@@ -35,6 +35,7 @@ public class CloudConfig
 
 public class Volken
 {
+    
     public static Volken Instance { get; private set; }
 
     public CloudConfig cloudConfig;

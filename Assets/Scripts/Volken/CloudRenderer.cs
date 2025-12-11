@@ -19,7 +19,7 @@ public class NearCameraScript : MonoBehaviour
 {
     private CloudConfig config;
     private Material mat;
-    private RenderTexture cloudTex, upscaledCloudTex, cloudHistoryTex, combinedDepthTex, lowResDepthTex;
+    private RenderTexture cloudTex, upscaledCloudTex, cloudHistoryTex, cloudHistoryDepthTex, combinedDepthTex, lowResDepthTex;
     private float currentResolutionScale;
     private Camera cam;
     private Matrix4x4 prevViewProjMat;
@@ -56,6 +56,8 @@ public class NearCameraScript : MonoBehaviour
 
         cloudHistoryTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.ARGB32);
         cloudHistoryTex.Create();
+        cloudHistoryDepthTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.RFloat);
+        cloudHistoryDepthTex.Create();
 
         combinedDepthTex = new RenderTexture(res.width, res.height, 0, RenderTextureFormat.RFloat);
         combinedDepthTex.Create();
@@ -72,6 +74,8 @@ public class NearCameraScript : MonoBehaviour
             upscaledCloudTex.Release();
         if (cloudHistoryTex != null && cloudHistoryTex.IsCreated())
             cloudHistoryTex.Release();
+        if (cloudHistoryDepthTex != null && cloudHistoryDepthTex.IsCreated())
+            cloudHistoryDepthTex.Release();
         if (combinedDepthTex != null && combinedDepthTex.IsCreated())
             combinedDepthTex.Release();
         if (lowResDepthTex != null && lowResDepthTex.IsCreated())
@@ -101,6 +105,7 @@ public class NearCameraScript : MonoBehaviour
         mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
         mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
         mat.SetFloat("historyBlend", config.historyBlend);
+        mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
         mat.SetVector("phaseParams", config.phaseParameters);
         mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
         mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
@@ -155,9 +160,11 @@ public class NearCameraScript : MonoBehaviour
         // main cloud pass + history buffer blend
         mat.SetTexture("DepthTex", lowResDepthTex);
         mat.SetTexture("HistoryTex", cloudHistoryTex);
+        mat.SetTexture("HistoryDepthTex", cloudHistoryDepthTex);
         Graphics.Blit(null, cloudTex, mat, mat.FindPass("Clouds"));
         // write output to history buffer
         Graphics.Blit(cloudTex, cloudHistoryTex);
+        Graphics.Blit(lowResDepthTex, cloudHistoryDepthTex);
         // depth aware upscaling
         mat.SetTexture("CombinedDepthTex", combinedDepthTex);
         mat.SetTexture("LowResDepthTex", lowResDepthTex);

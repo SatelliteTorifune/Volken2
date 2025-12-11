@@ -28,4 +28,5 @@ public class CloudConfig
     public float blueNoiseStrength;
     public float depthThreshold;
     public float historyBlend;
+    public float historyDepthThreshold = 0.05f;
 }

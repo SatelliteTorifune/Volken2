@@ -189,6 +189,8 @@ Shader "Hidden/Clouds"
 
             Texture2D<float4> HistoryTex;
             SamplerState samplerHistoryTex;
+            Texture2D<float> HistoryDepthTex;
+            SamplerState samplerHistoryDepthTex;
 
             //Cloud Shape
             float cloudDensity;
@@ -201,6 +203,7 @@ Shader "Hidden/Clouds"
             float3 cloudOffset;
             float4 cloudColor;
             float scatterStrength;
+            float historyDepthThreshold;
 
             //Cloud Layers
             float2 cloudLayerHeights;
@@ -435,9 +438,16 @@ Shader "Hidden/Clouds"
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
                 float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV.xy, 0);
                 
+                float currentDepth = DepthTex.Sample(samplerDepthTex, i.uv);
+                float historyDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV.xy);
+                float depthDiff = abs(currentDepth - historyDepth) / max(currentDepth, 0.001);
+                float depthWeight = depthDiff < historyDepthThreshold ? 1.0 : 0.0;
+                
                 bool badSample = cloudSurfaceDist >= maxRayDist || (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
+                float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight;
+                
+                return (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
 
-                return badSample ? raymarchOutput : ((1.0 - historyBlend) * raymarchOutput + historyBlend * history);
             }
             ENDCG
         }

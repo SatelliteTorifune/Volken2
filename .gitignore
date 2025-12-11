@@ -11,3 +11,9 @@ Assets/_ModAssets_.meta
 Assets/ModTools/*
 .vsconfig
 /.idea
+/.Library
+/.Logs
+/.ModAssetBundles
+/.obj
+/.Packages
+/.UserSettings

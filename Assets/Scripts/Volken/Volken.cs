@@ -44,7 +44,7 @@ public class Volken
             offset = Vector3.zero,
             windSpeed = 0.0f,
             windDirection = 0.0f,
-            scatterStrength = 10.0f,
+            scatterStrength = 1f,
             atmoBlendFactor = 0.25f,
             cloudColor = Color.white,
             layerHeights = new Vector2(2000.0f, 4500.0f),
@@ -58,6 +58,13 @@ public class Volken
             blueNoiseStrength = 2.0f,
             depthThreshold = 0.1f,
             historyBlend = 0.9f,
+            scatterPower = 1.5f,
+            multiScatterBlend = 0.3f,
+            ambientScatterStrength = 0.5f,
+            customWavelengths = new Vector3(680f, 550f, 450f),
+            silverLiningIntensity = 1.0f,
+            forwardScatteringBias = 0.85f,
+
         };
         
         mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
@@ -115,6 +122,7 @@ public class Volken
 
         cloudShapeGroup.Add(renderToggleModel);
 
+        //--------------------------------------------------------------------------
         var densityModel = new SliderModel("Density", () => cloudConfig.density, s => { cloudConfig.density = s; ValueChanged(); }, 0.0001f, 0.05f);
         densityModel.ValueFormatter = (f) => FormatValue(f, 4);
         cloudShapeGroup.Add(densityModel);
@@ -163,14 +171,34 @@ public class Volken
         cloudColorBlueModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(cloudColorBlueModel);
 
-        var scatterModel = new SliderModel("Scatter Strength", () => cloudConfig.scatterStrength, s => { cloudConfig.scatterStrength = s; ValueChanged(); }, 0.0f, 20.0f);
+        var scatterModel = new SliderModel("Scatter Strength", () => cloudConfig.scatterStrength, s => { cloudConfig.scatterStrength = s; ValueChanged(); }, 0.0f, 5.0f);
         scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(scatterModel);
 
         var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => cloudConfig.atmoBlendFactor, s => { cloudConfig.atmoBlendFactor = s; ValueChanged(); }, 0.0f, 1.0f);
         atmoBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(atmoBlendModel);
+        var scatterPowerModel = new SliderModel("Scatter Power", () => cloudConfig.scatterPower, s => { cloudConfig.scatterPower = s; ValueChanged(); }, 1.0f, 2.5f);
+        scatterPowerModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(scatterPowerModel);
 
+        var multiScatterBlendModel = new SliderModel("Multi-Scatter Blend", () => cloudConfig.multiScatterBlend, s => { cloudConfig.multiScatterBlend = s; ValueChanged(); }, 0.0f, 1.0f);
+        multiScatterBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(multiScatterBlendModel);
+
+        var ambientScatterStrengthModel = new SliderModel("Ambient Scatter", () => cloudConfig.ambientScatterStrength, s => { cloudConfig.ambientScatterStrength = s; ValueChanged(); }, 0.0f, 2.0f);
+        ambientScatterStrengthModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(ambientScatterStrengthModel);
+
+        var silverLiningModel = new SliderModel("Silver Lining Intensity", () => cloudConfig.silverLiningIntensity, s => { cloudConfig.silverLiningIntensity = s; ValueChanged(); }, 0.0f, 3.0f);
+        silverLiningModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(silverLiningModel);
+
+        var forwardScatterBiasModel = new SliderModel("Forward Scatter Bias", () => cloudConfig.forwardScatteringBias, s => { cloudConfig.forwardScatteringBias = s; ValueChanged(); }, 0.0f, 0.99f);
+        forwardScatterBiasModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(forwardScatterBiasModel);
+
+        //--------------------------------------------------------------------------
         GroupModel containerSettingsGroup = new GroupModel("Cloud Container");
         request.Model.AddGroup(containerSettingsGroup);
 
@@ -201,7 +229,7 @@ public class Volken
         var maxHeightModel = new SliderModel("Max Cloud Height", () => cloudConfig.maxCloudHeight, s => { cloudConfig.maxCloudHeight = s; ValueChanged(); }, 1000.0f, 25000.0f);
         maxHeightModel.ValueFormatter = (f) => FormatValue(f, 0);
         containerSettingsGroup.Add(maxHeightModel);
-
+        //--------------------------------------------------------------------------
         GroupModel qualityGroup = new GroupModel("Cloud Quality");
         request.Model.AddGroup(qualityGroup);
 
@@ -232,6 +260,9 @@ public class Volken
         var historyBlendModel = new SliderModel("History Blend", () => cloudConfig.historyBlend, s => { cloudConfig.historyBlend = s; ValueChanged(); }, 0.0f, 0.99f);
         historyBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
         qualityGroup.Add(historyBlendModel);
+        //--------------------------------------------------------------------------
+        
+
     }
 
     private void ValueChanged()

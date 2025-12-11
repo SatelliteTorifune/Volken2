@@ -17,3 +17,10 @@ Assets/ModTools/*
 /.obj
 /.Packages
 /.UserSettings
+.bezisidekick/.settings.json
+.bezisidekick/.user-settings.json
+/Packages
+Packages/packages-lock.json
+Packages/packages-lock.json
+Assets/Scripts/Volken/to-do.xml.meta
+*.meta

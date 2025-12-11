@@ -205,6 +205,13 @@ Shader "Hidden/Clouds"
             float scatterStrength;
             float historyDepthThreshold;
 
+            //scatter
+            float scatterPower;
+            float multiScatterBlend;
+            float ambientScatterStrength;
+            float3 customWavelengths;
+            float silverLiningIntensity;
+            float forwardScatteringBias;
             //Cloud Layers
             float2 cloudLayerHeights;
             float2 cloudLayerSpreads;
@@ -232,9 +239,24 @@ Shader "Hidden/Clouds"
             matrix reprojMat;
 
             // magic functions for better lighting
-            float HenyeyGreenstein(float a, float g) {
+            float HenyeyGreenstein(float a, float g)
+            {
                 float g2 = g * g;
-                return (1 - g2) / (4 * 3.14159265 * pow(1 + g2 - 2 * g * (a), 1.5));
+                return (1.0 - g2) / (4.0 * 3.1415926 * pow(abs(1.0 + g2 - 2.0 * g * a), 1.5));
+            }
+            float HenyeyGreensteinMultiple(float cosAngle, float g1, float g2, float blend)
+            {
+                float hg1 = HenyeyGreenstein(cosAngle, g1);
+                float hg2 = HenyeyGreenstein(cosAngle, g2);
+                float hg3 = HenyeyGreenstein(cosAngle, 0.0);
+                
+                float firstBlend = lerp(hg1, hg2, blend);
+                return lerp(firstBlend, hg3, multiScatterBlend * 0.5);
+            }
+            float CloudPhase(float a, float blend)
+            {
+                float hgBlend = HenyeyGreensteinMultiple(a, forwardScatteringBias, -phaseParams.y, blend);
+                return phaseParams.z + hgBlend * phaseParams.w * silverLiningIntensity;
             }
 
             float Phase(float a) {
@@ -284,8 +306,8 @@ Shader "Hidden/Clouds"
                 float2 spherical = float2(0.5 * (atan2(offset.z, offset.x) / 3.14159265 + 1.0), acos(offset.y / r) / 3.14159265);
                 // sample 2D density map for both layers
                 //that 0.1 is rotation speed
+                //TODO:connect the rotation speed with time warp
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical + cloudOffset.xz * 0.1, 0);
-
                 
                 // height based falloff
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
@@ -357,6 +379,8 @@ Shader "Hidden/Clouds"
                 // cut short by scene depth
                 maxRayDist = min(maxRayDist, depth);
 
+                
+
                 if (maxRayDist <= startRayDist) {
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
@@ -371,19 +395,28 @@ Shader "Hidden/Clouds"
                 float3 lightEnergy = 0.0;
                 
                 float3 rayPos;
-                float3 lightTransmittance;
-                float density;
+                float3 lightTransmittance=0.0;
+                float density=0.0;
 
                 // precompute light dependant scattering (ideally this would be parameterised)
-                float3 wavelengths = float3(700, 530, 440);
-                float3 scatterCoeff = pow(1.0 / wavelengths, 4) * scatterStrength;
+                float3 wavelengths = customWavelengths;
+                float3 normalizedWavelengths = wavelengths / 550.0;
+                float3 scatterCoeff = pow(normalizedWavelengths, -scatterPower) * scatterStrength * 0.1;
 
                 float localStepSize = stepSize;
                 float stepSizeMultiplier = 1.0;
                 int emptySamples = 0;
                 float detailCutoffDist = 25.0 / detailScale;
                 float cloudSurfaceDist = maxRayDist;
+                
                 int iter = 0;
+                float3 scatteredLight = density * localStepSize * transmittance * lightTransmittance * phaseValue;
+                float3 ambientScatter = scatterCoeff * ambientLight * ambientScatterStrength * density * (1.0 - transmittance) * localStepSize;
+                lightEnergy += scatteredLight + ambientScatter;
+                
+                
+                
+
 
                 while(rayDist < maxRayDist && iter < 350) {
                     rayPos = camPos + rayDist * viewDir;
@@ -404,7 +437,9 @@ Shader "Hidden/Clouds"
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
                         float2 lightSample = SampleLightRay(rayPos);
-                        lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * lightSample.y * scatterCoeff);
+                        //lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * lightSample.y * scatterCoeff);
+                        lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * scatterCoeff);
+
                         lightEnergy += density * localStepSize * transmittance * lightTransmittance * phaseValue;
                         transmittance *= Beer(density * localStepSize, amb);
                         
@@ -435,7 +470,8 @@ Shader "Hidden/Clouds"
                 transmittance *= shadowTransmittance;
 
                 float atmoBlend = exp(-atmoBlendFactor * (cloudSurfaceDist - startRayDist));
-                float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor, min(1.0, transmittance + 1.0 - atmoBlend));
+                float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor.rgb, min(1.0, transmittance + 1.0 - atmoBlend));
+
 
                 float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;

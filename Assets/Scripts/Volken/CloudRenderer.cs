@@ -84,7 +84,6 @@ public class NearCameraScript : MonoBehaviour
 
     public void SetShaderProperties()
     {
-        // TODO: use a structured buffer instead
         mat.SetFloat("cloudDensity", config.density);
         mat.SetFloat("cloudAbsorption", config.absorption);
         mat.SetFloat("ambientLight", config.ambientLight);
@@ -99,8 +98,8 @@ public class NearCameraScript : MonoBehaviour
         mat.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
         mat.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
         mat.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
-        mat.SetFloat("scatterStrength", config.scatterStrength);
-        mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-5f);
+        mat.SetFloat("scatterStrength", config.scatterStrength*1e-3f);
+        mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
         mat.SetColor("cloudColor", config.cloudColor);
         mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
         mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
@@ -109,7 +108,15 @@ public class NearCameraScript : MonoBehaviour
         mat.SetVector("phaseParams", config.phaseParameters);
         mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
         mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
+        
+        mat.SetFloat("scatterPower", config.scatterPower);
+        mat.SetFloat("multiScatterBlend", config.multiScatterBlend);
+        mat.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
+        mat.SetVector("customWavelengths", config.customWavelengths);
+        mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
+        mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
     }
+
 
     public void SetDynamicProperties()
     {

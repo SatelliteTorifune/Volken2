@@ -29,4 +29,11 @@ public class CloudConfig
     public float depthThreshold;
     public float historyBlend;
     public float historyDepthThreshold = 0.05f;
+    
+    public float scatterPower = 1.5f;
+    public float multiScatterBlend = 0.3f;
+    public float ambientScatterStrength = 0.5f;
+    public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
+    public float silverLiningIntensity = 1.0f;
+    public float forwardScatteringBias = 0.85f;
 }

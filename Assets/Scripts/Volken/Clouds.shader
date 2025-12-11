@@ -283,7 +283,9 @@ Shader "Hidden/Clouds"
                 // sperical coords of the sample point
                 float2 spherical = float2(0.5 * (atan2(offset.z, offset.x) / 3.14159265 + 1.0), acos(offset.y / r) / 3.14159265);
                 // sample 2D density map for both layers
-                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                //that 0.1 is rotation speed
+                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical + cloudOffset.xz * 0.1, 0);
+
                 
                 // height based falloff
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
@@ -300,7 +302,8 @@ Shader "Hidden/Clouds"
                 float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, offset * cloudScale + cloudOffset, 0);
 
                 float2 spherical = float2(0.5 * (atan2(offset.z, offset.x) / 3.14159265 + 1.0), acos(offset.y / r) / 3.14159265);
-                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical + cloudOffset.xz * 0.1, 0);
+
                 
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);

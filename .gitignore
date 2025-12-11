@@ -10,3 +10,4 @@ Assets/_ModAssets_.meta
 *.csproj
 Assets/ModTools/*
 .vsconfig
+/.idea

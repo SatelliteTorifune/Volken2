@@ -1,3 +1,5 @@
+using Assets.Packages.DevConsole;
+
 namespace Assets.Scripts
 {
     using System;
@@ -36,6 +38,12 @@ namespace Assets.Scripts
             base.OnModInitialized();
 
             Volken.Initialize();
+            RegisterCommands();
         }
+
+        private void RegisterCommands()
+        {
+        }
+
     }
 }

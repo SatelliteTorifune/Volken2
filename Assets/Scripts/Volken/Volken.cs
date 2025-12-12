@@ -1,16 +1,17 @@
-
+using System;
 using Assets.Scripts;
 using ModApi.Scenes.Events;
 using ModApi.Ui.Inspector;
 using UnityEngine;
-
+using System.Collections.Generic;
+using System.Linq;
 
 public class Volken
 {
-    
     public static Volken Instance { get; private set; }
 
     public CloudConfig cloudConfig;
+    public string currentConfigName = "Default";
 
     public Material mat;
     public NearCameraScript cloudRenderer;
@@ -22,6 +23,7 @@ public class Volken
     public Texture2D blueNoiseTex;
 
     private CloudNoise _noise;
+    private List<string> _availableConfigs = new List<string>();
 
     public static void Initialize()
     {
@@ -30,42 +32,20 @@ public class Volken
 
     private Volken()
     {
-        cloudConfig = new CloudConfig
+        RefreshConfigList();
+        
+        if (_availableConfigs.Count > 0)
         {
-            enabled = true,
-            density = 0.025f,
-            absorption = 0.5f,
-            ambientLight = 0.1f,
-            coverage = 0.25f,
-            shapeScale = 10000.0f,
-            detailScale = 2000.0f,
-            detailStrength = 0.5f,
-            phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
-            offset = Vector3.zero,
-            windSpeed = 0.0f,
-            windDirection = 0.0f,
-            scatterStrength = 1f,
-            atmoBlendFactor = 0.25f,
-            cloudColor = Color.white,
-            layerHeights = new Vector2(2000.0f, 4500.0f),
-            layerSpreads = new Vector2(1000.0f, 750.0f),
-            layerStrengths = new Vector2(3.0f, 1.5f),
-            maxCloudHeight = 6500.0f,
-            resolutionScale = 0.5f,
-            stepSize = 200.0f,
-            stepSizeFalloff = 1.0f,
-            numLightSamplePoints = 10,
-            blueNoiseStrength = 2.0f,
-            depthThreshold = 0.1f,
-            historyBlend = 0.9f,
-            scatterPower = 1.5f,
-            multiScatterBlend = 0.3f,
-            ambientScatterStrength = 0.5f,
-            customWavelengths = new Vector3(680f, 550f, 450f),
-            silverLiningIntensity = 1.0f,
-            forwardScatteringBias = 0.85f,
-
-        };
+            currentConfigName = _availableConfigs[0];
+            cloudConfig = CloudConfig.LoadFromFile(currentConfigName);
+        }
+        else
+        {
+            currentConfigName = "Default";
+            cloudConfig = CloudConfig.CreateDefault();
+            cloudConfig.SaveToFile(currentConfigName);
+            _availableConfigs.Add(currentConfigName);
+        }
         
         mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
         
@@ -80,7 +60,6 @@ public class Volken
     {
         if (e.Scene == "Flight")
         {
-            // setup camera scripts
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
             cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<NearCameraScript>();
@@ -103,9 +82,78 @@ public class Volken
         mat.SetTexture("BlueNoiseTex", blueNoiseTex);
     }
 
+    private void RefreshConfigList()
+    {
+        _availableConfigs = CloudConfig.GetAllConfigNames();
+        if (_availableConfigs.Count == 0)
+        {
+            _availableConfigs.Add("Default");
+        }
+    }
+
     private void OnBuildFlightViewInspectorPanel(BuildInspectorPanelRequest request)
     {
-        // uuh yea
+        
+        GroupModel configManagementGroup = new GroupModel("Config Management");
+        request.Model.AddGroup(configManagementGroup);
+    
+        var currentConfigLabel = new TextModel("Current Config", () => currentConfigName);
+        configManagementGroup.Add(currentConfigLabel);
+    
+        var saveCurrentButton = new TextButtonModel("Save Current Config", (Action<TextButtonModel>)(b => 
+        {
+            cloudConfig.SaveToFile(currentConfigName);
+            Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{currentConfigName}' saved!");
+        }));
+        configManagementGroup.Add(saveCurrentButton);
+    
+        var saveAsButton = new TextButtonModel("Save As New Config", (Action<TextButtonModel>)(b => 
+        {
+            var dialog = Game.Instance.UserInterface.CreateInputDialog();
+            dialog.MessageText = "Enter new config name:";
+            dialog.InputText = "NewConfig";
+            dialog.OkayClicked += (inputDialog) =>
+            {
+                string name = inputDialog.InputText;
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    cloudConfig.SaveToFile(name);
+                    currentConfigName = name;
+                    RefreshConfigList();
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config saved as '{name}'!");
+                }
+                inputDialog.Close();
+            };
+        }));
+        configManagementGroup.Add(saveAsButton);
+    
+        var loadConfigDropdown = new DropdownModel(
+            "Load Config",
+            () => currentConfigName,
+            (newConfig) =>
+            {
+                if (!string.IsNullOrWhiteSpace(newConfig) && newConfig != currentConfigName)
+                {
+                    CloudConfig loadedConfig = CloudConfig.LoadFromFile(newConfig);
+                    cloudConfig.CopyFrom(loadedConfig);
+                    currentConfigName = newConfig;
+                    ValueChanged();
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{newConfig}' loaded!");
+                }
+            },
+            _availableConfigs
+        );
+        configManagementGroup.Add(loadConfigDropdown);
+        
+        var resetToDefaultButton = new TextButtonModel("Reset Current to Default", (Action<TextButtonModel>)(b => 
+        {
+            CloudConfig defaultConfig = CloudConfig.CreateDefault();
+            cloudConfig.CopyFrom(defaultConfig);
+            ValueChanged();
+            Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Config reset to defaults!");
+        }));
+        configManagementGroup.Add(resetToDefaultButton);
+
 
         GroupModel cloudShapeGroup = new GroupModel("Clouds");
         request.Model.AddGroup(cloudShapeGroup);
@@ -122,7 +170,6 @@ public class Volken
 
         cloudShapeGroup.Add(renderToggleModel);
 
-        //--------------------------------------------------------------------------
         var densityModel = new SliderModel("Density", () => cloudConfig.density, s => { cloudConfig.density = s; ValueChanged(); }, 0.0001f, 0.05f);
         densityModel.ValueFormatter = (f) => FormatValue(f, 4);
         cloudShapeGroup.Add(densityModel);
@@ -178,6 +225,7 @@ public class Volken
         var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => cloudConfig.atmoBlendFactor, s => { cloudConfig.atmoBlendFactor = s; ValueChanged(); }, 0.0f, 1.0f);
         atmoBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(atmoBlendModel);
+        
         var scatterPowerModel = new SliderModel("Scatter Power", () => cloudConfig.scatterPower, s => { cloudConfig.scatterPower = s; ValueChanged(); }, 1.0f, 2.5f);
         scatterPowerModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(scatterPowerModel);
@@ -198,7 +246,6 @@ public class Volken
         forwardScatterBiasModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(forwardScatterBiasModel);
 
-        //--------------------------------------------------------------------------
         GroupModel containerSettingsGroup = new GroupModel("Cloud Container");
         request.Model.AddGroup(containerSettingsGroup);
 
@@ -229,7 +276,7 @@ public class Volken
         var maxHeightModel = new SliderModel("Max Cloud Height", () => cloudConfig.maxCloudHeight, s => { cloudConfig.maxCloudHeight = s; ValueChanged(); }, 1000.0f, 25000.0f);
         maxHeightModel.ValueFormatter = (f) => FormatValue(f, 0);
         containerSettingsGroup.Add(maxHeightModel);
-        //--------------------------------------------------------------------------
+
         GroupModel qualityGroup = new GroupModel("Cloud Quality");
         request.Model.AddGroup(qualityGroup);
 
@@ -260,17 +307,18 @@ public class Volken
         var historyBlendModel = new SliderModel("History Blend", () => cloudConfig.historyBlend, s => { cloudConfig.historyBlend = s; ValueChanged(); }, 0.0f, 0.99f);
         historyBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
         qualityGroup.Add(historyBlendModel);
-        //--------------------------------------------------------------------------
-        
-
     }
 
     private void ValueChanged()
     {
-        if(cloudRenderer != null) {
+        if(cloudRenderer != null) 
+        {
             cloudRenderer.SetShaderProperties();
         }
     }
 
-    private string FormatValue(float arg, int decimals) { return arg.ToString("n" + Mathf.Max(0, decimals)); }
+    private string FormatValue(float arg, int decimals) 
+    { 
+        return arg.ToString("n" + Mathf.Max(0, decimals)); 
+    }
 }

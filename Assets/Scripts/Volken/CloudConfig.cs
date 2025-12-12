@@ -1,7 +1,16 @@
+using System;
 using UnityEngine;
+using System.Xml.Serialization;
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 
+[Serializable]
 public class CloudConfig
 {
+    private const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
+    private const string DEFAULT_CONFIG_NAME = "Default";
+
     public bool enabled;
     public float density;
     public float absorption;
@@ -10,16 +19,66 @@ public class CloudConfig
     public float shapeScale;
     public float detailScale;
     public float detailStrength;
+    
+    [XmlIgnore]
     public Vector4 phaseParameters;
+    [XmlElement("phaseParameters")]
+    public SerializableVector4 phaseParametersSerializable
+    {
+        get => new SerializableVector4(phaseParameters);
+        set => phaseParameters = value.ToVector4();
+    }
+    
+    [XmlIgnore]
     public Vector3 offset;
+    [XmlElement("offset")]
+    public SerializableVector3 offsetSerializable
+    {
+        get => new SerializableVector3(offset);
+        set => offset = value.ToVector3();
+    }
+    
     public float windSpeed;
     public float windDirection;
     public float scatterStrength;
     public float atmoBlendFactor;
+    
+    [XmlIgnore]
     public Color cloudColor;
+    [XmlElement("cloudColor")]
+    public SerializableColor cloudColorSerializable
+    {
+        get => new SerializableColor(cloudColor);
+        set => cloudColor = value.ToColor();
+    }
+    
+    [XmlIgnore]
     public Vector2 layerHeights;
+    [XmlElement("layerHeights")]
+    public SerializableVector2 layerHeightsSerializable
+    {
+        get => new SerializableVector2(layerHeights);
+        set => layerHeights = value.ToVector2();
+    }
+    
+    [XmlIgnore]
     public Vector2 layerSpreads;
+    [XmlElement("layerSpreads")]
+    public SerializableVector2 layerSpreadsSerializable
+    {
+        get => new SerializableVector2(layerSpreads);
+        set => layerSpreads = value.ToVector2();
+    }
+    
+    [XmlIgnore]
     public Vector2 layerStrengths;
+    [XmlElement("layerStrengths")]
+    public SerializableVector2 layerStrengthsSerializable
+    {
+        get => new SerializableVector2(layerStrengths);
+        set => layerStrengths = value.ToVector2();
+    }
+    
     public float maxCloudHeight;
     public float resolutionScale;
     public float stepSize;
@@ -29,11 +88,241 @@ public class CloudConfig
     public float depthThreshold;
     public float historyBlend;
     public float historyDepthThreshold = 0.05f;
-    
     public float scatterPower = 1.5f;
     public float multiScatterBlend = 0.3f;
     public float ambientScatterStrength = 0.5f;
+    
+    [XmlIgnore]
     public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
+    [XmlElement("customWavelengths")]
+    public SerializableVector3 customWavelengthsSerializable
+    {
+        get => new SerializableVector3(customWavelengths);
+        set => customWavelengths = value.ToVector3();
+    }
+    
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
+
+    public static string GetConfigFolderPath()
+    {
+        string folderPath = Application.persistentDataPath + CONFIG_FOLDER;
+        if (!Directory.Exists(folderPath))
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+        return folderPath;
+    }
+
+    public static string GetConfigPath(string configName)
+    {
+        return Path.Combine(GetConfigFolderPath(), configName + ".xml");
+    }
+
+    public static List<string> GetAllConfigNames()
+    {
+        string folderPath = GetConfigFolderPath();
+        
+        if (!Directory.Exists(folderPath))
+        {
+            return new List<string>();
+        }
+
+        string[] files = Directory.GetFiles(folderPath, "*.xml");
+        List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
+        
+        return configNames;
+    }
+
+    public void SaveToFile(string configName)
+    {
+        try
+        {
+            string filePath = GetConfigPath(configName);
+            string directory = Path.GetDirectoryName(filePath);
+            
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
+            using (FileStream stream = new FileStream(filePath, FileMode.Create))
+            {
+                serializer.Serialize(stream, this);
+            }
+            Debug.Log($"Cloud config '{configName}' saved to: {filePath}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to save cloud config '{configName}': {e.Message}");
+        }
+    }
+
+    public static CloudConfig LoadFromFile(string configName)
+    {
+        string filePath = GetConfigPath(configName);
+        
+        if (!File.Exists(filePath))
+        {
+            Debug.LogWarning($"Config file '{configName}' not found at {filePath}. Creating default config.");
+            CloudConfig defaultConfig = CreateDefault();
+            defaultConfig.SaveToFile(configName);
+            return defaultConfig;
+        }
+
+        try
+        {
+            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
+            using (FileStream stream = new FileStream(filePath, FileMode.Open))
+            {
+                CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
+                Debug.Log($"Cloud config '{configName}' loaded from: {filePath}");
+                return config;
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
+            return CreateDefault();
+        }
+    }
+
+    public static bool DeleteConfig(string configName)
+    {
+        try
+        {
+            string filePath = GetConfigPath(configName);
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+                Debug.Log($"Config '{configName}' deleted.");
+                return true;
+            }
+            return false;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to delete config '{configName}': {e.Message}");
+            return false;
+        }
+    }
+
+    public static CloudConfig CreateDefault()
+    {
+        return new CloudConfig
+        {
+            enabled = true,
+            density = 0.025f,
+            absorption = 0.5f,
+            ambientLight = 0.1f,
+            coverage = 0.25f,
+            shapeScale = 10000.0f,
+            detailScale = 2000.0f,
+            detailStrength = 0.5f,
+            phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
+            offset = Vector3.zero,
+            windSpeed = 0.0f,
+            windDirection = 0.0f,
+            scatterStrength = 1f,
+            atmoBlendFactor = 0.25f,
+            cloudColor = Color.white,
+            layerHeights = new Vector2(2000.0f, 4500.0f),
+            layerSpreads = new Vector2(1000.0f, 750.0f),
+            layerStrengths = new Vector2(3.0f, 1.5f),
+            maxCloudHeight = 6500.0f,
+            resolutionScale = 0.5f,
+            stepSize = 200.0f,
+            stepSizeFalloff = 1.0f,
+            numLightSamplePoints = 10,
+            blueNoiseStrength = 2.0f,
+            depthThreshold = 0.1f,
+            historyBlend = 0.9f,
+            historyDepthThreshold = 0.05f,
+            scatterPower = 1.5f,
+            multiScatterBlend = 0.3f,
+            ambientScatterStrength = 0.5f,
+            customWavelengths = new Vector3(680f, 550f, 450f),
+            silverLiningIntensity = 1.0f,
+            forwardScatteringBias = 0.85f
+        };
+    }
+
+    public CloudConfig Clone()
+    {
+        return new CloudConfig
+        {
+            enabled = this.enabled,
+            density = this.density,
+            absorption = this.absorption,
+            ambientLight = this.ambientLight,
+            coverage = this.coverage,
+            shapeScale = this.shapeScale,
+            detailScale = this.detailScale,
+            detailStrength = this.detailStrength,
+            phaseParameters = this.phaseParameters,
+            offset = this.offset,
+            windSpeed = this.windSpeed,
+            windDirection = this.windDirection,
+            scatterStrength = this.scatterStrength,
+            atmoBlendFactor = this.atmoBlendFactor,
+            cloudColor = this.cloudColor,
+            layerHeights = this.layerHeights,
+            layerSpreads = this.layerSpreads,
+            layerStrengths = this.layerStrengths,
+            maxCloudHeight = this.maxCloudHeight,
+            resolutionScale = this.resolutionScale,
+            stepSize = this.stepSize,
+            stepSizeFalloff = this.stepSizeFalloff,
+            numLightSamplePoints = this.numLightSamplePoints,
+            blueNoiseStrength = this.blueNoiseStrength,
+            depthThreshold = this.depthThreshold,
+            historyBlend = this.historyBlend,
+            historyDepthThreshold = this.historyDepthThreshold,
+            scatterPower = this.scatterPower,
+            multiScatterBlend = this.multiScatterBlend,
+            ambientScatterStrength = this.ambientScatterStrength,
+            customWavelengths = this.customWavelengths,
+            silverLiningIntensity = this.silverLiningIntensity,
+            forwardScatteringBias = this.forwardScatteringBias
+        };
+    }
+    
+    public void CopyFrom(CloudConfig source)
+    {
+        this.enabled = source.enabled;
+        this.density = source.density;
+        this.absorption = source.absorption;
+        this.ambientLight = source.ambientLight;
+        this.coverage = source.coverage;
+        this.shapeScale = source.shapeScale;
+        this.detailScale = source.detailScale;
+        this.detailStrength = source.detailStrength;
+        this.phaseParameters = source.phaseParameters;
+        this.offset = source.offset;
+        this.windSpeed = source.windSpeed;
+        this.windDirection = source.windDirection;
+        this.scatterStrength = source.scatterStrength;
+        this.atmoBlendFactor = source.atmoBlendFactor;
+        this.cloudColor = source.cloudColor;
+        this.layerHeights = source.layerHeights;
+        this.layerSpreads = source.layerSpreads;
+        this.layerStrengths = source.layerStrengths;
+        this.maxCloudHeight = source.maxCloudHeight;
+        this.resolutionScale = source.resolutionScale;
+        this.stepSize = source.stepSize;
+        this.stepSizeFalloff = source.stepSizeFalloff;
+        this.numLightSamplePoints = source.numLightSamplePoints;
+        this.blueNoiseStrength = source.blueNoiseStrength;
+        this.depthThreshold = source.depthThreshold;
+        this.historyBlend = source.historyBlend;
+        this.historyDepthThreshold = source.historyDepthThreshold;
+        this.scatterPower = source.scatterPower;
+        this.multiScatterBlend = source.multiScatterBlend;
+        this.ambientScatterStrength = source.ambientScatterStrength;
+        this.customWavelengths = source.customWavelengths;
+        this.silverLiningIntensity = source.silverLiningIntensity;
+        this.forwardScatteringBias = source.forwardScatteringBias;
+    }
+
 }

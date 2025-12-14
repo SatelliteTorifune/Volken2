@@ -32,7 +32,7 @@ namespace Assets.Scripts
         /// </summary>
         /// <value>The singleton instance of the mod object.</value>
         public static Mod Instance { get; } = GetModInstance<Mod>();
-
+        
         protected override void OnModInitialized()
         {
             base.OnModInitialized();

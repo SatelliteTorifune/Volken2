@@ -357,17 +357,23 @@ Shader "Hidden/Clouds"
                 return float2(d, intersect.y - max(0.0, intersect.x));
             }
 
-            float4 frag(vert2Frag i) : SV_Target {
+            float4 frag(vert2Frag i) : SV_Target 
+            {
                 float3 camPos = _WorldSpaceCameraPos;
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
+                float firstCloudDepth = maxDepth;  // Track first cloud intersection depth
+                bool foundCloud = false;
+                
                 // no intersection in front of the camera
                 if (intersect.y < 0.0) {
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
+                
+                
 
                 float2 surfIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius);
                 float depth = viewLength * DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
@@ -584,46 +590,62 @@ Shader "Hidden/Clouds"
         Pass
         {
             Name "Composite"
-
+        
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-
+        
             #include "UnityCG.cginc"
-
+        
             struct appdata
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
             };
-
+        
             struct v2f
             {
                 float4 vertex : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 viewDir : TEXCOORD1;
             };
-
+        
             v2f vert(appdata v)
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
+                // Reconstruct view direction
+                o.viewDir = mul(unity_CameraInvProjection, float4(v.uv * 2 - 1, 0, -1));
+                o.viewDir = mul(unity_CameraToWorld, float4(o.viewDir, 0));
                 return o;
             }
-
-            sampler2D _MainTex;
-
+        
             Texture2D<float4> UpscaledCloudTex;
             SamplerState samplerUpscaledCloudTex;
-
+            Texture2D<float> SceneDepthTex;
+            SamplerState samplerSceneDepthTex;
+            sampler2D _MainTex;
+            
+            float3 sphereCenter;
+            float surfaceRadius;
+        
             float4 frag(v2f i) : SV_Target
             {
-                float3 col = tex2D(_MainTex, i.uv);
                 float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
-
-                // image color * cloud transmittance + cloud color
-                return float4(col * clouds.a + clouds.rgb, 0.0);
+                float4 source = tex2D(_MainTex, i.uv);
+                float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
+                float depthThreshold = 5000.0;  
+                float depthMask = saturate(sceneDepth / depthThreshold);
+                float3 maskedCloudColor = clouds.rgb * depthMask;
+                float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
+                
+                // Composite
+                return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
             }
+
+
+
             ENDCG
         }
     }

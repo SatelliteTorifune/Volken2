@@ -179,6 +179,7 @@ public class NearCameraScript : MonoBehaviour
         Graphics.Blit(cloudTex, upscaledCloudTex, mat, mat.FindPass("Upscale"));
         // blur + composite
         mat.SetTexture("UpscaledCloudTex", upscaledCloudTex);
+        mat.SetTexture("SceneDepthTex", combinedDepthTex);
         Graphics.Blit(source, destination, mat, mat.FindPass("Composite"));
     }
     

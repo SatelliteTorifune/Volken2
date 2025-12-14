@@ -40,6 +40,7 @@ public class CloudConfig
     
     public float windSpeed;
     public float windDirection;
+    public float globalRotationAngular;
     public float scatterStrength;
     public float atmoBlendFactor;
     
@@ -224,6 +225,7 @@ public class CloudConfig
             offset = Vector3.zero,
             windSpeed = 0.0f,
             windDirection = 0.0f,
+            globalRotationAngular=0.1f,
             scatterStrength = 1f,
             atmoBlendFactor = 0.25f,
             cloudColor = Color.white,
@@ -264,6 +266,7 @@ public class CloudConfig
             offset = this.offset,
             windSpeed = this.windSpeed,
             windDirection = this.windDirection,
+            globalRotationAngular = this.globalRotationAngular,
             scatterStrength = this.scatterStrength,
             atmoBlendFactor = this.atmoBlendFactor,
             cloudColor = this.cloudColor,
@@ -302,6 +305,7 @@ public class CloudConfig
         this.offset = source.offset;
         this.windSpeed = source.windSpeed;
         this.windDirection = source.windDirection;
+        this.globalRotationAngular= source.globalRotationAngular;
         this.scatterStrength = source.scatterStrength;
         this.atmoBlendFactor = source.atmoBlendFactor;
         this.cloudColor = source.cloudColor;

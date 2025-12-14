@@ -14,7 +14,7 @@ public class Volken
     public string currentConfigName = "Default";
 
     public Material mat;
-    public NearCameraScript cloudRenderer;
+    public CloudRenderer cloudRenderer;
     public FarCameraScript farCam;
 
     public RenderTexture whorleyTex;
@@ -62,7 +62,7 @@ public class Volken
         {
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<NearCameraScript>();
+            cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
             farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
         }
     }
@@ -205,6 +205,10 @@ public class Volken
         var windDirectionModel = new SliderModel("Wind Direction", () => cloudConfig.windDirection, s => { cloudConfig.windDirection = s; ValueChanged(); }, 0.0f, 360.0f, true);
         windDirectionModel.ValueFormatter = (f) => FormatValue(f, 0);
         cloudShapeGroup.Add(windDirectionModel);
+        
+        var globalRotationAngularModel = new SliderModel("Global Rotation Angular", () => cloudConfig.globalRotationAngular, s => { cloudConfig.globalRotationAngular = s; ValueChanged(); }, 0.0f, 1.0f);
+        globalRotationAngularModel.ValueFormatter = (f) => FormatValue(f, 2);
+        cloudShapeGroup.Add(globalRotationAngularModel);
 
         var cloudColorRedModel = new SliderModel("Cloud Color Red", () => cloudConfig.cloudColor.r, s => { cloudConfig.cloudColor.r = s; ValueChanged(); }, 0.0f, 1.0f, false);
         cloudColorRedModel.ValueFormatter = (f) => FormatValue(f, 2);

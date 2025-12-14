@@ -15,7 +15,7 @@ using UnityEngine;
     7. Blur the upscaled clouds and add them into the main image
 */
 
-public class NearCameraScript : MonoBehaviour
+public class CloudRenderer : MonoBehaviour
 {
     private CloudConfig config;
     private Material mat;
@@ -24,7 +24,7 @@ public class NearCameraScript : MonoBehaviour
     private Camera cam;
     private Matrix4x4 prevViewProjMat;
 
-    public NearCameraScript()
+    public CloudRenderer()
     {
         mat = Volken.Instance.mat;
         config = Volken.Instance.cloudConfig;
@@ -134,6 +134,7 @@ public class NearCameraScript : MonoBehaviour
 
         mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
         mat.SetVector("sphereCenter", planetCenter);
+        mat.SetFloat("globalRotationAngular", config.globalRotationAngular);
         mat.SetVector("lightDir", sun.transform.forward);
         mat.SetVector("cloudOffset", config.offset);
         mat.SetVector("blueNoiseOffset", Random.insideUnitCircle);

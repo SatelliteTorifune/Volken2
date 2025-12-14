@@ -36,8 +36,11 @@ namespace Assets.Scripts
         protected override void OnModInitialized()
         {
             base.OnModInitialized();
-
             Volken.Initialize();
+            /*
+            GameObject VUI=new GameObject("VUI");
+            VUI.AddComponent<VolkenUserInterface>();
+            */
             RegisterCommands();
         }
 

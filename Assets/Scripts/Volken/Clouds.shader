@@ -298,8 +298,9 @@ Shader "Hidden/Clouds"
            float SampleDensity(float3 worldPos, float detailFalloff) 
             {
                 float3 offset = worldPos - sphereCenter;
+                float r = length(offset);
             
-                // ===== 新增：正确的3D Y轴旋转 =====
+                //self rotating
                 float cosAngle = cos(currentRotation);
                 float sinAngle = sin(currentRotation);
                 float3 rotatedOffset = float3(
@@ -307,31 +308,35 @@ Shader "Hidden/Clouds"
                     offset.y,
                     offset.x * sinAngle + offset.z * cosAngle
                 );
-                // ================================
             
-                float r = length(offset);  // 注意：这里仍然用原始offset计算高度（旋转不影响高度）
-            
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale + cloudOffset, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale + cloudOffset, 0);
+                //wind stuff
+                float3 noiseOffset = rotatedOffset + cloudOffset;
+                
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, noiseOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, noiseOffset * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
+                float3 normalizedRotated = normalize(rotatedOffset);
             
-                // spherical现在基于旋转后的坐标计算
-                float2 spherical = float2(0.5 * (atan2(rotatedOffset.z, rotatedOffset.x) / 3.14159265 + 1.0), 
-                                          acos(rotatedOffset.y / r) / 3.14159265);
+                float2 spherical = float2(0.5 * (atan2(normalizedRotated.z, normalizedRotated.x) / 3.14159265 + 1.0), 
+                                          acos(normalizedRotated.y) / 3.14159265);  // 注意：这里直接用 normalized.y，避免除 r
+                spherical.x += cloudOffset.x;
+                
+                spherical.y += cloudOffset.z * 0.25;
             
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
             
-                // 后面的高度衰减等代码保持不变
+               //height fall off here
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
                 
                 return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
             }
-            
-            float SampleDensityCheap(float3 worldPos) {
+                        
+            float SampleDensityCheap(float3 worldPos) 
+            {
                 float3 offset = worldPos - sphereCenter;
+                float r = length(offset);
             
-                // ===== 同样的3D旋转 =====
                 float cosAngle = cos(currentRotation);
                 float sinAngle = sin(currentRotation);
                 float3 rotatedOffset = float3(
@@ -339,20 +344,23 @@ Shader "Hidden/Clouds"
                     offset.y,
                     offset.x * sinAngle + offset.z * cosAngle
                 );
-                // =========================
+                
+                float3 noiseOffset = rotatedOffset + cloudOffset;
             
-                float r = length(offset);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, noiseOffset * cloudScale, 0);
+                
+                float3 normalizedRotated = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(normalizedRotated.z, normalizedRotated.x) / 3.14159265 + 1.0), 
+                                          acos(normalizedRotated.y) / 3.14159265);
             
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale + cloudOffset, 0);
-            
-                float2 spherical = float2(0.5 * (atan2(rotatedOffset.z, rotatedOffset.x) / 3.14159265 + 1.0), 
-                                          acos(rotatedOffset.y / r) / 3.14159265);
+                spherical.x += cloudOffset.x;
+                spherical.y += cloudOffset.z * 0.25;
             
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
             
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
-                
+            
                 return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
             }
 

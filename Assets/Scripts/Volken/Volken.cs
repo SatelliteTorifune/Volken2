@@ -24,6 +24,31 @@ public class Volken
 
     private CloudNoise _noise;
     private List<string> _availableConfigs = new List<string>();
+    
+    public const string BlueNoisePath = "Assets/Resources/Volken/BlueNoise.png";
+    public const string PerlinFullRough = "Assets/Resources/Volken/PerlinFullRough.png";
+    public const string PerlinFullSoft = "Assets/Resources/Volken/PerlinFullSoft.png";
+    public const string PerlinHalfRough = "Assets/Resources/Volken/PerlinHalfRough.png";
+    public const string PerlinHalfSoft = "Assets/Resources/Volken/PerlinHalfSoft.png";
+
+    private string GetNoiseMapPath()
+    {
+        switch (ModSettings.Instance.NoiseMapIndex)
+        {
+            case 1:
+                return BlueNoisePath;
+            case 2:
+                return PerlinFullRough;
+            case 3:
+                return PerlinFullSoft;
+            case 4:
+                return PerlinHalfRough;
+            case 5:
+                return PerlinHalfSoft;
+            default:
+                return PerlinFullRough;
+        }
+    }
 
     public static void Initialize()
     {
@@ -78,7 +103,8 @@ public class Volken
         planetMapTex = _noise.GetPlanetMap(2048, 16.0f, 6, 0.5f, 2.0f);
         mat.SetTexture("PlanetMapTex", planetMapTex);
         
-        blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>("Assets/Resources/Volken/PerlinFullRough.png");
+        //blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>("Assets/Resources/Volken/PerlinFullRough.png");
+        blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>(GetNoiseMapPath());
         mat.SetTexture("BlueNoiseTex", blueNoiseTex);
     }
 
@@ -206,7 +232,7 @@ public class Volken
         windDirectionModel.ValueFormatter = (f) => FormatValue(f, 0);
         cloudShapeGroup.Add(windDirectionModel);
         
-        var globalRotationAngularModel = new SliderModel("Global Rotation Angular", () => cloudConfig.globalRotationAngular, s => { cloudConfig.globalRotationAngular = s; ValueChanged(); }, 0.0f, 1.0f);
+        var globalRotationAngularModel = new SliderModel("Global Rotation Angular", () => cloudConfig.globalRotationAngular, s => { cloudConfig.globalRotationAngular = s; ValueChanged(); }, -2.0f, 2.0f);
         globalRotationAngularModel.ValueFormatter = (f) => FormatValue(f, 2);
         cloudShapeGroup.Add(globalRotationAngularModel);
 

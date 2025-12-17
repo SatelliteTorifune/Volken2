@@ -23,6 +23,8 @@ public class CloudRenderer : MonoBehaviour
     private float currentResolutionScale;
     private Camera cam;
     private Matrix4x4 prevViewProjMat;
+    
+    private float accumulatedRotation = 0f;
 
     public CloudRenderer()
     {
@@ -134,11 +136,14 @@ public class CloudRenderer : MonoBehaviour
 
         mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
         mat.SetVector("sphereCenter", planetCenter);
-        mat.SetFloat("globalRotationAngular", config.globalRotationAngular);
         mat.SetVector("lightDir", sun.transform.forward);
         mat.SetVector("cloudOffset", config.offset);
         mat.SetVector("blueNoiseOffset", Random.insideUnitCircle);
         mat.SetMatrix("reprojMat", prevViewProjMat);
+        
+        
+        accumulatedRotation += config.globalRotationAngular * (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
+        mat.SetFloat("currentRotation",accumulatedRotation);
         
         prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
     }

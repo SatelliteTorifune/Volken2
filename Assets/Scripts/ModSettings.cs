@@ -39,17 +39,18 @@ namespace Assets.Scripts
         ///// <value>
         ///// The TestSetting1 value.
         ///// </value>
-        //public NumericSetting<float> TestSetting1 { get; private set; }
+        public NumericSetting<int> NoiseMapIndex { get; private set; }
+        
 
         /// <summary>
         /// Initializes the settings in the category.
         /// </summary>
         protected override void InitializeSettings()
         {
-            //this.TestSetting1 = this.CreateNumeric<float>("Test Setting 1", 1f, 10f, 1f)
-            //    .SetDescription("A test setting that does nothing.")
-            //    .SetDisplayFormatter(x => x.ToString("F1"))
-            //    .SetDefault(2f);
+            this.NoiseMapIndex = this.CreateNumeric<int>("Noise Map", 1, 5, 1)
+                .SetDescription("the noise map index.")
+                .SetDisplayFormatter(x => x.ToString("F1"))
+                .SetDefault(2);
         }
     }
 }

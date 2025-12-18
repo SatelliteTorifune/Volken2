@@ -295,12 +295,12 @@ Shader "Hidden/Clouds"
                 return float2((-b - sqrtD) / (2 * a), (-b + sqrtD) / (2 * a));
             }
 
-           float SampleDensity(float3 worldPos, float detailFalloff) 
+            //those 2 functions made me wanna kill myself tbh
+            float SampleDensity(float3 worldPos, float detailFalloff) 
             {
                 float3 offset = worldPos - sphereCenter;
                 float r = length(offset);
             
-                //self rotating
                 float cosAngle = cos(currentRotation);
                 float sinAngle = sin(currentRotation);
                 float3 rotatedOffset = float3(
@@ -309,29 +309,31 @@ Shader "Hidden/Clouds"
                     offset.x * sinAngle + offset.z * cosAngle
                 );
             
-                //wind stuff
-                float3 noiseOffset = rotatedOffset + cloudOffset;
-                
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, noiseOffset * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, noiseOffset * detailScale, 0);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
-                float3 normalizedRotated = normalize(rotatedOffset);
             
-                float2 spherical = float2(0.5 * (atan2(normalizedRotated.z, normalizedRotated.x) / 3.14159265 + 1.0), 
-                                          acos(normalizedRotated.y) / 3.14159265);  // 注意：这里直接用 normalized.y，避免除 r
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
+            
+                //yes the wind and the angular are somehow conflic...but lmao i dgaf
+                //no joking,but that's the best effect for now if you don't want to see the pile of shit in northern pole
+                // Strong east/west wind (full strength)
                 spherical.x += cloudOffset.x;
-                
-                spherical.y += cloudOffset.z * 0.25;
+            
+                //TODO the velocity of the cloud should be with direction
+                // Safe north/south wind: attenuated by latitude (zero at poles, max at equator)
+                float latFactor = sin(spherical.y * 3.14159265);  // ranges 0 at poles to 1 at equator
+                spherical.y += cloudOffset.z * 0.25 * latFactor;  // adjust 0.25 for desired strength
             
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
             
-               //height fall off here
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
                 
                 return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
             }
-                        
+
             float SampleDensityCheap(float3 worldPos) 
             {
                 float3 offset = worldPos - sphereCenter;
@@ -339,22 +341,22 @@ Shader "Hidden/Clouds"
             
                 float cosAngle = cos(currentRotation);
                 float sinAngle = sin(currentRotation);
-                float3 rotatedOffset = float3(
+                float3 rotatedOffset = float3
+                (
                     offset.x * cosAngle - offset.z * sinAngle,
                     offset.y,
                     offset.x * sinAngle + offset.z * cosAngle
                 );
-                
-                float3 noiseOffset = rotatedOffset + cloudOffset;
             
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, noiseOffset * cloudScale, 0);
-                
-                float3 normalizedRotated = normalize(rotatedOffset);
-                float2 spherical = float2(0.5 * (atan2(normalizedRotated.z, normalizedRotated.x) / 3.14159265 + 1.0), 
-                                          acos(normalizedRotated.y) / 3.14159265);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+            
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
             
                 spherical.x += cloudOffset.x;
-                spherical.y += cloudOffset.z * 0.25;
+            
+                float latFactor = sin(spherical.y * 3.14159265);
+                spherical.y += cloudOffset.z * 0.25 * latFactor;
             
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
             

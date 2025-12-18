@@ -128,11 +128,14 @@ public class CloudRenderer : MonoBehaviour
         var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
         
         // wind stuff
+        //I added a "0.1" as for current shader the velocity is a little bit higher
         Vector3 north = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.North);
         Vector3 east = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.East);
         Vector3 windVec = Mathf.Cos(Mathf.Deg2Rad * config.windDirection) * north + Mathf.Sin(Mathf.Deg2Rad * config.windDirection) * east;
-        config.offset += config.windSpeed * (float)Game.Instance.FlightScene.TimeManager.DeltaTime * windVec;
+        config.offset += config.windSpeed*0.25f * (float)Game.Instance.FlightScene.TimeManager.DeltaTime * windVec;
         config.offset.Set(config.offset.x % 1.0f, config.offset.y % 1.0f, config.offset.z % 1.0f);
+        
+        
 
         mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
         mat.SetVector("sphereCenter", planetCenter);
@@ -141,8 +144,8 @@ public class CloudRenderer : MonoBehaviour
         mat.SetVector("blueNoiseOffset", Random.insideUnitCircle);
         mat.SetMatrix("reprojMat", prevViewProjMat);
         
-        
-        accumulatedRotation += config.globalRotationAngular * (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
+        //so as this one
+        accumulatedRotation += config.globalRotationAngular*0.05f * (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
         mat.SetFloat("currentRotation",accumulatedRotation);
         
         prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;

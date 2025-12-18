@@ -5,6 +5,8 @@ using ModApi.Ui.Inspector;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using ModApi.Craft;
+using ModApi.Flight.Sim;
 
 public class Volken
 {
@@ -85,6 +87,23 @@ public class Volken
     {
         if (e.Scene == "Flight")
         {
+            Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+            cloudConfig.enabled = false;
+            cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+            cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
+            farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
+        }
+        else
+        {
+            Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+        }
+    }
+    private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
+    {
+        if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
+        {
+            cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
             cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
@@ -92,6 +111,7 @@ public class Volken
         }
     }
 
+    
     private void GenerateNoiseTextures()
     {
         whorleyTex = _noise.GetWhorleyFBM3D(128, 4, 4, 0.5f, 2.0f);
@@ -186,11 +206,12 @@ public class Volken
 
         var renderToggleModel = new ToggleModel("Main Toggle", () => cloudConfig.enabled, s =>
         {
+            if (!Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
+            {
+                Game.Instance.FlightScene.FlightSceneUI.ShowMessage("°`_´° hey I don't think there should be clouds here");
+                return;
+            }
             cloudConfig.enabled = s;
-
-            if (s && !Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage("°`_´°");
-
             ValueChanged();
         });
 

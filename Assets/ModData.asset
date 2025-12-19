@@ -27,6 +27,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 5c03357c1bfd4594e98c6a1fadfda428, type: 3}
   - {fileID: 2800000, guid: 4afe011b80cfb254588587267d7fc7a5, type: 3}
   - {fileID: 102900000, guid: 86892f66e1db2ed48acc395bc0cdc055, type: 3}
+  - {fileID: 2800000, guid: 722d9288623fd6d4896668c18735939c, type: 3}
   _prefabs: []
   _steamDescription: 
   _steamLanguage: English
@@ -41,4 +42,5 @@ MonoBehaviour:
   _partStyleExtensions: []
   _partTextureStyles: []
   _persistentObjects: []
-  _uiResourceDatabases: []
+  _uiResourceDatabases:
+  - {fileID: 11400000, guid: fd681a5bcfcdd444783d7dd0a9ab2ced, type: 2}

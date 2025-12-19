@@ -425,7 +425,8 @@ Shader "Hidden/Clouds"
                 }
 
                 // offset the sample ray starting position using blue noise to avoid banding
-                float rayDist = startRayDist + blueNoiseStrength * stepSize * BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
+                float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
+                float rayDist = startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5;
 
                 // precompute phase values
                 float phaseValue = Phase(dot(viewDir, -lightDir));

@@ -123,33 +123,77 @@ public class CloudRenderer : MonoBehaviour
     public void SetDynamicProperties()
     {
         var craftNode = Game.Instance.FlightScene.CraftNode;
-        // position of the center of the parent body in view space
         Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
         var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
+    
+        float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
         
-        // wind stuff
-        //I added a "0.1" as for current shader the velocity is a little bit higher
+        //wind stuff
         Vector3 north = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.North);
         Vector3 east = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.East);
-        Vector3 windVec = Mathf.Cos(Mathf.Deg2Rad * config.windDirection) * north + Mathf.Sin(Mathf.Deg2Rad * config.windDirection) * east;
-        config.offset += config.windSpeed*0.25f * (float)Game.Instance.FlightScene.TimeManager.DeltaTime * windVec;
-        config.offset.Set(config.offset.x % 1.0f, config.offset.y % 1.0f, config.offset.z % 1.0f);
-        
-        
+        float rad = Mathf.Deg2Rad * config.windDirection;
+        Vector3 windDir = Mathf.Cos(rad) * north + Mathf.Sin(rad) * east;
+        float speedFactor = GetWindSpeedFactor(config.windDirection);
+        //
+        float Fractional(float f)
+        {
+            return f - Mathf.Floor(f);
+        }
+        config.offset += config.windSpeed * speedFactor * deltaTime * windDir;
+        config.offset.x = Fractional(config.offset.x);
+        config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加
+        config.offset.z = Fractional(config.offset.z);
 
+
+        /*
+        config.offset += config.windSpeed * speedFactor * deltaTime * windDir;
+        config.offset.x -= Mathf.Floor(config.offset.x);
+        config.offset.z -= Mathf.Floor(config.offset.z);
+        */
+        
+        //self rotation part
+        accumulatedRotation += config.globalRotationAngular * deltaTime;
+        mat.SetFloat("currentRotation", accumulatedRotation);
+    
+       //other stuff
         mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
         mat.SetVector("sphereCenter", planetCenter);
         mat.SetVector("lightDir", sun.transform.forward);
         mat.SetVector("cloudOffset", config.offset);
-        mat.SetVector("blueNoiseOffset", Random.insideUnitCircle);
+        float time = (float)Game.Instance.GameState.GetCurrentTime();
+        mat.SetVector("blueNoiseOffset", new Vector2
+        (
+            Mathf.PerlinNoise(time * 0.5f, 0f) * 2f - 1f,
+            Mathf.PerlinNoise(0f, time * 0.5f) * 2f - 1f
+        ));
         mat.SetMatrix("reprojMat", prevViewProjMat);
-        
-        //so as this one
-        accumulatedRotation += config.globalRotationAngular*0.05f * (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
-        mat.SetFloat("currentRotation",accumulatedRotation);
-        
+    
         prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
+        float GetWindSpeedFactor(float directionDeg)
+        {
+            // 归一化到 -180 ~ 180
+            float angle = directionDeg % 360f;
+            if (angle > 180f) angle -= 360f;
+            if (angle < -180f) angle += 360f;
+            
+            float absAngle = Mathf.Abs(angle);
+
+            if (absAngle < 45f || absAngle > 135f) 
+            {
+                return 2.0f;  
+            }
+            else if (absAngle > 60f && absAngle < 120f)
+            {
+                return 1.0f;
+            }
+            else
+            {
+                float t = Mathf.InverseLerp(45f, 60f, absAngle);
+                return Mathf.Lerp(2.0f, 1.0f, t);
+            }
+        }
     }
+    
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
+using Random = System.Random;
 
 public class Volken
 {

@@ -1,4 +1,6 @@
 using Assets.Packages.DevConsole;
+using Assets.Scripts.Flight.UI;
+using HarmonyLib;
 
 namespace Assets.Scripts
 {
@@ -36,17 +38,38 @@ namespace Assets.Scripts
         protected override void OnModInitialized()
         {
             base.OnModInitialized();
+            GameObject VolkenUI=new GameObject("VolkenUI");
+            VolkenUI.AddComponent<VolkenUserInterface>();
+            GameObject.DontDestroyOnLoad(VolkenUI);
+            VolkenUI.SetActive(true);
             Volken.Initialize();
-            /*
-            GameObject VUI=new GameObject("VUI");
-            VUI.AddComponent<VolkenUserInterface>();
-            */
             RegisterCommands();
         }
 
         private void RegisterCommands()
         {
+            //I don't really know if i need to use console here so I'll just leave a function here so far
+            
         }
 
+    }
+    [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
+    class LayoutRebuiltPatch2
+    {
+        static bool Prefix(NavPanelController ___instance)
+        {
+            try
+            {
+                Debug.LogFormat("Volken harmonyPatched0");
+                ___instance.xmlLayout.GetElementById(VolkenUserInterface.volkenUserInterfaceID).AddOnClickEvent(VolkenUserInterface.Instance.OnToggleVolkenUI, true);
+                Debug.LogFormat("Volken harmonyPatched");
+            }
+            catch (Exception e)
+            {
+                Debug.LogFormat("Volken:Error while adding click event to{0}", e);
+            }
+
+            return true;
+        }
     }
 }

@@ -27,3 +27,5 @@ Assets/Scripts/Volken/to-do.xml.meta
 Volken.sln.DotSettings.user
 UserSettings/Layouts/default-2022.dwlt
 UserSettings/Layouts/default-2022.dwlt
+UserSettings
+*.dwlt

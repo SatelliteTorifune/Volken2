@@ -65,6 +65,16 @@ public class VolkenUserInterface:MonoBehaviour
                     ns + "Image",
                     new XAttribute("class", "panel-button-icon"),
                     new XAttribute("sprite", "Volken/Sprites/VolkenUI"))));
+        request.AddOnLayoutRebuiltAction(xmlLayoutController =>
+        {
+            var button = xmlLayoutController.XmlLayout.GetElementById(volkenUserInterfaceID);
+            button.AddOnClickEvent(OnToggleVolkenUI2);
+        });
+    }
+
+    private static void OnToggleVolkenUI2()
+    {
+        Debug.Log("Volken inspector panel clicked");
     }
 
     //this is called in Harmony

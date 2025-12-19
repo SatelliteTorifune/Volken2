@@ -1,20 +1,12 @@
-using Assets.Packages.DevConsole;
+using System.Reflection;
 using Assets.Scripts.Flight.UI;
+using Assets.Scripts.Flight.UI.Navball;
 using HarmonyLib;
+using ModApi.Flight.UI;
 
 namespace Assets.Scripts
 {
     using System;
-    using System.Collections.Generic;
-    using System.Drawing.Printing;
-    using System.Linq;
-    using System.Text;
-    using Assets.Scripts.Flight;
-    using ModApi;
-    using ModApi.Common;
-    using ModApi.Mods;
-    using ModApi.Scenes.Events;
-    using ModApi.Ui.Inspector;
     using UnityEngine;
 
     /// <summary>
@@ -35,9 +27,11 @@ namespace Assets.Scripts
         /// <value>The singleton instance of the mod object.</value>
         public static Mod Instance { get; } = GetModInstance<Mod>();
         
-        protected override void OnModInitialized()
+        public override void OnModLoaded()
         {
             base.OnModInitialized();
+            var harmony = new Harmony("com.SatelliteTorifune.Volken");
+            harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
             GameObject VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
@@ -53,16 +47,16 @@ namespace Assets.Scripts
         }
 
     }
+    
     [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
-    class LayoutRebuiltPatch2
+    class LayoutRebuiltPatch
     {
-        static bool Prefix(NavPanelController ___instance)
+        static bool Prefix(NavPanelController __instance)
         {
             try
             {
-                Debug.LogFormat("Volken harmonyPatched0");
-                ___instance.xmlLayout.GetElementById(VolkenUserInterface.volkenUserInterfaceID).AddOnClickEvent(VolkenUserInterface.Instance.OnToggleVolkenUI, true);
-                Debug.LogFormat("Volken harmonyPatched");
+                __instance.xmlLayout.GetElementById(VolkenUserInterface.volkenUserInterfaceID)
+                    .AddOnClickEvent(VolkenUserInterface.Instance.OnToggleVolkenUI, true);
             }
             catch (Exception e)
             {
@@ -72,4 +66,5 @@ namespace Assets.Scripts
             return true;
         }
     }
+    
 }

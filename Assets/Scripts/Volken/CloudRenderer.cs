@@ -152,7 +152,7 @@ public class CloudRenderer : MonoBehaviour
         */
         
         //self rotation part
-        accumulatedRotation += config.globalRotationAngular * deltaTime;
+        accumulatedRotation += config.globalRotationAngular*5e-4f * deltaTime;
         mat.SetFloat("currentRotation", accumulatedRotation);
     
        //other stuff

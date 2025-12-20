@@ -26,7 +26,7 @@ public class Volken
     public Texture2D blueNoiseTex;
 
     private CloudNoise _noise;
-    private List<string> _availableConfigs = new List<string>();
+    public List<string> _availableConfigs = new List<string>();
     
     public const string BlueNoisePath = "Assets/Resources/Volken/BlueNoise.png";
     public const string PerlinFullRough = "Assets/Resources/Volken/PerlinFullRough.png";
@@ -60,8 +60,6 @@ public class Volken
 
     private Volken()
     {
-        RefreshConfigList();
-        
         if (_availableConfigs.Count > 0)
         {
             currentConfigName = _availableConfigs[0];
@@ -81,7 +79,7 @@ public class Volken
         GenerateNoiseTextures();
 
         Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded;
-        Game.Instance.UserInterface.AddBuildInspectorPanelAction(InspectorIds.FlightView, OnBuildFlightViewInspectorPanel);
+        //Game.Instance.UserInterface.AddBuildInspectorPanelAction(InspectorIds.FlightView, OnBuildFlightViewInspectorPanel);
     }
 
     private void OnSceneLoaded(object sender, SceneEventArgs e)
@@ -129,14 +127,7 @@ public class Volken
         mat.SetTexture("BlueNoiseTex", blueNoiseTex);
     }
 
-    private void RefreshConfigList()
-    {
-        _availableConfigs = CloudConfig.GetAllConfigNames();
-        if (_availableConfigs.Count == 0)
-        {
-            _availableConfigs.Add("Default");
-        }
-    }
+    
 
     private void OnBuildFlightViewInspectorPanel(BuildInspectorPanelRequest request)
     {
@@ -166,7 +157,7 @@ public class Volken
                 {
                     cloudConfig.SaveToFile(name);
                     currentConfigName = name;
-                    RefreshConfigList();
+                    VolkenUserInterface.Instance.RefreshConfigList();
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config saved as '{name}'!");
                 }
                 inputDialog.Close();
@@ -361,7 +352,7 @@ public class Volken
         qualityGroup.Add(historyBlendModel);
     }
 
-    private void ValueChanged()
+    public void ValueChanged()
     {
         if(cloudRenderer != null) 
         {

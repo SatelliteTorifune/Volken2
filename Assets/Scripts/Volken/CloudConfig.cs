@@ -4,6 +4,7 @@ using System.Xml.Serialization;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using Assets.Scripts;
 
 [Serializable]
 public class CloudConfig
@@ -122,14 +123,13 @@ public class CloudConfig
 
     public static List<string> GetAllConfigNames()
     {
-        string folderPath = GetConfigFolderPath();
         
-        if (!Directory.Exists(folderPath))
+        if (!Directory.Exists(GetConfigFolderPath()))
         {
             return new List<string>();
         }
 
-        string[] files = Directory.GetFiles(folderPath, "*.xml");
+        string[] files = Directory.GetFiles(GetConfigFolderPath(), "*.xml");
         List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
         
         return configNames;
@@ -152,11 +152,11 @@ public class CloudConfig
             {
                 serializer.Serialize(stream, this);
             }
-            Debug.Log($"Cloud config '{configName}' saved to: {filePath}");
+            Mod.LOG($"Cloud config '{configName}' saved to: {filePath}");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"Failed to save cloud config '{configName}': {e.Message}");
+            Mod.LOG($"Failed to save cloud config '{configName}': {e.Message}");
         }
     }
 
@@ -166,7 +166,7 @@ public class CloudConfig
         
         if (!File.Exists(filePath))
         {
-            Debug.LogWarning($"Config file '{configName}' not found at {filePath}. Creating default config.");
+            Mod.LOG($"Config file '{configName}' not found at {filePath}. Creating default config.");
             CloudConfig defaultConfig = CreateDefault();
             defaultConfig.SaveToFile(configName);
             return defaultConfig;
@@ -178,37 +178,24 @@ public class CloudConfig
             using (FileStream stream = new FileStream(filePath, FileMode.Open))
             {
                 CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
-                Debug.Log($"Cloud config '{configName}' loaded from: {filePath}");
+                Mod.LOG($"Cloud config '{configName}' loaded from: {filePath}");
                 return config;
             }
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
+            Mod.LOG($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
             return CreateDefault();
         }
     }
 
-    public static bool DeleteConfig(string configName)
+    /*
+    public static void DeleteConfig(string configName)
     {
-        try
-        {
-            string filePath = GetConfigPath(configName);
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-                Debug.Log($"Config '{configName}' deleted.");
-                return true;
-            }
-            return false;
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogError($"Failed to delete config '{configName}': {e.Message}");
-            return false;
-        }
+        throw new Exception("UNAVAILABLE FUNCTION");
+        //yes I was about to write this,but lmao why don't you go open explorer and delete the config yourself anyway?
     }
-
+    */
     public static CloudConfig CreateDefault()
     {
         return new CloudConfig

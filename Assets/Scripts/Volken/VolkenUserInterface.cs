@@ -9,6 +9,7 @@ using ModApi.Scenes.Events;
 using ModApi.Ui;
 using ModApi.Ui.Inspector;
 using UnityEngine;
+using Assets.Scripts.Mods;
 
 public class VolkenUserInterface:MonoBehaviour
 {
@@ -40,7 +41,7 @@ public class VolkenUserInterface:MonoBehaviour
                 Volken.Initialize();
                 
                 // Refresh config list before creating UI
-                RefreshConfigList();
+                Volken.Instance.RefreshConfigList();
                 
                 CreateInspectorPanel();
                 if (inspectorPanel != null)
@@ -53,7 +54,7 @@ public class VolkenUserInterface:MonoBehaviour
             }
             catch (Exception ex)
             {
-                Debug.LogError("Volken: Error OnSceneLoaded: " + ex);
+                Mod.LOG("Volken: Error OnSceneLoaded: " + ex);
             }
         }
         else
@@ -89,7 +90,7 @@ public class VolkenUserInterface:MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("Volken: Error in OnPlayerChangedSoi: " + ex);
+            Mod.LOG("Volken: Error in OnPlayerChangedSoi: " + ex);
         }
     }
 
@@ -127,7 +128,7 @@ public class VolkenUserInterface:MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("Volken: Error building flight UI: " + ex);
+            Mod.LOG("Volken: Error building flight UI: " + ex);
         }
     }
     
@@ -135,15 +136,11 @@ public class VolkenUserInterface:MonoBehaviour
     {
         try 
         {
-            // Ensure config list is up to date
-            RefreshConfigList();
-            
-            // If panel doesn't exist or was destroyed, recreate it
+            Volken.Instance.RefreshConfigList();
             if (inspectorPanel == null)
             {
                 CreateInspectorPanel();
             }
-            
             if (inspectorPanel != null)
             {
                 inspectorPanel.Visible = !inspectorPanel.Visible;
@@ -151,7 +148,7 @@ public class VolkenUserInterface:MonoBehaviour
         } 
         catch (Exception ex) 
         {
-            Debug.LogError("Volken: Error toggling UI: " + ex);
+            Mod.LOG("Volken: Error toggling UI: " + ex);
             try
             {
                 CreateInspectorPanel();
@@ -162,11 +159,11 @@ public class VolkenUserInterface:MonoBehaviour
             }
             catch (Exception createEx)
             {
-                Debug.LogError("Volken: Error creating panel: " + createEx);
+                Mod.LOG("Volken: Error creating panel: " + createEx);
             }
         }
     }
-
+    
     private void CreateInspectorPanel()
     {
         try
@@ -178,7 +175,10 @@ public class VolkenUserInterface:MonoBehaviour
                     inspectorPanel.CloseButtonClicked -= OnCloseButtonClicked;
                     inspectorPanel.Visible = false;
                 }
-                catch { }
+                catch(Exception e)
+                {
+                    Mod.LOG($"error in VolkenInterface.CreateInspectorPanel {e}");
+                }
             }
 
             inspectorModel = new InspectorModel("VolkenSettingsInspector", "<color=green>Cloud Settings");
@@ -198,7 +198,7 @@ public class VolkenUserInterface:MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError("Volken: Error saving config: " + ex);
+                    Mod.LOG("Volken: Error saving config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error saving config!");
                 }
             }));
@@ -220,13 +220,16 @@ public class VolkenUserInterface:MonoBehaviour
                             {
                                 Volken.Instance.cloudConfig.SaveToFile(name);
                                 Volken.Instance.currentConfigName = name;
-                                RefreshConfigList();
+                                Volken.Instance.AddConfig("name");
+                                Volken.Instance.RefreshConfigList();
+                                inspectorPanel.Visible = false;
+                                RebuildInspectorPanel();
                                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config saved as '{name}'!");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Debug.LogError("Volken: Error saving new config: " + ex);
+                            Mod.LOG("Volken: Error saving new config: " + ex);
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error saving new config!");
                         }
                         finally
@@ -237,15 +240,14 @@ public class VolkenUserInterface:MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError("Volken: Error creating save dialog: " + ex);
+                    Mod.LOG("Volken: Error creating save dialog: " + ex);
                 }
             }));
-            configManagementGroup.Add(saveAsButton);
-        
-            // Refresh config list before creating dropdown
-            RefreshConfigList();
             
-            var loadConfigDropdown = new DropdownModel(
+            configManagementGroup.Add(saveAsButton);
+            
+            var loadConfigDropdown = new DropdownModel
+            (
                 "Load Config",
                 () => Volken.Instance.currentConfigName,
                 (newConfig) =>
@@ -258,19 +260,34 @@ public class VolkenUserInterface:MonoBehaviour
                             Volken.Instance.cloudConfig.CopyFrom(loadedConfig);
                             Volken.Instance.currentConfigName = newConfig;
                             Volken.Instance.ValueChanged();
+                            
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{newConfig}' loaded!");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError("Volken: Error loading config: " + ex);
+                        Mod.LOG("Volken: Error loading config: " + ex);
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error loading config!");
                     }
                 },
+                
                 Volken.Instance._availableConfigs
             );
             configManagementGroup.Add(loadConfigDropdown);
-            
+            /*
+            var anotherDropDown = new DropdownModel(
+                "TEST",
+                    () =>
+                    {
+                        return Volken.Instance.currentConfigName;
+                    },
+                    value =>
+                    {
+                        Volken.Instance.cloudConfig.CopyFrom(CloudConfig.LoadFromFile(value));
+                    },
+                    Volken.Instance._availableConfigs
+                );
+            configManagementGroup.Add(anotherDropDown);*/
             var resetToDefaultButton = new TextButtonModel("Reset Current to Default", (Action<TextButtonModel>)(b => 
             {
                 try
@@ -281,14 +298,15 @@ public class VolkenUserInterface:MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError("Volken: Error resetting config: " + ex);
+                    Mod.LOG("Volken: Error resetting config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error resetting config!");
                 }
             }));
             configManagementGroup.Add(resetToDefaultButton);
             inspectorModel.Add(configManagementGroup);
-            #endregion
 
+           
+            #endregion
             #region cloudShapeGroup
             GroupModel cloudShapeGroup = new GroupModel("Clouds");
             var renderToggleModel = new ToggleModel("Main Toggle", () => Volken.Instance.cloudConfig.enabled, s =>
@@ -464,31 +482,41 @@ public class VolkenUserInterface:MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("Volken: Error creating inspector panel: " + ex);
+            Mod.LOG("Volken: Error creating inspector panel: " + ex);
             inspectorPanel = null;
         }
     }
-
-    public void RefreshConfigList()
+    public void RebuildInspectorPanel()
     {
         try
         {
-            Volken.Instance._availableConfigs = CloudConfig.GetAllConfigNames();
-            if (Volken.Instance._availableConfigs.Count == 0)
+            // 先销毁旧面板
+            if (inspectorPanel != null)
             {
-                Volken.Instance._availableConfigs.Add("Default");
+                try
+                {
+                    inspectorPanel.CloseButtonClicked -= OnCloseButtonClicked;
+                    inspectorPanel.Visible = false;
+                }
+                catch { /* 忽略错误 */ }
+                inspectorPanel = null;
             }
+        
+            // 创建新面板
+            CreateInspectorPanel();
         }
         catch (Exception ex)
         {
-            Debug.LogError("Volken: Error refreshing config list: " + ex);
-            Volken.Instance._availableConfigs = new List<string> { "Default" };
+            Mod.LOG("Volken: Error rebuilding panel: " + ex);
         }
+
+        inspectorPanel.Visible = true;
     }
+    
     
     private void UpdateInfo()
     {
-        // This can be empty or used for future updates
+        
     }
     
     private string FormatValue(float arg, int decimals) 

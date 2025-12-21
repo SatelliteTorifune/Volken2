@@ -45,9 +45,35 @@ namespace Assets.Scripts
             //I don't really know if i need to use console here so I'll just leave a function here so far
             
         }
+        #region LOG
+        public static void LOG(object message)
+        {
+            if (ModSettings.Instance.ShowDevLog)
+            {
+                Debug.unityLogger.Log(message);
+            }
+        }
+        public static void LOG(string format, params object[] args)
+        {
+            if (ModSettings.Instance.ShowDevLog)
+            {
+                Debug.unityLogger.LogFormat(LogType.Log, format, args);
+            }
+        }
+        public static void LOG(UnityEngine.Object context, string format, params object[] args)
+        {
+            if (ModSettings.Instance.ShowDevLog)
+            {
+                Debug.unityLogger.LogFormat(LogType.Log, context, format, args);
+            }
+        }
+    
+
+        #endregion
 
     }
-    
+
+    #region HarmonyPatch
     [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
     class LayoutRebuiltPatch
     {
@@ -60,11 +86,14 @@ namespace Assets.Scripts
             }
             catch (Exception e)
             {
-                Debug.LogFormat("Volken:Error while adding click event to{0}", e);
+                Mod.LOG("Volken:Error while adding click event to{0}", e);
             }
 
             return true;
         }
     }
+    #endregion
+
+    
     
 }

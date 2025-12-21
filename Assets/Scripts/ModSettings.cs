@@ -1,3 +1,5 @@
+using System.Windows.Forms;
+
 namespace Assets.Scripts
 {
     using System;
@@ -40,6 +42,7 @@ namespace Assets.Scripts
         ///// The TestSetting1 value.
         ///// </value>
         public NumericSetting<int> NoiseMapIndex { get; private set; }
+        public BoolSetting ShowDevLog{get; private set;}
         
 
         /// <summary>
@@ -51,6 +54,7 @@ namespace Assets.Scripts
                 .SetDescription("the noise map index.")
                 .SetDisplayFormatter(x => x.ToString("F1"))
                 .SetDefault(2);
+            this.ShowDevLog=this.CreateBool("Show Dev Log", "ShowDevLog").SetDefault(true).SetDescription("Show Log for devs or not");
         }
     }
 }

@@ -1,8 +1,5 @@
-using System.Reflection;
 using Assets.Scripts.Flight.UI;
-using Assets.Scripts.Flight.UI.Navball;
 using HarmonyLib;
-using ModApi.Flight.UI;
 
 namespace Assets.Scripts
 {

@@ -7,7 +7,7 @@ Shader "Hidden/Clouds"
         SubShader
     {
         Cull Off ZWrite Off ZTest Always
-
+        
         Pass
         {
             Name "FarDepth"
@@ -624,7 +624,6 @@ Shader "Hidden/Clouds"
         Pass
         {
             Name "Composite"
-        
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -669,18 +668,20 @@ Shader "Hidden/Clouds"
                 float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
+                
+                // 添加深度检测，避免与近处透明物体冲突
                 float depthThreshold = 5000.0;  
                 float depthMask = saturate(sceneDepth / depthThreshold);
+                
+                // 关键修改：只在远处渲染云
                 float3 maskedCloudColor = clouds.rgb * depthMask;
                 float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
                 
                 // Composite
                 return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
             }
-
-
-
             ENDCG
+
         }
     }
 }

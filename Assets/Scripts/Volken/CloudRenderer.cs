@@ -194,7 +194,7 @@ public class CloudRenderer : MonoBehaviour
         }
     }
     
-
+    [ImageEffectOpaque] 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         if (!config.enabled || FarCameraScript.farDepthTex == null)

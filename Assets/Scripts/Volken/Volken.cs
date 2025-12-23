@@ -124,7 +124,15 @@ public class Volken
         }
         else
         {
-            Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+            try
+            {
+                Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+            }
+            catch (Exception exception)
+            {
+                Mod.LOG("failed to unregister");
+            }
+           
         }
     }
     private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)

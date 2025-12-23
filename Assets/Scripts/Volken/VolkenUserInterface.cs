@@ -57,7 +57,14 @@ public class VolkenUserInterface:MonoBehaviour
         }
         else
         {
-            
+            try
+            {
+                Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+            }
+            catch (Exception exception)
+            {
+                Mod.LOG("Volken: Error OnSceneLoaded: " + exception);
+            }
         }
     }
 

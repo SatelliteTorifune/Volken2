@@ -139,17 +139,10 @@ public class CloudRenderer : MonoBehaviour
         {
             return f - Mathf.Floor(f);
         }
-        config.offset += config.windSpeed * speedFactor * deltaTime * windDir;
+        config.offset += config.windSpeed* 0.1f * speedFactor * deltaTime * windDir;
         config.offset.x = Fractional(config.offset.x);
         config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加
         config.offset.z = Fractional(config.offset.z);
-
-
-        /*
-        config.offset += config.windSpeed * speedFactor * deltaTime * windDir;
-        config.offset.x -= Mathf.Floor(config.offset.x);
-        config.offset.z -= Mathf.Floor(config.offset.z);
-        */
         
         //self rotation part
         accumulatedRotation += config.globalRotationAngular*5e-4f * deltaTime;
@@ -168,7 +161,9 @@ public class CloudRenderer : MonoBehaviour
         ));
         mat.SetMatrix("reprojMat", prevViewProjMat);
     
+        mat.SetVector("clipPlanes", new Vector2(cam.nearClipPlane, cam.farClipPlane));
         prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
+        mat.SetFloat("_NearThreshold", config.nearThreshold); 
         float GetWindSpeedFactor(float directionDeg)
         {
             // 归一化到 -180 ~ 180
@@ -194,6 +189,7 @@ public class CloudRenderer : MonoBehaviour
         }
     }
     
+    //this will cause water eat cloud, don't do this
     [ImageEffectOpaque] 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {

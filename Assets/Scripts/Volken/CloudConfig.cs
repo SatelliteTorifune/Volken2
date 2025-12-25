@@ -21,6 +21,8 @@ public class CloudConfig
     public float detailScale;
     public float detailStrength;
     
+    
+    
     [XmlIgnore]
     public Vector4 phaseParameters;
     [XmlElement("phaseParameters")]
@@ -93,6 +95,8 @@ public class CloudConfig
     public float scatterPower = 1.5f;
     public float multiScatterBlend = 0.3f;
     public float ambientScatterStrength = 0.5f;
+
+    public float nearThreshold = 1e5f;
     
     [XmlIgnore]
     public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
@@ -106,7 +110,7 @@ public class CloudConfig
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
 
-    public static string GetConfigFolderPath()
+    public static string GetUniversalConfigFolderPath()
     {
         string folderPath = Application.persistentDataPath + CONFIG_FOLDER;
         if (!Directory.Exists(folderPath))
@@ -118,18 +122,18 @@ public class CloudConfig
 
     public static string GetConfigPath(string configName)
     {
-        return Path.Combine(GetConfigFolderPath(), configName + ".xml");
+        return Path.Combine(GetUniversalConfigFolderPath(), configName + ".xml");
     }
 
     public static List<string> GetAllConfigNames()
     {
         
-        if (!Directory.Exists(GetConfigFolderPath()))
+        if (!Directory.Exists(GetUniversalConfigFolderPath()))
         {
             return new List<string>();
         }
 
-        string[] files = Directory.GetFiles(GetConfigFolderPath(), "*.xml");
+        string[] files = Directory.GetFiles(GetUniversalConfigFolderPath(), "*.xml");
         List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
         
         return configNames;
@@ -233,7 +237,8 @@ public class CloudConfig
             ambientScatterStrength = 0.5f,
             customWavelengths = new Vector3(680f, 550f, 450f),
             silverLiningIntensity = 1.0f,
-            forwardScatteringBias = 0.85f
+            forwardScatteringBias = 0.85f,
+            nearThreshold = 1e4f
         };
     }
 
@@ -274,7 +279,8 @@ public class CloudConfig
             ambientScatterStrength = this.ambientScatterStrength,
             customWavelengths = this.customWavelengths,
             silverLiningIntensity = this.silverLiningIntensity,
-            forwardScatteringBias = this.forwardScatteringBias
+            forwardScatteringBias = this.forwardScatteringBias,
+            nearThreshold = 1e4f
         };
     }
     
@@ -314,6 +320,7 @@ public class CloudConfig
         this.customWavelengths = source.customWavelengths;
         this.silverLiningIntensity = source.silverLiningIntensity;
         this.forwardScatteringBias = source.forwardScatteringBias;
+        this.nearThreshold= source.nearThreshold;
     }
 
 }

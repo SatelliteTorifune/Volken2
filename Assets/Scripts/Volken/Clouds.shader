@@ -3,11 +3,12 @@ Shader "Hidden/Clouds"
     Properties
     {
         _MainTex("Texture", 2D) = "white" {}
+        _NearThreshold("Near Threshold", Float) = 2000.0
     }
         SubShader
     {
         Cull Off ZWrite Off ZTest Always
-        
+
         Pass
         {
             Name "FarDepth"
@@ -624,6 +625,7 @@ Shader "Hidden/Clouds"
         Pass
         {
             Name "Composite"
+        
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -662,26 +664,37 @@ Shader "Hidden/Clouds"
             
             float3 sphereCenter;
             float surfaceRadius;
-        
+            float _NearThreshold;
+            
             float4 frag(v2f i) : SV_Target
             {
                 float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
                 
-                // 添加深度检测，避免与近处透明物体冲突
-                float depthThreshold = 5000.0;  
-                float depthMask = saturate(sceneDepth / depthThreshold);
+                float nearThreshold = _NearThreshold;
+                if (sceneDepth > 0.0 && sceneDepth < nearThreshold)
+                {
+                    float nearFactor = smoothstep(0.0, nearThreshold, sceneDepth);
+                    nearFactor = lerp(0.2, 1.0, nearFactor);
+                    
+                    float3 finalCloudColor = clouds.rgb * nearFactor;
+                    float finalTransmittance = lerp(0.8, clouds.a, nearFactor);
+                    return float4(source.rgb * finalTransmittance + finalCloudColor, source.a);
+                }
                 
-                // 关键修改：只在远处渲染云
-                float3 maskedCloudColor = clouds.rgb * depthMask;
-                float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
-                
-                // Composite
-                return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
+                //when there is no cloud
+                else 
+                {
+                    float depthThreshold = 5000.0;  
+                    float depthMask = saturate(sceneDepth / depthThreshold);
+                    float3 maskedCloudColor = clouds.rgb * depthMask;
+                    float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
+                    
+                    return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
+                }
             }
             ENDCG
-
         }
     }
 }

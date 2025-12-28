@@ -118,8 +118,8 @@ public class Volken
             Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-            //Game.Instance.FlightScene.GameObject.AddComponent<ForceSetting>();
-            Mod.Instance.VolkenUI.AddComponent<ForceSetting>();
+            Game.Instance.FlightScene.GameObject.AddComponent<ForceSetting>();
+            //Mod.Instance.VolkenUI.AddComponent<ForceSetting>();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
             cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
             farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();

@@ -389,7 +389,7 @@ public class VolkenUserInterface:MonoBehaviour
             
             var nearThresholdModel = new SliderModel("Near Threshold", () => Volken.Instance.cloudConfig.nearThreshold, s => { Volken.Instance.cloudConfig.nearThreshold = s;Volken.Instance.ValueChanged(); }, 1e3f, 2e4f);
             nearThresholdModel.ValueFormatter = (f) => FormatValue(f, 2);
-            cloudShapeGroup.Add(nearThresholdModel);
+            //cloudShapeGroup.Add(nearThresholdModel);
             
             var scatterPowerModel = new SliderModel("Scatter Power", () => Volken.Instance.cloudConfig.scatterPower, s => { Volken.Instance.cloudConfig.scatterPower = s;Volken.Instance.ValueChanged(); }, 1.0f, 2.5f);
             scatterPowerModel.ValueFormatter = (f) => FormatValue(f, 2);

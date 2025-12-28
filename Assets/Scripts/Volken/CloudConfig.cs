@@ -238,7 +238,7 @@ public class CloudConfig
             customWavelengths = new Vector3(680f, 550f, 450f),
             silverLiningIntensity = 1.0f,
             forwardScatteringBias = 0.85f,
-            nearThreshold = 1e4f
+            nearThreshold = 0f
         };
     }
 

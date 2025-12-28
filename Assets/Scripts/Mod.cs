@@ -9,7 +9,7 @@ namespace Assets.Scripts
     /// <summary>
     /// A singleton object representing this mod that is instantiated and initialize when the mod is loaded.
     /// </summary>
-    public class Mod : ModApi.Mods.GameMod
+    public partial class Mod : ModApi.Mods.GameMod
     {
         /// <summary>
         /// Prevents a default instance of the <see cref="Mod"/> class from being created.
@@ -17,30 +17,30 @@ namespace Assets.Scripts
         private Mod() : base()
         {
         }
-
+        
         /// <summary>
         /// Gets the singleton instance of the mod object.
         /// </summary>
         /// <value>The singleton instance of the mod object.</value>
         public static Mod Instance { get; } = GetModInstance<Mod>();
-        
+
+        public GameObject VolkenUI;
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
-            harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
-            GameObject VolkenUI=new GameObject("VolkenUI");
+            harmony.PatchAll();
+            VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
             VolkenUI.SetActive(true);
             Volken.Initialize();
             RegisterCommands();
+            
         }
-
         private void RegisterCommands()
         {
             //I don't really know if i need to use console here so I'll just leave a function here so far
-            
         }
         #region LOG
         public static void LOG(object message)
@@ -64,33 +64,6 @@ namespace Assets.Scripts
                 Debug.unityLogger.LogFormat(LogType.Log, context, format, args);
             }
         }
-    
-
         #endregion
-
     }
-
-    #region HarmonyPatch
-    [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
-    class LayoutRebuiltPatch
-    {
-        static bool Prefix(NavPanelController __instance)
-        {
-            try
-            {
-                __instance.xmlLayout.GetElementById(VolkenUserInterface.volkenUserInterfaceID)
-                    .AddOnClickEvent(VolkenUserInterface.Instance.OnToggleVolkenUI, true);
-            }
-            catch (Exception e)
-            {
-                Mod.LOG("Volken:Error while adding click event to{0}", e);
-            }
-
-            return true;
-        }
-    }
-    #endregion
-
-    
-    
 }

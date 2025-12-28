@@ -40,7 +40,9 @@ namespace Assets.Scripts
         ///// The TestSetting1 value.
         ///// </value>
         public NumericSetting<int> NoiseMapIndex { get; private set; }
+        public NumericSetting<int> MinHeight { get; private set; }
         public BoolSetting ShowDevLog{get; private set;}
+        public BoolSetting AlterTransparency{get; private set;}
         
 
         /// <summary>
@@ -52,7 +54,11 @@ namespace Assets.Scripts
                 .SetDescription("the noise map index.")
                 .SetDisplayFormatter(x => x.ToString("F1"))
                 .SetDefault(2);
+            this.MinHeight = this.CreateNumeric<int>("MinHeight", 10, 100, 1)
+                .SetDisplayFormatter(x => x.ToString("F0"))
+                .SetDefault(10);
             this.ShowDevLog=this.CreateBool("Show Dev Log", "ShowDevLog").SetDefault(true).SetDescription("Show Log for devs or not");
+            this.AlterTransparency=this.CreateBool("Alter Transparency", "AlterTransparency").SetDefault(true).SetDescription("the original transparency settings has been altered into this one");
         }
     }
 }

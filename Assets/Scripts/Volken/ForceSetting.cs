@@ -3,9 +3,8 @@ using UnityEngine;
 
 public class ForceSetting : MonoBehaviour
 {
-    private float checkInterval = 1f;
-
-    private void Start()
+    private float checkInterval = 2f;
+    private void OnEnable()
     {
         InvokeRepeating(nameof(CheckWaterTransparency), checkInterval, checkInterval);
     }
@@ -14,25 +13,24 @@ public class ForceSetting : MonoBehaviour
     {
         CancelInvoke(nameof(CheckWaterTransparency));  
     }
-
+    
     private void CheckWaterTransparency()
     {
         var flightScene = Game.Instance.FlightScene;
         if (flightScene == null) return;
-
         var flightData = flightScene.CraftNode.CraftScript.FlightData;
         if (flightData == null) return;
+        
+        bool targetTransparency = flightData.AltitudeAboveSeaLevel <= ModSettings.Instance.MinHeight && ModSettings.Instance.AlterTransparency.Value;
 
-        bool shouldBeTransparent = flightData.AltitudeAboveSeaLevel <= ModSettings.Instance.MinHeight && ModSettings.Instance.AlterTransparency.Value;
+        var actualWaterTransparency = Game.Instance.Settings.Quality.Water.Transparency;
 
-        var waterTransparency = Game.Instance.Settings.Quality.Water.Transparency;
-
-        if (waterTransparency.Value != shouldBeTransparent)
+        if (actualWaterTransparency.Value != targetTransparency)
         {
-            waterTransparency.Value = shouldBeTransparent;
+            actualWaterTransparency.Value = targetTransparency;
             Game.Instance.Settings.Quality.Water.CommitChanges();
             Game.Instance.Settings.Quality.ApplySettings();
-            Mod.LOG($"[ForceSetting] Water Transparency set to {shouldBeTransparent} at altitude {flightData.AltitudeAboveSeaLevel:F0}m");
+            Mod.LOG($"Volken.ForceSetting:Water Transparency set to {targetTransparency} at altitude {flightData.AltitudeAboveSeaLevel:F1}m");
         }
     }
 }

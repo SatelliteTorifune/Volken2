@@ -25,19 +25,27 @@ namespace Assets.Scripts
         public static Mod Instance { get; } = GetModInstance<Mod>();
 
         public GameObject VolkenUI;
+        public GameObject forceSettingScriptLoadGameObject;
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
+            
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
             VolkenUI.SetActive(true);
+            
+            forceSettingScriptLoadGameObject=new GameObject("ForceSettingObject");
+            forceSettingScriptLoadGameObject.AddComponent<ForceSetting>();
+            GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
+            forceSettingScriptLoadGameObject.SetActive(false);
+            
             Volken.Initialize();
             RegisterCommands();
-            
         }
+        
         private void RegisterCommands()
         {
             //I don't really know if i need to use console here so I'll just leave a function here so far

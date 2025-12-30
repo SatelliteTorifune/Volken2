@@ -2,8 +2,10 @@ using System;
 using System.Xml.Serialization;
 using System.IO;
 using System.Collections.Generic;
+using UnityEngine;
+using Assets.Scripts;
 
-
+[Serializable]
 public class PlanetConfig
 {
     [XmlAttribute]
@@ -16,18 +18,23 @@ public class PlanetConfig
         PlanetName = planetName;
         CloudConfigName = cloudConfigName;
     }
+    public PlanetConfig()
+    {
+        
+    }
     
 }
 [Serializable]
 public class PlanetConfigList
 {
+    
     public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
     [XmlArray("Configs")]
     public List<PlanetConfig> configList = new List<PlanetConfig>();
     
     public static string GetConfigFolderPath()
     {
-        string folderPath = CONFIG_FOLDER;
+        string folderPath = Application.persistentDataPath + CONFIG_FOLDER;
         if (!Directory.Exists(folderPath))
         {
             Directory.CreateDirectory(folderPath);
@@ -55,9 +62,11 @@ public class PlanetConfigList
             {
                 serializer.Serialize(stream, this);
             }
+            Mod.LOG($"Not Cloud config '{configName}' saved to: {filePath}");
         }
         catch (System.Exception e)
         {
+            Mod.LOG("SAving failed+"+e);
         }
     }
     public static PlanetConfigList LoadFromFile(string configName)
@@ -66,9 +75,7 @@ public class PlanetConfigList
         
         if (!File.Exists(filePath))
         {
-            PlanetConfigList defaultConfig = CreateDefault();
-            defaultConfig.SaveToFile(configName);
-            return defaultConfig;
+            return CreateDefault();
         }
 
         try
@@ -93,20 +100,25 @@ public class PlanetConfigList
         newP.SaveToFile(Volken.CloudConfigListName);
         return newP ;
     }
-    
-    
-
-    public string GetConfigName(PlanetConfigList planetConfigList,string planetName)
+    public string GetConfigName(string planetName)
     {
-        foreach (var config in planetConfigList.configList)
+        Mod.LOG($"Looking for config for planet: {planetName}");
+        Mod.LOG($"Available configs: {configList.Count}");
+    
+        foreach (var planetConfig in configList)
         {
-            if (config.PlanetName == planetName)
+            Mod.LOG($"Found planet config - Name: {planetConfig.PlanetName}, Config: {planetConfig.CloudConfigName}");
+            if (planetConfig.PlanetName == planetName)
             {
-              return config.CloudConfigName;  
+                Mod.LOG($"Match found! Returning config: {planetConfig.CloudConfigName}");
+                return planetConfig.CloudConfigName;
             }
         }
-        return "Not Found";
+    
+        Mod.LOG($"No match found for {planetName}, returning Default");
+        return "Default";
     }
+
 
     public bool ExistsInConfig(string planetName)
     {

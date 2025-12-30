@@ -63,7 +63,7 @@ public class Volken
     {
         
         mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
-        
+        planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
         _noise = new CloudNoise();
         GenerateNoiseTextures();
 
@@ -104,28 +104,23 @@ public class Volken
 
     private void OnSceneLoaded(object sender, SceneEventArgs e)
     {
+        RefreshConfigList();
+        planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
         if (e.Scene == "Flight")
         {
-            //planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
+            
             if (_availableConfigs.Count > 0)
             {
-                /*
-                if (planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
                 {
-                    foreach (var planetConfig in planetConfigList.configList)
-                    {
-                        if (planetConfig.CloudConfigName==Game.Instance.FlightScene.CraftNode.Parent.Name)
-                        {
-                            currentConfigName=planetConfig.CloudConfigName;
-                            return;
-                        }
-                    }
+                    currentConfigName = _availableConfigs[0];
+                    planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
                 }
                 else
                 {
-                    currentConfigName = _availableConfigs[0];
-                }*/
-                currentConfigName = _availableConfigs[0];
+                    currentConfigName = planetConfigList.GetConfigName(Game.Instance.FlightScene.CraftNode.Parent.Name);
+                }
+                
                 cloudConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
             }
             else
@@ -135,15 +130,29 @@ public class Volken
                 cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
                 _availableConfigs.Add(currentConfigName);
             }
-            
             Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
-            farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
+            if (gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null)
+            {
+                cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
+            }
+            else
+            {
+                cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+            }
+
+            if (gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null)
+            {
+                farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
+            }
+            else
+            {
+                farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+            }
+
             Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
-            //gameCam.FarCamera.gameObject.AddComponent<CloudRenderer>();
         }
         else
         {
@@ -155,27 +164,57 @@ public class Volken
             {
                 Mod.LOG("failed to unregister");
             }
-           
         }
     }
-
-    
     private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
+            if (_availableConfigs.Count > 0)
+            {
+                if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                {
+                    currentConfigName = _availableConfigs[0];
+                    planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                }
+                else
+                {
+                    currentConfigName = planetConfigList.GetConfigName(Game.Instance.FlightScene.CraftNode.Parent.Name);
+                }
+                cloudConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+            }
+            else
+            {
+                currentConfigName = "Default";
+                cloudConfig = CloudConfig.CreateDefault();
+                cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                _availableConfigs.Add(currentConfigName);
+            }
+            
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             RefreshConfigList();
-            /*
-            if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
-            {
-                this.planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
-            }*/
+            
             VolkenUserInterface.Instance.RebuildInspectorPanel();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
-            farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
+            if (gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null)
+            {
+                cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
+            }
+            else
+            {
+                cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+            }
+
+            if (gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null)
+            {
+                farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
+            }
+            else
+            {
+                farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+            }
+
             Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
         }
     }

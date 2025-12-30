@@ -210,6 +210,7 @@ public class VolkenUserInterface:MonoBehaviour
             }));
             configManagementGroup.Add(saveCurrentButton);
         
+            /*
             var saveUniversalAsButton = new TextButtonModel("Save As New Universal Config", (Action<TextButtonModel>)(b => 
             {
                 try
@@ -250,8 +251,7 @@ public class VolkenUserInterface:MonoBehaviour
                 }
             }));
             
-            //configManagementGroup.Add(saveUniversalAsButton);
-            
+            configManagementGroup.Add(saveUniversalAsButton);*/
             var savePlanetAsButton = new TextButtonModel("Save As New Config", (Action<TextButtonModel>)(b => 
             {
                 try
@@ -305,17 +305,14 @@ public class VolkenUserInterface:MonoBehaviour
                         if (!string.IsNullOrWhiteSpace(newConfig) && newConfig != Volken.Instance.currentConfigName)
                         {
                             var loadedConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,newConfig);
-                            if (loadedConfig==null)
-                            {
-                                Mod.LOG("this is null1");
-                            }
                             Volken.Instance.cloudConfig.CopyFrom(loadedConfig);
-                            Mod.LOG("good2");
                             Volken.Instance.currentConfigName = newConfig;
-                            Mod.LOG("good3");
                             Volken.Instance.ValueChanged();
-                           
-                            //Volken.Instance.planetConfigList.SetConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,newConfig);
+                            
+                            if (Volken.Instance.planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                            {
+                                Volken.Instance.planetConfigList.SetConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,Volken.Instance.currentConfigName);
+                            }
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{newConfig}' loaded!");
                         }
                     }

@@ -114,15 +114,7 @@ public class CloudConfig
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
     #endregion
-    public static string GetConfigFolderPath()
-    {
-        string folderPath = Application.persistentDataPath + CONFIG_FOLDER;
-        if (!Directory.Exists(folderPath))
-        {
-            Directory.CreateDirectory(folderPath);
-        }
-        return folderPath;
-    }
+    
 
     public static string GetConfigFolderPath(string planetName)
     {
@@ -133,34 +125,14 @@ public class CloudConfig
         }
         return folderPath;
     }
-
-    public static string GetConfigPath(string configName)
-    {
-        return Path.Combine(GetConfigFolderPath(), configName + ".xml");
-    }
-
+    
     public static string GetConfigPath(string planetName, string configName)
     {
         return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
     }
-
-    public static List<string> GetAllConfigNames()
-    {
-        
-        if (!Directory.Exists(GetConfigFolderPath()))
-        {
-            return new List<string>();
-        }
-
-        string[] files = Directory.GetFiles(GetConfigFolderPath(), "*.xml");
-        List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
-        
-        return configNames;
-    }
     
     public static List<string> GetAllConfigNames(string planetName)
     {
-        
         if (!Directory.Exists(GetConfigFolderPath(planetName)))
         {
             return new List<string>();
@@ -171,31 +143,7 @@ public class CloudConfig
         
         return configNames;
     }
-
-    public void SaveToFile(string configName)
-    {
-        try
-        {
-            string filePath = GetConfigPath(configName);
-            string directory = Path.GetDirectoryName(filePath);
-            
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
-            using (FileStream stream = new FileStream(filePath, FileMode.Create))
-            {
-                serializer.Serialize(stream, this);
-            }
-            Mod.LOG($"Cloud config '{configName}' saved to: {filePath}");
-        }
-        catch (System.Exception e)
-        {
-            Mod.LOG($"Failed to save cloud config '{configName}': {e.Message}");
-        }
-    }
+    
     public void SaveToFile(string planetName,string configName)
     {
         try
@@ -221,35 +169,7 @@ public class CloudConfig
         }
     }
 
-    public static CloudConfig LoadFromFile(string configName)
-    {
-        string filePath = GetConfigPath(configName);
-        
-        if (!File.Exists(filePath))
-        {
-            Mod.LOG($"Config file '{configName}' not found at {filePath}. Creating default config.");
-            CloudConfig defaultConfig = CreateDefault();
-            defaultConfig.SaveToFile(configName);
-            return defaultConfig;
-        }
-
-        try
-        {
-            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
-            using (FileStream stream = new FileStream(filePath, FileMode.Open))
-            {
-                CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
-                Mod.LOG($"Cloud config '{configName}' loaded from: {filePath}");
-                return config;
-            }
-        }
-        catch (System.Exception e)
-        {
-            Mod.LOG($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
-            return CreateDefault();
-        }
-    }
-
+    
     public static CloudConfig LoadFromFile(string planetName,string configName)
     {
         string filePath = GetConfigPath(planetName, configName);

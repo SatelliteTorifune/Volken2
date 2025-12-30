@@ -198,7 +198,8 @@ public class VolkenUserInterface:MonoBehaviour
             {
                 try
                 {
-                    Volken.Instance.cloudConfig.SaveToFile(Volken.Instance.currentConfigName);
+                   
+                    Volken.Instance.cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,Volken.Instance.currentConfigName);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{Volken.Instance.currentConfigName}' saved!");
                 }
                 catch (Exception ex)
@@ -209,7 +210,7 @@ public class VolkenUserInterface:MonoBehaviour
             }));
             configManagementGroup.Add(saveCurrentButton);
         
-            var saveAsButton = new TextButtonModel("Save As New Config", (Action<TextButtonModel>)(b => 
+            var saveUniversalAsButton = new TextButtonModel("Save As New Universal Config", (Action<TextButtonModel>)(b => 
             {
                 try
                 {
@@ -229,7 +230,7 @@ public class VolkenUserInterface:MonoBehaviour
                                 Volken.Instance.RefreshConfigList();
                                 inspectorPanel.Visible = false;
                                 RebuildInspectorPanel();
-                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config saved as '{name}'!");
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Universal Config saved as '{name}'!");
                             }
                         }
                         catch (Exception ex)
@@ -249,7 +250,49 @@ public class VolkenUserInterface:MonoBehaviour
                 }
             }));
             
-            configManagementGroup.Add(saveAsButton);
+            //configManagementGroup.Add(saveUniversalAsButton);
+            
+            var savePlanetAsButton = new TextButtonModel("Save As New Config", (Action<TextButtonModel>)(b => 
+            {
+                try
+                {
+                    var dialog = Game.Instance.UserInterface.CreateInputDialog();
+                    dialog.MessageText = "Enter new config name:";
+                    dialog.InputText = "NewConfig";
+                    dialog.OkayClicked += (inputDialog) =>
+                    {
+                        try
+                        {
+                            string name = inputDialog.InputText;
+                            if (!string.IsNullOrWhiteSpace(name))
+                            {
+                                Volken.Instance.cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,name);
+                                Volken.Instance.currentConfigName = name;
+                                Volken.Instance.AddConfig("name");
+                                Volken.Instance.RefreshConfigList();
+                                inspectorPanel.Visible = false;
+                                RebuildInspectorPanel();
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"{Game.Instance.FlightScene.CraftNode.Parent.Name} Config saved as '{name}'!");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Mod.LOG("Volken: Error saving new config: " + ex);
+                            Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error saving new config!");
+                        }
+                        finally
+                        {
+                            inputDialog?.Close();
+                        }
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Mod.LOG("Volken: Error creating save dialog: " + ex);
+                }
+            }));
+            
+            configManagementGroup.Add(savePlanetAsButton);
             
             var loadConfigDropdown = new DropdownModel
             (
@@ -261,11 +304,18 @@ public class VolkenUserInterface:MonoBehaviour
                     {
                         if (!string.IsNullOrWhiteSpace(newConfig) && newConfig != Volken.Instance.currentConfigName)
                         {
-                            var loadedConfig = CloudConfig.LoadFromFile(newConfig);
+                            var loadedConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,newConfig);
+                            if (loadedConfig==null)
+                            {
+                                Mod.LOG("this is null1");
+                            }
                             Volken.Instance.cloudConfig.CopyFrom(loadedConfig);
+                            Mod.LOG("good2");
                             Volken.Instance.currentConfigName = newConfig;
+                            Mod.LOG("good3");
                             Volken.Instance.ValueChanged();
-                            
+                           
+                            //Volken.Instance.planetConfigList.SetConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,newConfig);
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{newConfig}' loaded!");
                         }
                     }
@@ -279,20 +329,7 @@ public class VolkenUserInterface:MonoBehaviour
                 Volken.Instance._availableConfigs
             );
             configManagementGroup.Add(loadConfigDropdown);
-            /*
-            var anotherDropDown = new DropdownModel(
-                "TEST",
-                    () =>
-                    {
-                        return Volken.Instance.currentConfigName;
-                    },
-                    value =>
-                    {
-                        Volken.Instance.cloudConfig.CopyFrom(CloudConfig.LoadFromFile(value));
-                    },
-                    Volken.Instance._availableConfigs
-                );
-            configManagementGroup.Add(anotherDropDown);*/
+           
             var resetToDefaultButton = new TextButtonModel("Reset Current to Default", (Action<TextButtonModel>)(b => 
             {
                 try
@@ -522,12 +559,6 @@ public class VolkenUserInterface:MonoBehaviour
         inspectorPanel.Visible = true;
     }
     
-    
-    private void UpdateInfo()
-    {
-        
-    }
-    
     private string FormatValue(float arg, int decimals) 
     { 
         return arg.ToString("n" + Mathf.Max(0, decimals)); 
@@ -541,7 +572,10 @@ public class VolkenUserInterface:MonoBehaviour
             {
                 inspectorPanel.CloseButtonClicked -= OnCloseButtonClicked;
             }
-            catch { /* Ignore */ }
+            catch
+            {
+                
+            }
         }
         
       

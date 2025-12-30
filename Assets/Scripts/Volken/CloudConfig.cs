@@ -9,9 +9,11 @@ using Assets.Scripts;
 [Serializable]
 public class CloudConfig
 {
-    private const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
+    public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
     private const string DEFAULT_CONFIG_NAME = "Default";
 
+
+    #region parameter
     public bool enabled;
     public float density;
     public float absorption;
@@ -20,6 +22,8 @@ public class CloudConfig
     public float shapeScale;
     public float detailScale;
     public float detailStrength;
+
+    
     
     
     
@@ -109,8 +113,8 @@ public class CloudConfig
     
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
-
-    public static string GetUniversalConfigFolderPath()
+    #endregion
+    public static string GetConfigFolderPath()
     {
         string folderPath = Application.persistentDataPath + CONFIG_FOLDER;
         if (!Directory.Exists(folderPath))
@@ -120,20 +124,49 @@ public class CloudConfig
         return folderPath;
     }
 
+    public static string GetConfigFolderPath(string planetName)
+    {
+        string folderPath = Application.persistentDataPath + CONFIG_FOLDER+planetName;
+        if (!Directory.Exists(folderPath))
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+        return folderPath;
+    }
+
     public static string GetConfigPath(string configName)
     {
-        return Path.Combine(GetUniversalConfigFolderPath(), configName + ".xml");
+        return Path.Combine(GetConfigFolderPath(), configName + ".xml");
+    }
+
+    public static string GetConfigPath(string planetName, string configName)
+    {
+        return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
     }
 
     public static List<string> GetAllConfigNames()
     {
         
-        if (!Directory.Exists(GetUniversalConfigFolderPath()))
+        if (!Directory.Exists(GetConfigFolderPath()))
         {
             return new List<string>();
         }
 
-        string[] files = Directory.GetFiles(GetUniversalConfigFolderPath(), "*.xml");
+        string[] files = Directory.GetFiles(GetConfigFolderPath(), "*.xml");
+        List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
+        
+        return configNames;
+    }
+    
+    public static List<string> GetAllConfigNames(string planetName)
+    {
+        
+        if (!Directory.Exists(GetConfigFolderPath(planetName)))
+        {
+            return new List<string>();
+        }
+
+        string[] files = Directory.GetFiles(GetConfigFolderPath(planetName), "*.xml");
         List<string> configNames = files.Select(f => Path.GetFileNameWithoutExtension(f)).ToList();
         
         return configNames;
@@ -144,6 +177,30 @@ public class CloudConfig
         try
         {
             string filePath = GetConfigPath(configName);
+            string directory = Path.GetDirectoryName(filePath);
+            
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
+            using (FileStream stream = new FileStream(filePath, FileMode.Create))
+            {
+                serializer.Serialize(stream, this);
+            }
+            Mod.LOG($"Cloud config '{configName}' saved to: {filePath}");
+        }
+        catch (System.Exception e)
+        {
+            Mod.LOG($"Failed to save cloud config '{configName}': {e.Message}");
+        }
+    }
+    public void SaveToFile(string planetName,string configName)
+    {
+        try
+        {
+            string filePath = GetConfigPath(planetName,configName);
             string directory = Path.GetDirectoryName(filePath);
             
             if (!Directory.Exists(directory))
@@ -193,13 +250,34 @@ public class CloudConfig
         }
     }
 
-    /*
-    public static void DeleteConfig(string configName)
+    public static CloudConfig LoadFromFile(string planetName,string configName)
     {
-        throw new Exception("UNAVAILABLE FUNCTION");
-        //yes I was about to write this,but lmao why don't you go open explorer and delete the config yourself anyway?
+        string filePath = GetConfigPath(planetName, configName);
+        
+        if (!File.Exists(filePath))
+        {
+            Mod.LOG($"Config file '{configName}' not found at {filePath}. Creating default config.");
+            CloudConfig defaultConfig = CreateDefault();
+            defaultConfig.SaveToFile(planetName,configName);
+            return defaultConfig;
+        }
+
+        try
+        {
+            XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
+            using (FileStream stream = new FileStream(filePath, FileMode.Open))
+            {
+                CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
+                Mod.LOG($"Cloud config '{configName}' loaded from: {filePath}");
+                return config;
+            }
+        }
+        catch (System.Exception e)
+        {
+            Mod.LOG($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
+            return CreateDefault();
+        }
     }
-    */
     public static CloudConfig CreateDefault()
     {
         return new CloudConfig

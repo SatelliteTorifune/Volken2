@@ -12,6 +12,7 @@ public class Volken
 
     public CloudConfig cloudConfig;
     public string currentConfigName = "Default";
+    public const string CloudConfigListName="PlanetConfigList";
 
     public Material mat;
     public CloudRenderer cloudRenderer;
@@ -23,7 +24,8 @@ public class Volken
     public Texture2D blueNoiseTex;
 
     private CloudNoise _noise;
-    public List<string> _availableConfigs = new List<string>();
+    public List<string> _availableConfigs=new List<string>();
+    public PlanetConfigList planetConfigList;
     
     public const string BlueNoisePath = "Assets/Resources/Volken/BlueNoise.png";
     public const string PerlinFullRough = "Assets/Resources/Volken/PerlinFullRough.png";
@@ -59,19 +61,6 @@ public class Volken
 
     private Volken()
     {
-        if (_availableConfigs.Count > 0)
-        {
-            //the mod will try load the first config on the list anyway, how the hell do i suppose to know which config you guys want to load?
-            currentConfigName = _availableConfigs[0];
-            cloudConfig = CloudConfig.LoadFromFile(currentConfigName);
-        }
-        else
-        {
-            currentConfigName = "Default";
-            cloudConfig = CloudConfig.CreateDefault();
-            cloudConfig.SaveToFile(currentConfigName);
-            _availableConfigs.Add(currentConfigName);
-        }
         
         mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
         
@@ -92,8 +81,8 @@ public class Volken
         Mod.LOG("Refreshing config list");
         try
         {
-            this._availableConfigs = CloudConfig.GetAllConfigNames();
-            Mod.LOG($"{CloudConfig.GetAllConfigNames().Count}");
+            this._availableConfigs = CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name);
+            Mod.LOG($"{CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name).Count}");
             Mod.LOG($"{this._availableConfigs.Count}");
             
             if (this._availableConfigs.Count == 0)
@@ -117,6 +106,36 @@ public class Volken
     {
         if (e.Scene == "Flight")
         {
+            //planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
+            if (_availableConfigs.Count > 0)
+            {
+                /*
+                if (planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                {
+                    foreach (var planetConfig in planetConfigList.configList)
+                    {
+                        if (planetConfig.CloudConfigName==Game.Instance.FlightScene.CraftNode.Parent.Name)
+                        {
+                            currentConfigName=planetConfig.CloudConfigName;
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    currentConfigName = _availableConfigs[0];
+                }*/
+                currentConfigName = _availableConfigs[0];
+                cloudConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+            }
+            else
+            {
+                currentConfigName = "Default";
+                cloudConfig = CloudConfig.CreateDefault();
+                cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                _availableConfigs.Add(currentConfigName);
+            }
+            
             Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
@@ -139,12 +158,21 @@ public class Volken
            
         }
     }
+
+    
     private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+            RefreshConfigList();
+            /*
+            if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+            {
+                this.planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+            }*/
+            VolkenUserInterface.Instance.RebuildInspectorPanel();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
             cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
             farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();

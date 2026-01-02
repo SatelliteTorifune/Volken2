@@ -342,28 +342,32 @@ Shader "Hidden/Clouds"
             
                 float cosAngle = cos(currentRotation);
                 float sinAngle = sin(currentRotation);
-                float3 rotatedOffset = float3
-                (
+                float3 rotatedOffset = float3(
                     offset.x * cosAngle - offset.z * sinAngle,
                     offset.y,
                     offset.x * sinAngle + offset.z * cosAngle
                 );
             
                 float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
+                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
             
                 float3 dir = normalize(rotatedOffset);
                 float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
             
+                //yes the wind and the angular are somehow conflic...but lmao i dgaf
+                //no joking,but that's the best effect for now if you don't want to see the pile of shit in northern pole
+                // Strong east/west wind (full strength)
                 spherical.x += cloudOffset.x;
-            
-                float latFactor = sin(spherical.y * 3.14159265);
-                spherical.y += cloudOffset.z * 0.25 * latFactor;
+                
+                float latFactor = sin(spherical.y * 3.14159265);  
+                spherical.y += cloudOffset.z * 0.25 * latFactor;  
             
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
             
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
-            
+                
                 return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
             }
 

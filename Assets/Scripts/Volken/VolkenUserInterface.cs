@@ -417,7 +417,7 @@ public class VolkenUserInterface:MonoBehaviour
             scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(scatterModel);
             
-            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
+            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 50.0f);
             atmoBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(atmoBlendModel);
             
@@ -499,7 +499,7 @@ public class VolkenUserInterface:MonoBehaviour
             
             var thresholdModel = new SliderModel("Threshold", () => Volken.Instance.cloudConfig.depthThreshold, s => { Volken.Instance.cloudConfig.depthThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
             thresholdModel.ValueFormatter = (f) => FormatValue(f, 2);
-            qualityGroup.Add(thresholdModel);
+            //qualityGroup.Add(thresholdModel);
             
             var rayOffsetStrengthModel = new SliderModel("Ray Offset Strength", () => Volken.Instance.cloudConfig.blueNoiseStrength, s => { Volken.Instance.cloudConfig.blueNoiseStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 10.0f);
             rayOffsetStrengthModel.ValueFormatter = (f) => FormatValue(f, 1);

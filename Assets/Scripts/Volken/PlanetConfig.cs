@@ -2,8 +2,8 @@ using System;
 using System.Xml.Serialization;
 using System.IO;
 using System.Collections.Generic;
-using UnityEngine;
 using Assets.Scripts;
+using Application = UnityEngine.Application;
 
 [Serializable]
 public class PlanetConfig
@@ -95,8 +95,6 @@ public class PlanetConfigList
     public static PlanetConfigList CreateDefault()
     {
         PlanetConfigList newP = new PlanetConfigList();
-        var cfg = new PlanetConfig("Droo","Default");
-        newP.configList.Add(cfg);
         newP.SaveToFile(Volken.CloudConfigListName);
         return newP ;
     }

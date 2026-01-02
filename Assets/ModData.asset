@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _assemblies:
   - Volken.dll
-  _author: Insanity
-  _description: 
+  _author: Insanity+SatelliteTorifune
+  _description: '<color=green>Raymarched Volumetric Clouds for Juno: New Origins'
   _loadPriority: 1000
   _name: Volken
   _otherAssets:
@@ -36,7 +36,7 @@ MonoBehaviour:
   _steamTitle: 
   _steamVisibility: 0
   _versionMajor: 0
-  _versionMinor: 3
+  _versionMinor: 31
   _partCategories: []
   _parts: []
   _partStyleExtensions: []

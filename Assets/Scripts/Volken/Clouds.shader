@@ -3,6 +3,7 @@ Shader "Hidden/Clouds"
     Properties
     {
         _MainTex("Texture", 2D) = "white" {}
+        _NearThreshold("Near Threshold", Float) = 2000.0
     }
         SubShader
     {
@@ -189,6 +190,8 @@ Shader "Hidden/Clouds"
 
             Texture2D<float4> HistoryTex;
             SamplerState samplerHistoryTex;
+            Texture2D<float> HistoryDepthTex;
+            SamplerState samplerHistoryDepthTex;
 
             //Cloud Shape
             float cloudDensity;
@@ -201,7 +204,15 @@ Shader "Hidden/Clouds"
             float3 cloudOffset;
             float4 cloudColor;
             float scatterStrength;
+            float historyDepthThreshold;
 
+            //scatter
+            float scatterPower;
+            float multiScatterBlend;
+            float ambientScatterStrength;
+            float3 customWavelengths;
+            float silverLiningIntensity;
+            float forwardScatteringBias;
             //Cloud Layers
             float2 cloudLayerHeights;
             float2 cloudLayerSpreads;
@@ -227,11 +238,28 @@ Shader "Hidden/Clouds"
             float maxDepth;
             float historyBlend;
             matrix reprojMat;
+            float globalRotationAngular;
+            float currentRotation;
 
             // magic functions for better lighting
-            float HenyeyGreenstein(float a, float g) {
+            float HenyeyGreenstein(float a, float g)
+            {
                 float g2 = g * g;
-                return (1 - g2) / (4 * 3.14159265 * pow(1 + g2 - 2 * g * (a), 1.5));
+                return (1.0 - g2) / (4.0 * 3.1415926 * pow(abs(1.0 + g2 - 2.0 * g * a), 1.5));
+            }
+            float HenyeyGreensteinMultiple(float cosAngle, float g1, float g2, float blend)
+            {
+                float hg1 = HenyeyGreenstein(cosAngle, g1);
+                float hg2 = HenyeyGreenstein(cosAngle, g2);
+                float hg3 = HenyeyGreenstein(cosAngle, 0.0);
+                
+                float firstBlend = lerp(hg1, hg2, blend);
+                return lerp(firstBlend, hg3, multiScatterBlend * 0.5);
+            }
+            float CloudPhase(float a, float blend)
+            {
+                float hgBlend = HenyeyGreensteinMultiple(a, forwardScatteringBias, -phaseParams.y, blend);
+                return phaseParams.z + hgBlend * phaseParams.w * silverLiningIntensity;
             }
 
             float Phase(float a) {
@@ -268,37 +296,75 @@ Shader "Hidden/Clouds"
                 return float2((-b - sqrtD) / (2 * a), (-b + sqrtD) / (2 * a));
             }
 
-            float SampleDensity(float3 worldPos, float detailFalloff) {
+            //those 2 functions made me wanna kill myself tbh
+            float SampleDensity(float3 worldPos, float detailFalloff) 
+            {
                 float3 offset = worldPos - sphereCenter;
                 float r = length(offset);
-
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, offset * cloudScale + cloudOffset, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, offset * detailScale + cloudOffset, 0);
-                // use detail noise to erode the edges of the main shape
+            
+                float cosAngle = cos(currentRotation);
+                float sinAngle = sin(currentRotation);
+                float3 rotatedOffset = float3(
+                    offset.x * cosAngle - offset.z * sinAngle,
+                    offset.y,
+                    offset.x * sinAngle + offset.z * cosAngle
+                );
+            
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
-
-                // sperical coords of the sample point
-                float2 spherical = float2(0.5 * (atan2(offset.z, offset.x) / 3.14159265 + 1.0), acos(offset.y / r) / 3.14159265);
-                // sample 2D density map for both layers
+            
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
+            
+                //yes the wind and the angular are somehow conflic...but lmao i dgaf
+                //no joking,but that's the best effect for now if you don't want to see the pile of shit in northern pole
+                // Strong east/west wind (full strength)
+                spherical.x += cloudOffset.x;
+            
+                //TODO the velocity of the cloud should be with direction
+                // Safe north/south wind: attenuated by latitude (zero at poles, max at equator)
+                float latFactor = sin(spherical.y * 3.14159265);  // ranges 0 at poles to 1 at equator
+                spherical.y += cloudOffset.z * 0.25 * latFactor;  // adjust 0.25 for desired strength
+            
                 float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
-                
-                // height based falloff
+            
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
                 
                 return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
             }
 
-            // density without detail noise for far away samples
-            float SampleDensityCheap(float3 worldPos) {
+            float SampleDensityCheap(float3 worldPos) 
+            {
                 float3 offset = worldPos - sphereCenter;
                 float r = length(offset);
-
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, offset * cloudScale + cloudOffset, 0);
-
-                float2 spherical = float2(0.5 * (atan2(offset.z, offset.x) / 3.14159265 + 1.0), acos(offset.y / r) / 3.14159265);
-                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+            
+                float cosAngle = cos(currentRotation);
+                float sinAngle = sin(currentRotation);
+                float3 rotatedOffset = float3(
+                    offset.x * cosAngle - offset.z * sinAngle,
+                    offset.y,
+                    offset.x * sinAngle + offset.z * cosAngle
+                );
+            
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
+                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
+            
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
+            
+                //yes the wind and the angular are somehow conflic...but lmao i dgaf
+                //no joking,but that's the best effect for now if you don't want to see the pile of shit in northern pole
+                // Strong east/west wind (full strength)
+                spherical.x += cloudOffset.x;
                 
+                float latFactor = sin(spherical.y * 3.14159265);  
+                spherical.y += cloudOffset.z * 0.25 * latFactor;  
+            
+                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+            
                 float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float2 falloff = exp(-falloffExponent * falloffExponent);
                 
@@ -329,17 +395,23 @@ Shader "Hidden/Clouds"
                 return float2(d, intersect.y - max(0.0, intersect.x));
             }
 
-            float4 frag(vert2Frag i) : SV_Target {
+            float4 frag(vert2Frag i) : SV_Target 
+            {
                 float3 camPos = _WorldSpaceCameraPos;
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
+                float firstCloudDepth = maxDepth;  // Track first cloud intersection depth
+                bool foundCloud = false;
+                
                 // no intersection in front of the camera
                 if (intersect.y < 0.0) {
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
+                
+                
 
                 float2 surfIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius);
                 float depth = viewLength * DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
@@ -351,12 +423,15 @@ Shader "Hidden/Clouds"
                 // cut short by scene depth
                 maxRayDist = min(maxRayDist, depth);
 
+                
+
                 if (maxRayDist <= startRayDist) {
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
 
                 // offset the sample ray starting position using blue noise to avoid banding
-                float rayDist = startRayDist + blueNoiseStrength * stepSize * BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
+                float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
+                float rayDist = startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5;
 
                 // precompute phase values
                 float phaseValue = Phase(dot(viewDir, -lightDir));
@@ -365,19 +440,28 @@ Shader "Hidden/Clouds"
                 float3 lightEnergy = 0.0;
                 
                 float3 rayPos;
-                float3 lightTransmittance;
-                float density;
+                float3 lightTransmittance=0.0;
+                float density=0.0;
 
                 // precompute light dependant scattering (ideally this would be parameterised)
-                float3 wavelengths = float3(700, 530, 440);
-                float3 scatterCoeff = pow(1.0 / wavelengths, 4) * scatterStrength;
+                float3 wavelengths = customWavelengths;
+                float3 normalizedWavelengths = wavelengths / 550.0;
+                float3 scatterCoeff = pow(normalizedWavelengths, -scatterPower) * scatterStrength * 0.1;
 
                 float localStepSize = stepSize;
                 float stepSizeMultiplier = 1.0;
                 int emptySamples = 0;
                 float detailCutoffDist = 25.0 / detailScale;
                 float cloudSurfaceDist = maxRayDist;
+                
                 int iter = 0;
+                float3 scatteredLight = density * localStepSize * transmittance * lightTransmittance * phaseValue;
+                float3 ambientScatter = scatterCoeff * ambientLight * ambientScatterStrength * density * (1.0 - transmittance) * localStepSize;
+                lightEnergy += scatteredLight + ambientScatter;
+                
+                
+                
+
 
                 while(rayDist < maxRayDist && iter < 350) {
                     rayPos = camPos + rayDist * viewDir;
@@ -398,7 +482,9 @@ Shader "Hidden/Clouds"
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
                         float2 lightSample = SampleLightRay(rayPos);
-                        lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * lightSample.y * scatterCoeff);
+                        //lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * lightSample.y * scatterCoeff);
+                        lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * scatterCoeff);
+
                         lightEnergy += density * localStepSize * transmittance * lightTransmittance * phaseValue;
                         transmittance *= Beer(density * localStepSize, amb);
                         
@@ -429,15 +515,23 @@ Shader "Hidden/Clouds"
                 transmittance *= shadowTransmittance;
 
                 float atmoBlend = exp(-atmoBlendFactor * (cloudSurfaceDist - startRayDist));
-                float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor, min(1.0, transmittance + 1.0 - atmoBlend));
+                float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor.rgb, min(1.0, transmittance + 1.0 - atmoBlend));
+
 
                 float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
                 float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV.xy, 0);
                 
+                float currentDepth = DepthTex.Sample(samplerDepthTex, i.uv);
+                float historyDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV.xy);
+                float depthDiff = abs(currentDepth - historyDepth) / max(currentDepth, 0.001);
+                float depthWeight = depthDiff < historyDepthThreshold ? 1.0 : 0.0;
+                
                 bool badSample = cloudSurfaceDist >= maxRayDist || (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
+                float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight;
+                
+                return (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
 
-                return badSample ? raymarchOutput : ((1.0 - historyBlend) * raymarchOutput + historyBlend * history);
             }
             ENDCG
         }
@@ -535,45 +629,74 @@ Shader "Hidden/Clouds"
         Pass
         {
             Name "Composite"
-
+        
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-
+        
             #include "UnityCG.cginc"
-
+        
             struct appdata
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
             };
-
+        
             struct v2f
             {
                 float4 vertex : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 viewDir : TEXCOORD1;
             };
-
+        
             v2f vert(appdata v)
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
+                // Reconstruct view direction
+                o.viewDir = mul(unity_CameraInvProjection, float4(v.uv * 2 - 1, 0, -1));
+                o.viewDir = mul(unity_CameraToWorld, float4(o.viewDir, 0));
                 return o;
             }
-
-            sampler2D _MainTex;
-
+        
             Texture2D<float4> UpscaledCloudTex;
             SamplerState samplerUpscaledCloudTex;
-
+            Texture2D<float> SceneDepthTex;
+            SamplerState samplerSceneDepthTex;
+            sampler2D _MainTex;
+            
+            float3 sphereCenter;
+            float surfaceRadius;
+            float _NearThreshold;
+            
             float4 frag(v2f i) : SV_Target
             {
-                float3 col = tex2D(_MainTex, i.uv);
                 float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
-
-                // image color * cloud transmittance + cloud color
-                return float4(col * clouds.a + clouds.rgb, 0.0);
+                float4 source = tex2D(_MainTex, i.uv);
+                float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
+                
+                float nearThreshold = _NearThreshold;
+                if (sceneDepth > 0.0 && sceneDepth < nearThreshold)
+                {
+                    float nearFactor = smoothstep(0.0, nearThreshold, sceneDepth);
+                    nearFactor = lerp(0.2, 1.0, nearFactor);
+                    
+                    float3 finalCloudColor = clouds.rgb * nearFactor;
+                    float finalTransmittance = lerp(0.8, clouds.a, nearFactor);
+                    return float4(source.rgb * finalTransmittance + finalCloudColor, source.a);
+                }
+                
+                //when there is no cloud
+                else 
+                {
+                    float depthThreshold = 5000.0;  
+                    float depthMask = saturate(sceneDepth / depthThreshold);
+                    float3 maskedCloudColor = clouds.rgb * depthMask;
+                    float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
+                    
+                    return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
+                }
             }
             ENDCG
         }

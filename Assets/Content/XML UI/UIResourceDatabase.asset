@@ -18,5 +18,7 @@ MonoBehaviour:
   - Content/XML UI
   AutomaticallyRemoveEntries: 1
   entries:
+  - path: Volken/Sprites/VolkenUI
+    resource: {fileID: 21300000, guid: 722d9288623fd6d4896668c18735939c, type: 3}
   - path: Volken/UIResourceDatabase
     resource: {fileID: 11400000}

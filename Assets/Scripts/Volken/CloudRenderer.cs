@@ -1,0 +1,248 @@
+using Assets.Scripts;
+using ModApi.Craft;
+using ModApi.Flight.Sim;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+/*
+    Volken Pipeline Overview:
+
+    1. Write depth from far camera to a render texture
+    2. Write depth from near camera to the same texture
+    3. Downsample the combined depth texture for later use in depth aware upscaling
+    4. Render volumetrics to "cloudTex" texture (optionally blend with history buffer)
+    5. Write the output to the history buffer
+    6. Upscale "cloudTex" to the game view resolution using the previously generated depth textures
+    7. Blur the upscaled clouds and add them into the main image
+*/
+
+public class CloudRenderer : MonoBehaviour
+{
+    private CloudConfig config;
+    private Material mat;
+    private RenderTexture cloudTex, upscaledCloudTex, cloudHistoryTex, cloudHistoryDepthTex, combinedDepthTex, lowResDepthTex;
+    private float currentResolutionScale;
+    private Camera cam;
+    private Matrix4x4 prevViewProjMat;
+    
+    private float accumulatedRotation = 0f;
+
+    public CloudRenderer()
+    {
+        mat = Volken.Instance.mat;
+        config = Volken.Instance.cloudConfig;
+        currentResolutionScale = config.resolutionScale;
+        cam = GetComponent<Camera>();
+        prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
+
+        CreateRenderTextures();
+        SetShaderProperties();
+
+        Game.Instance.FlightScene.PlayerChangedSoi += OnSoiChanged;
+    }
+
+    private void OnSoiChanged(ICraftNode playerCraftNode, IPlanetNode newParent)
+    {
+        config.enabled = newParent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+    }
+
+    private void CreateRenderTextures()
+    {
+        var res = Screen.currentResolution;
+        Vector2Int cloudRes = Vector2Int.RoundToInt(currentResolutionScale * new Vector2(res.width, res.height));
+
+        cloudTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.ARGB32);
+        cloudTex.Create();
+
+        upscaledCloudTex = new RenderTexture(res.width, res.height, 0, RenderTextureFormat.ARGB32);
+        upscaledCloudTex.Create();
+
+        cloudHistoryTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.ARGB32);
+        cloudHistoryTex.Create();
+        cloudHistoryDepthTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.RFloat);
+        cloudHistoryDepthTex.Create();
+
+        combinedDepthTex = new RenderTexture(res.width, res.height, 0, RenderTextureFormat.RFloat);
+        combinedDepthTex.Create();
+        
+        lowResDepthTex = new RenderTexture(cloudRes.x, cloudRes.y, 0, RenderTextureFormat.RFloat);
+        lowResDepthTex.Create();
+    }
+
+    void ReleaseRenderTextures()
+    {
+        if (cloudTex != null && cloudTex.IsCreated())
+            cloudTex.Release();
+        if (upscaledCloudTex != null && upscaledCloudTex.IsCreated())
+            upscaledCloudTex.Release();
+        if (cloudHistoryTex != null && cloudHistoryTex.IsCreated())
+            cloudHistoryTex.Release();
+        if (cloudHistoryDepthTex != null && cloudHistoryDepthTex.IsCreated())
+            cloudHistoryDepthTex.Release();
+        if (combinedDepthTex != null && combinedDepthTex.IsCreated())
+            combinedDepthTex.Release();
+        if (lowResDepthTex != null && lowResDepthTex.IsCreated())
+            lowResDepthTex.Release();
+    }
+
+    public void SetShaderProperties()
+    {
+        mat.SetFloat("cloudDensity", config.density);
+        mat.SetFloat("cloudAbsorption", config.absorption);
+        mat.SetFloat("ambientLight", config.ambientLight);
+        mat.SetFloat("cloudCoverage", config.coverage);
+        mat.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
+        mat.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));
+        mat.SetFloat("detailStrength", config.detailStrength);
+        mat.SetVector("cloudLayerHeights", config.layerHeights);
+        mat.SetVector("cloudLayerSpreads", config.layerSpreads);
+        mat.SetVector("cloudLayerStrengths", config.layerStrengths);
+        mat.SetFloat("maxCloudHeight", Mathf.Max(0.001f, config.maxCloudHeight));
+        mat.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
+        mat.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
+        mat.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
+        mat.SetFloat("scatterStrength", config.scatterStrength*1e-3f);
+        mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
+        mat.SetColor("cloudColor", config.cloudColor);
+        mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
+        mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
+        mat.SetFloat("historyBlend", config.historyBlend);
+        mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
+        mat.SetVector("phaseParams", config.phaseParameters);
+        mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
+        mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
+        
+        mat.SetFloat("scatterPower", config.scatterPower);
+        mat.SetFloat("multiScatterBlend", config.multiScatterBlend);
+        mat.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
+        mat.SetVector("customWavelengths", config.customWavelengths);
+        mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
+        mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
+    }
+
+
+    public void SetDynamicProperties()
+    {
+        var craftNode = Game.Instance.FlightScene.CraftNode;
+        Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+        var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
+    
+        float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
+        
+        //wind stuff
+        Vector3 north = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.North);
+        Vector3 east = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.East);
+        float rad = Mathf.Deg2Rad * config.windDirection;
+        Vector3 windDir = Mathf.Cos(rad) * north + Mathf.Sin(rad) * east;
+        float speedFactor = GetWindSpeedFactor(config.windDirection);
+        //
+        float Fractional(float f)
+        {
+            return f - Mathf.Floor(f);
+        }
+        config.offset += config.windSpeed* 0.1f * speedFactor * deltaTime * windDir;
+        config.offset.x = Fractional(config.offset.x);
+        config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加
+        config.offset.z = Fractional(config.offset.z);
+        
+        //self rotation part
+        accumulatedRotation += config.globalRotationAngular*5e-4f * deltaTime;
+        mat.SetFloat("currentRotation", accumulatedRotation);
+    
+       //other stuff
+        mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
+        mat.SetVector("sphereCenter", planetCenter);
+        mat.SetVector("lightDir", sun.transform.forward);
+        mat.SetVector("cloudOffset", config.offset);
+        float time = (float)Game.Instance.GameState.GetCurrentTime();
+        mat.SetVector("blueNoiseOffset", new Vector2
+        (
+            Mathf.PerlinNoise(time * 0.5f, 0f) * 2f - 1f,
+            Mathf.PerlinNoise(0f, time * 0.5f) * 2f - 1f
+        ));
+        mat.SetMatrix("reprojMat", prevViewProjMat);
+    
+        mat.SetVector("clipPlanes", new Vector2(cam.nearClipPlane, cam.farClipPlane));
+        prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
+        mat.SetFloat("_NearThreshold", config.nearThreshold); 
+        float GetWindSpeedFactor(float directionDeg)
+        {
+            // 归一化到 -180 ~ 180
+            float angle = directionDeg % 360f;
+            if (angle > 180f) angle -= 360f;
+            if (angle < -180f) angle += 360f;
+            
+            float absAngle = Mathf.Abs(angle);
+
+            if (absAngle < 45f || absAngle > 135f) 
+            {
+                return 2.0f;  
+            }
+            else if (absAngle > 60f && absAngle < 120f)
+            {
+                return 1.0f;
+            }
+            else
+            {
+                float t = Mathf.InverseLerp(45f, 60f, absAngle);
+                return Mathf.Lerp(2.0f, 1.0f, t);
+            }
+        }
+    }
+    [ImageEffectOpaque] 
+    private void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        if (!config.enabled || FarCameraScript.farDepthTex == null)
+        {
+            // return unchanged image
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        if (currentResolutionScale != config.resolutionScale)
+        {
+            ReleaseRenderTextures();
+            currentResolutionScale = config.resolutionScale;
+            CreateRenderTextures();
+        }
+
+        SetDynamicProperties();
+
+        // write near depth to combined depth texture
+        Graphics.Blit(FarCameraScript.farDepthTex, combinedDepthTex, mat, mat.FindPass("NearDepth"));
+        // downsample combined depth texture
+        Graphics.Blit(combinedDepthTex, lowResDepthTex, mat, mat.FindPass("DownsampleDepth"));
+        // main cloud pass + history buffer blend
+        mat.SetTexture("DepthTex", lowResDepthTex);
+        mat.SetTexture("HistoryTex", cloudHistoryTex);
+        mat.SetTexture("HistoryDepthTex", cloudHistoryDepthTex);
+        Graphics.Blit(null, cloudTex, mat, mat.FindPass("Clouds"));
+        // write output to history buffer
+        Graphics.Blit(cloudTex, cloudHistoryTex);
+        Graphics.Blit(lowResDepthTex, cloudHistoryDepthTex);
+        // depth aware upscaling
+        mat.SetTexture("CombinedDepthTex", combinedDepthTex);
+        mat.SetTexture("LowResDepthTex", lowResDepthTex);
+        mat.SetInt("isNativeRes", (cloudTex.width == source.width && cloudTex.height == source.height) ? 1 : 0);
+        Graphics.Blit(cloudTex, upscaledCloudTex, mat, mat.FindPass("Upscale"));
+        // blur + composite
+        mat.SetTexture("UpscaledCloudTex", upscaledCloudTex);
+        mat.SetTexture("SceneDepthTex", combinedDepthTex);
+        Graphics.Blit(source, destination, mat, mat.FindPass("Composite"));
+    }
+    
+    private void OnDestroy()
+    {
+        ReleaseRenderTextures();
+    }/*
+    private void OnDestroy()
+    {
+        ReleaseRenderTextures();
+
+        if (cloudCB != null)
+        {
+            cam.RemoveCommandBuffer(CameraEvent.AfterEverything, cloudCB);
+            cloudCB.Release();
+        }
+    }*/
+}

@@ -72,8 +72,16 @@ public class VolkenUserInterface:MonoBehaviour
     {
         try
         {
+            if (craftNode.Parent.Parent==null)
+            {
+                Volken.Instance.cloudConfig.enabled = false;
+                //dude,it's stupid to give sun cloud
+                return;
+            }
+            
             if (craftNode?.Parent?.PlanetData?.AtmosphereData != null)
             {
+                
                 bool hasAtmosphere = craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
                 Volken.Instance.cloudConfig.enabled = hasAtmosphere;
                 
@@ -350,9 +358,16 @@ public class VolkenUserInterface:MonoBehaviour
             GroupModel cloudShapeGroup = new GroupModel("Clouds");
             var renderToggleModel = new ToggleModel("Main Toggle", () => Volken.Instance.cloudConfig.enabled, s =>
             {
+                
             if (!Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
             {
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage("°`_´° hey I don't think there should be clouds here");
+                return;
+            }
+
+            if (Game.Instance.FlightScene.CraftNode.Parent.Parent==null)
+            {
+                Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Why you are trying to give star cloud???");
                 return;
             }
             Volken.Instance.cloudConfig.enabled = s;
@@ -552,8 +567,6 @@ public class VolkenUserInterface:MonoBehaviour
         {
             Mod.LOG("Volken: Error rebuilding panel: " + ex);
         }
-
-        inspectorPanel.Visible = true;
     }
     
     private string FormatValue(float arg, int decimals) 

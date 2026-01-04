@@ -168,6 +168,14 @@ public class Volken
     }
     private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
+        
+        if (craftNode.Parent.Parent==null)
+        {
+            Instance.cloudConfig.enabled = false;
+            //dude,it's stupid to give sun cloud
+            return;
+        }
+        
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
             if (_availableConfigs.Count > 0)

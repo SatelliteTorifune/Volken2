@@ -43,7 +43,15 @@ public class CloudRenderer : MonoBehaviour
 
     private void OnSoiChanged(ICraftNode playerCraftNode, IPlanetNode newParent)
     {
+        if (playerCraftNode.Parent.Parent==null)
+        {
+            Volken.Instance.cloudConfig.enabled = false;
+            //dude,it's stupid to give sun cloud
+            return;
+        }
         config.enabled = newParent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+        
+       
     }
 
     private void CreateRenderTextures()

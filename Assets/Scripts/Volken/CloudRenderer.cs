@@ -133,8 +133,51 @@ public class CloudRenderer : MonoBehaviour
     {
         var craftNode = Game.Instance.FlightScene.CraftNode;
         Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+        /*
+        double surfaceRadius = craftNode.Parent.PlanetData.Radius;
+        
+        // calculate the distance of cam to center of planet
+        Vector3d camWorldPos = cam.transform.position;
+        double camDistanceToCenter = (camWorldPos - planetCenter).magnitude;
+        double camHeightAboveSurface = camDistanceToCenter - surfaceRadius;
+        float distanceFactor = 1f;
+
+        if (camHeightAboveSurface > config.lowAltitudeThreshold)
+        {
+            if (camHeightAboveSurface < config.midAltitudeThreshold)
+            {
+                // 低到中：线性下降到 1.0 → 0.5（可调）
+                float t = (float)((camHeightAboveSurface - config.lowAltitudeThreshold) / 
+                                  (config.midAltitudeThreshold - config.lowAltitudeThreshold));
+                distanceFactor = Mathf.Lerp(1f, 0.5f, t);
+            }
+            else if (camHeightAboveSurface < config.highAltitudeThreshold)
+            {
+                // 中到高：继续下降到 minDistanceFactor
+                float t = (float)((camHeightAboveSurface - config.midAltitudeThreshold) / 
+                                  (config.highAltitudeThreshold - config.midAltitudeThreshold));
+                distanceFactor = Mathf.Lerp(0.5f, config.minDistanceFactor, t);
+            }
+            else
+            {
+                // 超高空/太空：固定最小值
+                distanceFactor = config.minDistanceFactor;
+            }
+        }
+
+        // 计算步长倍率（越高越粗糙）
+        float stepSizeMultiplier = Mathf.Lerp(1f, config.maxStepSizeMultiplier, 1f - distanceFactor);
+
+        // 计算光照采样比例
+        float lightSamplesFactor = Mathf.Lerp(1f, config.minLightSamplesFactor, 1f - distanceFactor);
+
+        // 传给 shader
+        mat.SetFloat("cloudDistanceFactor", distanceFactor);
+        mat.SetFloat("dynamicStepMultiplier", stepSizeMultiplier);
+        mat.SetFloat("dynamicLightSamplesFactor", lightSamplesFactor);
+        */
+        
         var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-    
         float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
         
         //wind stuff
@@ -150,7 +193,7 @@ public class CloudRenderer : MonoBehaviour
         }
         config.offset += config.windSpeed* 0.1f * speedFactor * deltaTime * windDir;
         config.offset.x = Fractional(config.offset.x);
-        config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加
+        config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加,但是我觉得没啥用
         config.offset.z = Fractional(config.offset.z);
         
         //self rotation part
@@ -242,15 +285,5 @@ public class CloudRenderer : MonoBehaviour
     private void OnDestroy()
     {
         ReleaseRenderTextures();
-    }/*
-    private void OnDestroy()
-    {
-        ReleaseRenderTextures();
-
-        if (cloudCB != null)
-        {
-            cam.RemoveCommandBuffer(CameraEvent.AfterEverything, cloudCB);
-            cloudCB.Release();
-        }
-    }*/
+    }
 }

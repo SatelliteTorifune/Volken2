@@ -432,7 +432,7 @@ public class VolkenUserInterface:MonoBehaviour
             scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(scatterModel);
             
-            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 50.0f);
+            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 100.0f);
             atmoBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(atmoBlendModel);
             
@@ -524,6 +524,35 @@ public class VolkenUserInterface:MonoBehaviour
             historyBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
             qualityGroup.Add(historyBlendModel);
             inspectorModel.Add(qualityGroup);
+            #endregion
+            #region fallOffGroup
+            GroupModel fallOffGroup = new GroupModel("Cloud Fall Off Settings");
+            
+            var lowAltitudeThreshold = new SliderModel("Low Altitude Threshold", () => Volken.Instance.cloudConfig.lowAltitudeThreshold, s => { Volken.Instance.cloudConfig.lowAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
+            lowAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
+            fallOffGroup.Add(lowAltitudeThreshold);
+            
+            var midAltitudeThreshold = new SliderModel("Mid Altitude Threshold", () => Volken.Instance.cloudConfig.midAltitudeThreshold, s => { Volken.Instance.cloudConfig.midAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
+            midAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
+            fallOffGroup.Add(midAltitudeThreshold);
+            
+            var highAltitudeThreshold = new SliderModel("High Altitude Threshold", () => Volken.Instance.cloudConfig.highAltitudeThreshold, s => { Volken.Instance.cloudConfig.highAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
+            highAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
+            fallOffGroup.Add(highAltitudeThreshold);
+            
+            var minDistanceFactor = new SliderModel("Min Distance Factor", () => Volken.Instance.cloudConfig.minDistanceFactor, s => { Volken.Instance.cloudConfig.minDistanceFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
+            minDistanceFactor.ValueFormatter = (f) => FormatValue(f, 2);
+            fallOffGroup.Add(minDistanceFactor);
+            
+            var maxStepSizeMultiplier = new SliderModel("Max Step Size Multiplier", () => Volken.Instance.cloudConfig.maxStepSizeMultiplier, s => { Volken.Instance.cloudConfig.maxStepSizeMultiplier = s;Volken.Instance.ValueChanged(); }, 0.0f, 3.0f);
+            maxStepSizeMultiplier.ValueFormatter = (f) => FormatValue(f, 2);
+            fallOffGroup.Add(maxStepSizeMultiplier);
+            
+            var minLightSamplesFactor = new SliderModel("Min Light Sample Factor", () => Volken.Instance.cloudConfig.minLightSamplesFactor, s => { Volken.Instance.cloudConfig.minLightSamplesFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
+            minLightSamplesFactor.ValueFormatter = (f) => FormatValue(f, 2);
+            fallOffGroup.Add(minLightSamplesFactor);
+            
+            //inspectorModel.Add(fallOffGroup);
             #endregion
 
             // Create the panel

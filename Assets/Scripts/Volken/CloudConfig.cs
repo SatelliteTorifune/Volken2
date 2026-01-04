@@ -4,7 +4,9 @@ using System.Xml.Serialization;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Forms;
 using Assets.Scripts;
+using Application = UnityEngine.Application;
 
 [Serializable]
 public class CloudConfig
@@ -113,6 +115,13 @@ public class CloudConfig
     
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
+
+    public float lowAltitudeThreshold = 10000f;
+    public float midAltitudeThreshold = 50000f;
+    public float highAltitudeThreshold = 150000f;
+    public float minDistanceFactor = 0.1f;
+    public float maxStepSizeMultiplier = 3f;
+    public float minLightSamplesFactor = 0.3f;
     #endregion
     
 
@@ -236,7 +245,15 @@ public class CloudConfig
             customWavelengths = new Vector3(680f, 550f, 450f),
             silverLiningIntensity = 1.0f,
             forwardScatteringBias = 0.65f,
-            nearThreshold = 0f
+            nearThreshold = 0f,
+            /*
+            lowAltitudeThreshold = 10000f,
+            midAltitudeThreshold = 50000f,
+            highAltitudeThreshold = 150000,
+            minDistanceFactor = 0.1f,
+            maxStepSizeMultiplier = 3f,
+            minLightSamplesFactor = 0.3f
+            */
         };
     }
 
@@ -278,7 +295,15 @@ public class CloudConfig
             customWavelengths = this.customWavelengths,
             silverLiningIntensity = this.silverLiningIntensity,
             forwardScatteringBias = this.forwardScatteringBias,
-            nearThreshold = 1e4f
+            nearThreshold = this.nearThreshold,
+            /*
+            lowAltitudeThreshold = this.lowAltitudeThreshold,
+            midAltitudeThreshold = this.midAltitudeThreshold,
+            highAltitudeThreshold = this.highAltitudeThreshold,
+            minDistanceFactor = this.minDistanceFactor,
+            maxStepSizeMultiplier = this.maxStepSizeMultiplier,
+            minLightSamplesFactor = this.minLightSamplesFactor,
+            */
         };
     }
     
@@ -319,6 +344,13 @@ public class CloudConfig
         this.silverLiningIntensity = source.silverLiningIntensity;
         this.forwardScatteringBias = source.forwardScatteringBias;
         this.nearThreshold= source.nearThreshold;
+        /*
+        this.lowAltitudeThreshold= source.lowAltitudeThreshold;
+        this.midAltitudeThreshold= source.midAltitudeThreshold;
+        this.highAltitudeThreshold= source.highAltitudeThreshold;
+        this.minDistanceFactor= source.minDistanceFactor;
+        this.maxStepSizeMultiplier= source.maxStepSizeMultiplier;
+        this.minLightSamplesFactor= source.minLightSamplesFactor;*/
     }
 
 }

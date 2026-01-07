@@ -1,3 +1,4 @@
+using Assets.Packages.DevConsole;
 using Assets.Scripts.Flight.UI;
 using HarmonyLib;
 
@@ -17,6 +18,12 @@ namespace Assets.Scripts
         private Mod() : base()
         {
         }
+
+        public int frontRenderQueue = 3000;
+        public int backRenderQueue = 3000;
+        
+        //f 2000 2500 2501
+        //b 2500-2501
         
         /// <summary>
         /// Gets the singleton instance of the mod object.
@@ -31,6 +38,7 @@ namespace Assets.Scripts
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
+            //PlanetRingsZWriteFix.Apply(harmony);
             
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
@@ -48,7 +56,8 @@ namespace Assets.Scripts
         
         private void RegisterCommands()
         {
-            //I don't really know if i need to use console here so I'll just leave a function here so far
+            DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
+            DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
         }
         #region LOG
         public static void LOG(object message)

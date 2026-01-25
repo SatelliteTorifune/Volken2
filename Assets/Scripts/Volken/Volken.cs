@@ -54,32 +54,30 @@ public class Volken
         }
     }
 
-    public static void Initialize()
+    public static void Initialize() 
     {
         Instance ??= new Volken();
     }
 
-    private Volken()
+    private Volken() 
     {
-        
         mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
         _noise = new CloudNoise();
         GenerateNoiseTextures();
-
         Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded;
     }
 
-    public void AddConfig(string cfg)
+    public void AddConfig(string cfg) 
     {
         this._availableConfigs.Add(cfg);
         Mod.LOG($"Volken: Added config {cfg} ,now has {this._availableConfigs.Count} configs");
     }
 
-    public void RefreshConfigList()
+    public void RefreshConfigList() 
     {
         Mod.LOG("Refreshing config list");
-        try
+        try 
         {
             this._availableConfigs = CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name);
             Mod.LOG($"{CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name).Count}");
@@ -101,6 +99,7 @@ public class Volken
             _availableConfigs = new List<string> { "Default" };
         }
     }
+    public void sb()=>this.OnSceneLoaded(new object(),new SceneEventArgs(Game.Instance.FlightScene.CraftNode.Parent.Name));
 
     private void OnSceneLoaded(object sender, SceneEventArgs e)
     {

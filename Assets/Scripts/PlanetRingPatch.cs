@@ -38,6 +38,7 @@ public static class PlanetRingsZWriteFix
 
     public static void Postfix(PlanetRingsScript __instance)
     {
+        return;
         try
         {
             // 强制改原脚本的 queue 常量，防止它再改
@@ -60,6 +61,7 @@ public static class PlanetRingsZWriteFix
 
     private static void FixMaterial(Material mat)
     {
+        return;
         // 强制写深度
         mat.SetInt("_ZWrite", 1);
         mat.SetOverrideTag("ZWrite", "On");

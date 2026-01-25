@@ -1,3 +1,4 @@
+using System;
 using Assets.Scripts;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
@@ -243,43 +244,50 @@ public class CloudRenderer : MonoBehaviour
     [ImageEffectOpaque] 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (!config.enabled || FarCameraScript.farDepthTex == null)
+        try
         {
-            // return unchanged image
-            Graphics.Blit(source, destination);
-            return;
-        }
+            if (!config.enabled || FarCameraScript.farDepthTex == null)
+            {
+                // return unchanged image
+                Graphics.Blit(source, destination);
+                return;
+            }
 
-        if (currentResolutionScale != config.resolutionScale)
+            if (currentResolutionScale != config.resolutionScale)
+            {
+                ReleaseRenderTextures();
+                currentResolutionScale = config.resolutionScale;
+                CreateRenderTextures();
+            }
+
+            SetDynamicProperties();
+
+            // write near depth to combined depth texture
+            Graphics.Blit(FarCameraScript.farDepthTex, combinedDepthTex, mat, mat.FindPass("NearDepth"));
+            // downsample combined depth texture
+            Graphics.Blit(combinedDepthTex, lowResDepthTex, mat, mat.FindPass("DownsampleDepth"));
+            // main cloud pass + history buffer blend
+            mat.SetTexture("DepthTex", lowResDepthTex);
+            mat.SetTexture("HistoryTex", cloudHistoryTex);
+            mat.SetTexture("HistoryDepthTex", cloudHistoryDepthTex);
+            Graphics.Blit(null, cloudTex, mat, mat.FindPass("Clouds"));
+            // write output to history buffer
+            Graphics.Blit(cloudTex, cloudHistoryTex);
+            Graphics.Blit(lowResDepthTex, cloudHistoryDepthTex);
+            // depth aware upscaling
+            mat.SetTexture("CombinedDepthTex", combinedDepthTex);
+            mat.SetTexture("LowResDepthTex", lowResDepthTex);
+            mat.SetInt("isNativeRes", (cloudTex.width == source.width && cloudTex.height == source.height) ? 1 : 0);
+            Graphics.Blit(cloudTex, upscaledCloudTex, mat, mat.FindPass("Upscale"));
+            // blur + composite
+            mat.SetTexture("UpscaledCloudTex", upscaledCloudTex);
+            mat.SetTexture("SceneDepthTex", combinedDepthTex);
+            Graphics.Blit(source, destination, mat, mat.FindPass("Composite"));
+        }
+        catch (Exception e)
         {
-            ReleaseRenderTextures();
-            currentResolutionScale = config.resolutionScale;
-            CreateRenderTextures();
+            //igore 
         }
-
-        SetDynamicProperties();
-
-        // write near depth to combined depth texture
-        Graphics.Blit(FarCameraScript.farDepthTex, combinedDepthTex, mat, mat.FindPass("NearDepth"));
-        // downsample combined depth texture
-        Graphics.Blit(combinedDepthTex, lowResDepthTex, mat, mat.FindPass("DownsampleDepth"));
-        // main cloud pass + history buffer blend
-        mat.SetTexture("DepthTex", lowResDepthTex);
-        mat.SetTexture("HistoryTex", cloudHistoryTex);
-        mat.SetTexture("HistoryDepthTex", cloudHistoryDepthTex);
-        Graphics.Blit(null, cloudTex, mat, mat.FindPass("Clouds"));
-        // write output to history buffer
-        Graphics.Blit(cloudTex, cloudHistoryTex);
-        Graphics.Blit(lowResDepthTex, cloudHistoryDepthTex);
-        // depth aware upscaling
-        mat.SetTexture("CombinedDepthTex", combinedDepthTex);
-        mat.SetTexture("LowResDepthTex", lowResDepthTex);
-        mat.SetInt("isNativeRes", (cloudTex.width == source.width && cloudTex.height == source.height) ? 1 : 0);
-        Graphics.Blit(cloudTex, upscaledCloudTex, mat, mat.FindPass("Upscale"));
-        // blur + composite
-        mat.SetTexture("UpscaledCloudTex", upscaledCloudTex);
-        mat.SetTexture("SceneDepthTex", combinedDepthTex);
-        Graphics.Blit(source, destination, mat, mat.FindPass("Composite"));
     }
     
     private void OnDestroy()

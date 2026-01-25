@@ -1,6 +1,7 @@
 using Assets.Packages.DevConsole;
 using Assets.Scripts.Flight.UI;
 using HarmonyLib;
+using ModApi.Scenes.Events;
 
 namespace Assets.Scripts
 {
@@ -33,23 +34,22 @@ namespace Assets.Scripts
 
         public GameObject VolkenUI;
         public GameObject forceSettingScriptLoadGameObject;
+        public bool hasHarmony { get; private set; } = false;
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
             //PlanetRingsZWriteFix.Apply(harmony);
-            
+            PlanetRingsShaderPatch.Apply(harmony);
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
             VolkenUI.SetActive(true);
-            
             forceSettingScriptLoadGameObject=new GameObject("ForceSettingObject");
             forceSettingScriptLoadGameObject.AddComponent<ForceSetting>();
             GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
             forceSettingScriptLoadGameObject.SetActive(false);
-            
             Volken.Initialize();
             RegisterCommands();
         }
@@ -58,6 +58,26 @@ namespace Assets.Scripts
         {
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
+            DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
+        }
+
+        public void ForceRefresh()
+        {
+            if (!Game.InFlightScene)
+            {
+                return;
+            }
+            if (Volken.Instance==null)
+            {
+                Volken.Initialize();
+                Volken.Instance.sb();
+                LOG("force refresh called");
+            }
+
+            if (Volken.Instance!=null)
+            {
+                LOG("Volken is still alive");
+            }
         }
         #region LOG
         public static void LOG(object message)

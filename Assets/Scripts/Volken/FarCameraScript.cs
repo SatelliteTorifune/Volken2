@@ -5,7 +5,7 @@ public class FarCameraScript : MonoBehaviour
     public static float maxFarDepth;
     public static RenderTexture farDepthTex;
     
-    private Material mat;
+    public Material mat;
     private Camera mainCam;
 
     public FarCameraScript()

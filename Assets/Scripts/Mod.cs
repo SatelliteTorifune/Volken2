@@ -61,7 +61,7 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
         }
 
-        public void ForceRefresh()
+        private void ForceRefresh()
         {
             if (!Game.InFlightScene)
             {
@@ -70,12 +70,14 @@ namespace Assets.Scripts
             if (Volken.Instance==null)
             {
                 Volken.Initialize();
-                Volken.Instance.sb();
+                Volken.Instance?.OnFlightSceneLoaded();
                 LOG("force refresh called");
             }
 
             if (Volken.Instance!=null)
-            {
+            { 
+                Volken.Initialize();
+                Volken.Instance?.OnFlightSceneLoaded();
                 LOG("Volken is still alive");
             }
         }

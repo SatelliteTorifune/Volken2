@@ -35,24 +35,28 @@ public class CloudRenderer : MonoBehaviour
         currentResolutionScale = config.resolutionScale;
         cam = GetComponent<Camera>();
         prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
-
-        CreateRenderTextures();
-        SetShaderProperties();
-
-        Game.Instance.FlightScene.PlayerChangedSoi += OnSoiChanged;
+        CloudRenderManualRefresh();
+        Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
     }
 
-    private void OnSoiChanged(ICraftNode playerCraftNode, IPlanetNode newParent)
+    private void OnPlayerChangedSoi(ICraftNode playerCraftNode, IPlanetNode newParent)
     {
         if (playerCraftNode.Parent.Parent==null)
         {
+        
             Volken.Instance.cloudConfig.enabled = false;
             //dude,it's stupid to give sun cloud
-            return;
         }
-        config.enabled = newParent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-        
-       
+        else
+        {
+            config.enabled = newParent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+        }
+    }
+
+    public void CloudRenderManualRefresh()
+    {
+        CreateRenderTextures();
+        SetShaderProperties();
     }
 
     private void CreateRenderTextures()
@@ -78,7 +82,7 @@ public class CloudRenderer : MonoBehaviour
         lowResDepthTex.Create();
     }
 
-    void ReleaseRenderTextures()
+    private void ReleaseRenderTextures()
     {
         if (cloudTex != null && cloudTex.IsCreated())
             cloudTex.Release();
@@ -96,37 +100,44 @@ public class CloudRenderer : MonoBehaviour
 
     public void SetShaderProperties()
     {
-        mat.SetFloat("cloudDensity", config.density);
-        mat.SetFloat("cloudAbsorption", config.absorption);
-        mat.SetFloat("ambientLight", config.ambientLight);
-        mat.SetFloat("cloudCoverage", config.coverage);
-        mat.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
-        mat.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));
-        mat.SetFloat("detailStrength", config.detailStrength);
-        mat.SetVector("cloudLayerHeights", config.layerHeights);
-        mat.SetVector("cloudLayerSpreads", config.layerSpreads);
-        mat.SetVector("cloudLayerStrengths", config.layerStrengths);
-        mat.SetFloat("maxCloudHeight", Mathf.Max(0.001f, config.maxCloudHeight));
-        mat.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
-        mat.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
-        mat.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
-        mat.SetFloat("scatterStrength", config.scatterStrength*1e-3f);
-        mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
-        mat.SetColor("cloudColor", config.cloudColor);
-        mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
-        mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
-        mat.SetFloat("historyBlend", config.historyBlend);
-        mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
-        mat.SetVector("phaseParams", config.phaseParameters);
-        mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
-        mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
-        
-        mat.SetFloat("scatterPower", config.scatterPower);
-        mat.SetFloat("multiScatterBlend", config.multiScatterBlend);
-        mat.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
-        mat.SetVector("customWavelengths", config.customWavelengths);
-        mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
-        mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
+        try
+        {
+            mat.SetFloat("cloudDensity", config.density);
+            mat.SetFloat("cloudAbsorption", config.absorption);
+            mat.SetFloat("ambientLight", config.ambientLight);
+            mat.SetFloat("cloudCoverage", config.coverage);
+            mat.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
+            mat.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));
+            mat.SetFloat("detailStrength", config.detailStrength);
+            mat.SetVector("cloudLayerHeights", config.layerHeights);
+            mat.SetVector("cloudLayerSpreads", config.layerSpreads);
+            mat.SetVector("cloudLayerStrengths", config.layerStrengths);
+            mat.SetFloat("maxCloudHeight", Mathf.Max(0.001f, config.maxCloudHeight));
+            mat.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
+            mat.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
+            mat.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
+            mat.SetFloat("scatterStrength", config.scatterStrength*1e-3f);
+            mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
+            mat.SetColor("cloudColor", config.cloudColor);
+            mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
+            mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
+            mat.SetFloat("historyBlend", config.historyBlend);
+            mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
+            mat.SetVector("phaseParams", config.phaseParameters);
+            mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
+            mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
+            
+            mat.SetFloat("scatterPower", config.scatterPower);
+            mat.SetFloat("multiScatterBlend", config.multiScatterBlend);
+            mat.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
+            mat.SetVector("customWavelengths", config.customWavelengths);
+            mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
+            mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
+        }
+        catch (Exception e)
+        {
+            Mod.LOG("Volken:CloudRenderer.SetShaderProperties"+Environment.StackTrace);
+        }
     }
 
 

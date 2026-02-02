@@ -49,6 +49,7 @@ public class VolkenUserInterface:MonoBehaviour
                 }
                 
                 Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+                
             }
             catch (Exception ex)
             {
@@ -75,7 +76,6 @@ public class VolkenUserInterface:MonoBehaviour
             if (craftNode.Parent.Parent==null)
             {
                 Volken.Instance.cloudConfig.enabled = false;
-                //dude,it's stupid to give sun cloud
                 return;
             }
             
@@ -97,16 +97,27 @@ public class VolkenUserInterface:MonoBehaviour
                         Volken.Instance.farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
                     }
                 }
-                
+                Volken.Instance.RefreshConfigList();
+                RebuildInspectorPanel();
                 Volken.Instance.ValueChanged();
+                Volken.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
+                
             }
+            else
+            {
+                Volken.Instance.RefreshConfigList();
+                RebuildInspectorPanel();
+                Volken.Instance.ValueChanged();
+                Volken.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
+            }
+            
         }
         catch (Exception ex)
         {
             Mod.LOG("Volken: Error in OnPlayerChangedSoi: " + ex);
         }
     }
-
+    
     private void OnCloseButtonClicked(IInspectorPanel panel)
     {
         if (panel != null)
@@ -362,12 +373,14 @@ public class VolkenUserInterface:MonoBehaviour
             if (!Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
             {
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage("°`_´° hey I don't think there should be clouds here");
+                Volken.Instance.cloudConfig.enabled = false;
                 return;
             }
 
             if (Game.Instance.FlightScene.CraftNode.Parent.Parent==null)
             {
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Why you are trying to give star cloud???");
+                Volken.Instance.cloudConfig.enabled = false;
                 return;
             }
             Volken.Instance.cloudConfig.enabled = s;
@@ -432,7 +445,7 @@ public class VolkenUserInterface:MonoBehaviour
             scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(scatterModel);
             
-            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 100.0f);
+            var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 50.0f);
             atmoBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(atmoBlendModel);
             
@@ -524,35 +537,6 @@ public class VolkenUserInterface:MonoBehaviour
             historyBlendModel.ValueFormatter = (f) => FormatValue(f, 2);
             qualityGroup.Add(historyBlendModel);
             inspectorModel.Add(qualityGroup);
-            #endregion
-            #region fallOffGroup
-            GroupModel fallOffGroup = new GroupModel("Cloud Fall Off Settings");
-            
-            var lowAltitudeThreshold = new SliderModel("Low Altitude Threshold", () => Volken.Instance.cloudConfig.lowAltitudeThreshold, s => { Volken.Instance.cloudConfig.lowAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
-            lowAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
-            fallOffGroup.Add(lowAltitudeThreshold);
-            
-            var midAltitudeThreshold = new SliderModel("Mid Altitude Threshold", () => Volken.Instance.cloudConfig.midAltitudeThreshold, s => { Volken.Instance.cloudConfig.midAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
-            midAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
-            fallOffGroup.Add(midAltitudeThreshold);
-            
-            var highAltitudeThreshold = new SliderModel("High Altitude Threshold", () => Volken.Instance.cloudConfig.highAltitudeThreshold, s => { Volken.Instance.cloudConfig.highAltitudeThreshold = s;Volken.Instance.ValueChanged(); }, 0.0f, 1e6f);
-            highAltitudeThreshold.ValueFormatter = (f) => FormatValue(f, 1);
-            fallOffGroup.Add(highAltitudeThreshold);
-            
-            var minDistanceFactor = new SliderModel("Min Distance Factor", () => Volken.Instance.cloudConfig.minDistanceFactor, s => { Volken.Instance.cloudConfig.minDistanceFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
-            minDistanceFactor.ValueFormatter = (f) => FormatValue(f, 2);
-            fallOffGroup.Add(minDistanceFactor);
-            
-            var maxStepSizeMultiplier = new SliderModel("Max Step Size Multiplier", () => Volken.Instance.cloudConfig.maxStepSizeMultiplier, s => { Volken.Instance.cloudConfig.maxStepSizeMultiplier = s;Volken.Instance.ValueChanged(); }, 0.0f, 3.0f);
-            maxStepSizeMultiplier.ValueFormatter = (f) => FormatValue(f, 2);
-            fallOffGroup.Add(maxStepSizeMultiplier);
-            
-            var minLightSamplesFactor = new SliderModel("Min Light Sample Factor", () => Volken.Instance.cloudConfig.minLightSamplesFactor, s => { Volken.Instance.cloudConfig.minLightSamplesFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
-            minLightSamplesFactor.ValueFormatter = (f) => FormatValue(f, 2);
-            fallOffGroup.Add(minLightSamplesFactor);
-            
-            //inspectorModel.Add(fallOffGroup);
             #endregion
 
             // Create the panel

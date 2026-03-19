@@ -1,5 +1,7 @@
+using Assets.Packages.DevConsole;
 using Assets.Scripts.Flight.UI;
 using HarmonyLib;
+using ModApi.Scenes.Events;
 
 namespace Assets.Scripts
 {
@@ -17,6 +19,12 @@ namespace Assets.Scripts
         private Mod() : base()
         {
         }
+
+        public int frontRenderQueue = 3000;
+        public int backRenderQueue = 3000;
+        
+        //f 2000 2500 2501
+        //b 2500-2501
         
         /// <summary>
         /// Gets the singleton instance of the mod object.
@@ -26,29 +34,52 @@ namespace Assets.Scripts
 
         public GameObject VolkenUI;
         public GameObject forceSettingScriptLoadGameObject;
+        public bool hasHarmony { get; private set; } = false;
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
-            
+            //PlanetRingsZWriteFix.Apply(harmony);
+            PlanetRingsShaderPatch.Apply(harmony);
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
             VolkenUI.SetActive(true);
-            
             forceSettingScriptLoadGameObject=new GameObject("ForceSettingObject");
             forceSettingScriptLoadGameObject.AddComponent<ForceSetting>();
             GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
             forceSettingScriptLoadGameObject.SetActive(false);
-            
             Volken.Initialize();
             RegisterCommands();
         }
         
         private void RegisterCommands()
         {
-            //I don't really know if i need to use console here so I'll just leave a function here so far
+            DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
+            DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
+            DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
+        }
+        
+        private void ForceRefresh()
+        {
+            if (!Game.InFlightScene)
+            {
+                return;
+            }
+            if (Volken.Instance==null)
+            {
+                Volken.Initialize();
+                Volken.Instance?.OnFlightSceneLoaded();
+                LOG("force refresh called");
+            }
+
+            if (Volken.Instance!=null)
+            { 
+                Volken.Initialize();
+                Volken.Instance?.OnFlightSceneLoaded();
+                LOG("Volken is still alive");
+            }
         }
         #region LOG
         public static void LOG(object message)

@@ -62,11 +62,11 @@ public class PlanetConfigList
             {
                 serializer.Serialize(stream, this);
             }
-            Mod.LOG($"Not Cloud config '{configName}' saved to: {filePath}");
+            Mod.LOG($"Planet config '{configName}' saved to: {filePath}");
         }
         catch (System.Exception e)
         {
-            Mod.LOG("SAving failed+"+e);
+            Mod.LOG("Saving failed+"+e);
         }
     }
     public static PlanetConfigList LoadFromFile(string configName)

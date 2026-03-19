@@ -102,6 +102,8 @@ public class Volken
         }
     }
 
+    public void OnFlightSceneLoaded() => OnSceneLoaded(new object(), new SceneEventArgs("Flight"));
+
     private void OnSceneLoaded(object sender, SceneEventArgs e)
     {
         RefreshConfigList();
@@ -134,23 +136,8 @@ public class Volken
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            if (gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null)
-            {
-                cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
-            }
-            else
-            {
-                cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
-            }
-
-            if (gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null)
-            {
-                farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
-            }
-            else
-            {
-                farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
-            }
+            cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>() : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+            farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>() : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
 
             Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
         }
@@ -166,7 +153,7 @@ public class Volken
             }
         }
     }
-    private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
+    public void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
         
         if (craftNode.Parent.Parent==null)
@@ -224,6 +211,11 @@ public class Volken
             }
 
             Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
+        }
+        else
+        {
+            cloudConfig.enabled = false;
+            currentConfigName="Default";
         }
     }
     private void GenerateNoiseTextures()

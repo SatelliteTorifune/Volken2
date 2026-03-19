@@ -49,6 +49,7 @@ public class VolkenUserInterface:MonoBehaviour
                 }
                 
                 Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+                
             }
             catch (Exception ex)
             {
@@ -75,7 +76,6 @@ public class VolkenUserInterface:MonoBehaviour
             if (craftNode.Parent.Parent==null)
             {
                 Volken.Instance.cloudConfig.enabled = false;
-                //dude,it's stupid to give sun cloud
                 return;
             }
             
@@ -97,16 +97,27 @@ public class VolkenUserInterface:MonoBehaviour
                         Volken.Instance.farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
                     }
                 }
-                
+                Volken.Instance.RefreshConfigList();
+                RebuildInspectorPanel();
                 Volken.Instance.ValueChanged();
+                Volken.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
+                
             }
+            else
+            {
+                Volken.Instance.RefreshConfigList();
+                RebuildInspectorPanel();
+                Volken.Instance.ValueChanged();
+                Volken.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
+            }
+            
         }
         catch (Exception ex)
         {
             Mod.LOG("Volken: Error in OnPlayerChangedSoi: " + ex);
         }
     }
-
+    
     private void OnCloseButtonClicked(IInspectorPanel panel)
     {
         if (panel != null)
@@ -350,6 +361,22 @@ public class VolkenUserInterface:MonoBehaviour
                 }
             }));
             configManagementGroup.Add(resetToDefaultButton);
+            
+            var tryAnotherButton = new TextButtonModel("Try Another Config", (Action<TextButtonModel>)(b => 
+            {
+                try
+                {
+                    Volken.Instance.cloudConfig.CopyFrom(CloudConfig.LaggyOne());
+                    Volken.Instance.ValueChanged();
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Config set to default II!");
+                }
+                catch (Exception ex)
+                {
+                    Mod.LOG("Volken: Error setting config: " + ex);
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error getting config!");
+                }
+            }));
+            configManagementGroup.Add(tryAnotherButton);
             inspectorModel.Add(configManagementGroup);
 
            
@@ -362,12 +389,14 @@ public class VolkenUserInterface:MonoBehaviour
             if (!Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
             {
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage("°`_´° hey I don't think there should be clouds here");
+                Volken.Instance.cloudConfig.enabled = false;
                 return;
             }
 
             if (Game.Instance.FlightScene.CraftNode.Parent.Parent==null)
             {
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Why you are trying to give star cloud???");
+                Volken.Instance.cloudConfig.enabled = false;
                 return;
             }
             Volken.Instance.cloudConfig.enabled = s;
@@ -388,7 +417,7 @@ public class VolkenUserInterface:MonoBehaviour
             ambientModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(ambientModel);
             
-            var coverageModel = new SliderModel("Coverage", () => Volken.Instance.cloudConfig.coverage, s => { Volken.Instance.cloudConfig.coverage = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
+            var coverageModel = new SliderModel("Coverage", () => Volken.Instance.cloudConfig.coverage, s => { Volken.Instance.cloudConfig.coverage = s;Volken.Instance.ValueChanged(); }, -2.0f, 2.0f);
             coverageModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(coverageModel);
             
@@ -428,8 +457,8 @@ public class VolkenUserInterface:MonoBehaviour
             cloudColorBlueModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(cloudColorBlueModel);
             
-            var scatterModel = new SliderModel("Scatter Strength", () => Volken.Instance.cloudConfig.scatterStrength, s => { Volken.Instance.cloudConfig.scatterStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 5.0f);
-            scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
+            var scatterModel = new SliderModel("Scatter Strength", () => Volken.Instance.cloudConfig.scatterStrength, s => { Volken.Instance.cloudConfig.scatterStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 2.0f);
+            scatterModel.ValueFormatter = (f) => FormatValue(f, 3);
             cloudShapeGroup.Add(scatterModel);
             
             var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 50.0f);

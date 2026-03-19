@@ -1,7 +1,8 @@
 using Assets.Scripts;
+using ModApi.GameLoop;
 using UnityEngine;
 
-public class ForceSetting : MonoBehaviour
+public class ForceSetting : MonoBehaviourBase
 {
     private float checkInterval = 2f;
     private void OnEnable()

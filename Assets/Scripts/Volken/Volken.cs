@@ -133,8 +133,9 @@ public class Volken
                 _availableConfigs.Add(currentConfigName);
             }
             Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+            bool beforeCgh = cloudConfig.enabled;
             cloudConfig.enabled = false;
-            cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+            cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere&&beforeCgh;
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
             cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>() : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
             farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>() : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();

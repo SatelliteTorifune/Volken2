@@ -434,7 +434,7 @@ public class VolkenUserInterface:MonoBehaviour
             cloudShapeGroup.Add(detailStrengthModel);
             
             var speedModel = new SliderModel("Cloud Movement Speed", () => Volken.Instance.cloudConfig.windSpeed, s => { Volken.Instance.cloudConfig.windSpeed = s;Volken.Instance.ValueChanged(); }, -0.05f, 0.05f);
-            speedModel.ValueFormatter = (f) => FormatValue(f, 2);
+            speedModel.ValueFormatter = (f) => FormatValue(f, 4);
             cloudShapeGroup.Add(speedModel);
             
             var windDirectionModel = new SliderModel("Wind Direction", () => Volken.Instance.cloudConfig.windDirection, s => { Volken.Instance.cloudConfig.windDirection = s;Volken.Instance.ValueChanged(); }, 0.0f, 360.0f, true);

@@ -361,6 +361,22 @@ public class VolkenUserInterface:MonoBehaviour
                 }
             }));
             configManagementGroup.Add(resetToDefaultButton);
+            
+            var tryAnotherButton = new TextButtonModel("Try Another Config", (Action<TextButtonModel>)(b => 
+            {
+                try
+                {
+                    Volken.Instance.cloudConfig.CopyFrom(CloudConfig.LaggyOne());
+                    Volken.Instance.ValueChanged();
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Config set to default II!");
+                }
+                catch (Exception ex)
+                {
+                    Mod.LOG("Volken: Error setting config: " + ex);
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error getting config!");
+                }
+            }));
+            configManagementGroup.Add(tryAnotherButton);
             inspectorModel.Add(configManagementGroup);
 
            
@@ -401,7 +417,7 @@ public class VolkenUserInterface:MonoBehaviour
             ambientModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(ambientModel);
             
-            var coverageModel = new SliderModel("Coverage", () => Volken.Instance.cloudConfig.coverage, s => { Volken.Instance.cloudConfig.coverage = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f);
+            var coverageModel = new SliderModel("Coverage", () => Volken.Instance.cloudConfig.coverage, s => { Volken.Instance.cloudConfig.coverage = s;Volken.Instance.ValueChanged(); }, -2.0f, 2.0f);
             coverageModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(coverageModel);
             
@@ -441,8 +457,8 @@ public class VolkenUserInterface:MonoBehaviour
             cloudColorBlueModel.ValueFormatter = (f) => FormatValue(f, 2);
             cloudShapeGroup.Add(cloudColorBlueModel);
             
-            var scatterModel = new SliderModel("Scatter Strength", () => Volken.Instance.cloudConfig.scatterStrength, s => { Volken.Instance.cloudConfig.scatterStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 5.0f);
-            scatterModel.ValueFormatter = (f) => FormatValue(f, 2);
+            var scatterModel = new SliderModel("Scatter Strength", () => Volken.Instance.cloudConfig.scatterStrength, s => { Volken.Instance.cloudConfig.scatterStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 2.0f);
+            scatterModel.ValueFormatter = (f) => FormatValue(f, 3);
             cloudShapeGroup.Add(scatterModel);
             
             var atmoBlendModel = new SliderModel("Atmosphere Blend Factor", () => Volken.Instance.cloudConfig.atmoBlendFactor, s => { Volken.Instance.cloudConfig.atmoBlendFactor = s;Volken.Instance.ValueChanged(); }, 0.0f, 50.0f);

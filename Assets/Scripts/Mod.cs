@@ -60,7 +60,7 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
         }
-
+        
         private void ForceRefresh()
         {
             if (!Game.InFlightScene)

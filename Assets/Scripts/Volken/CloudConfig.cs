@@ -207,6 +207,56 @@ public class CloudConfig
             return CreateDefault();
         }
     }
+
+    public static CloudConfig LaggyOne()
+    {
+        return new CloudConfig
+        {
+            enabled = true,
+            density = 0.05f,
+            absorption =0.584487557f,
+            ambientLight = 0.18f,
+            coverage = -0.25f,
+            shapeScale = 10182.435f,
+            detailScale = 25000.0f,
+            detailStrength = 1f,
+            phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
+            offset = new Vector3(0.89573895f,0.9473378f,0.95080435f),
+            windSpeed = 0.0f,
+            windDirection = 0.0f,
+            globalRotationAngular=0.1f,
+            scatterStrength = 0.21468132f,
+            atmoBlendFactor = 0.3628809f,
+            cloudColor = Color.white,
+            layerHeights = new Vector2(1671.05261f, 4717.10547f),
+            layerSpreads = new Vector2(670.083f, 5000f),
+            layerStrengths = new Vector2(0.300f, 2f),
+            maxCloudHeight = 11238.2275f,
+            resolutionScale = 0.5001385f,
+            stepSize = 193.29982f,
+            stepSizeFalloff = 0.67f,
+            numLightSamplePoints = 50,
+            blueNoiseStrength = 0.0f,
+            depthThreshold = 1f,
+            historyBlend = 0.0f,
+            historyDepthThreshold = 0.05f,
+            scatterPower = 1.5f,
+            multiScatterBlend = 0.3f,
+            ambientScatterStrength = 0.62f,
+            customWavelengths = new Vector3(680f, 550f, 450f),
+            silverLiningIntensity = 3.0f,
+            forwardScatteringBias = 0.65f,
+            nearThreshold = 100000f,
+            /*
+            lowAltitudeThreshold = 10000f,
+            midAltitudeThreshold = 50000f,
+            highAltitudeThreshold = 150000,
+            minDistanceFactor = 0.1f,
+            maxStepSizeMultiplier = 3f,
+            minLightSamplesFactor = 0.3f
+            */
+        };
+    }
     public static CloudConfig CreateDefault()
     {
         return new CloudConfig

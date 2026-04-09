@@ -750,6 +750,7 @@ Shader "Hidden/Clouds"
             float _NearThreshold;
             
             
+            
             //I give up,chaotic was fucking right
             
             /*

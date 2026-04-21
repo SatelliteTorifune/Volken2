@@ -16,17 +16,7 @@ public class CloudNoise
     private const int threadGroupSize = 8;
     private ComputeShader _noiseCompute;
 
-    private static int HashSeed(int seed, int a, int b)
-    {
-        unchecked
-        {
-            // Simple, stable integer hash to decorrelate octaves / params.
-            int h = seed;
-            h = (h * 486187739) ^ a;
-            h = (h * 486187739) ^ b;
-            return h;
-        }
-    }
+    
 
     public CloudNoise(int seed = 0, ComputeShader noiseCumpute = null)
     {
@@ -59,15 +49,15 @@ public class CloudNoise
                 break;
             }
 
-            WriteWhorley(ref tex, norm * weight, resolution, numCells, i);
+            WriteWhorley(ref tex, norm * weight, resolution, numCells);
         }
 
         return tex;
     }
 
-    private void WriteWhorley(ref RenderTexture tex, float weight, int res, int numCells, int octave)
+    private void WriteWhorley(ref RenderTexture tex, float weight, int res, int numCells)
     {
-        System.Random rand = new System.Random(HashSeed(_seed, octave, numCells));
+        System.Random rand = new System.Random(_seed);
         Vector3[] cellPoints = new Vector3[numCells * numCells * numCells];
         
         for (int z = 0; z < numCells; z++)
@@ -165,7 +155,7 @@ public class CloudNoise
     {
         Vector2[,] gradients = new Vector2[numCells, numCells];
         // Decorrelate octaves by using a changing seed per numCells (and weight).
-        System.Random rand = new System.Random(HashSeed(_seed, numCells, Mathf.RoundToInt(weight * 100000.0f)));
+        System.Random rand = new System.Random(_seed);
         int num = 10000;
         float invNum = 1.0f / num;
 

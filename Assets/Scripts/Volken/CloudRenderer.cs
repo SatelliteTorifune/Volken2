@@ -126,12 +126,7 @@ public class CloudRenderer : MonoBehaviour
             mat.SetVector("phaseParams", config.phaseParameters);
             mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
 
-            // Use the actual blue noise texture size instead of a hard-coded 512.
-            // This lets you swap to higher-res blue noise to push tiling farther out.
-            var blueNoise = mat.GetTexture("BlueNoiseTex") as Texture2D;
-            float bnW = (blueNoise != null && blueNoise.width > 0) ? blueNoise.width : 512.0f;
-            float bnH = (blueNoise != null && blueNoise.height > 0) ? blueNoise.height : 512.0f;
-            mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width / bnW, Screen.height / bnH));
+            mat.SetVector("blueNoiseScale", currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
             
             mat.SetFloat("scatterPower", config.scatterPower);
             mat.SetFloat("multiScatterBlend", config.multiScatterBlend);

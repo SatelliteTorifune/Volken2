@@ -238,7 +238,6 @@ Shader "Hidden/Clouds"
             float maxDepth;
             float historyBlend;
             matrix reprojMat;
-            float globalRotationAngular;
             float currentRotation;
             
             // magic functions for better lighting
@@ -268,68 +267,6 @@ Shader "Hidden/Clouds"
                 return phaseParams.z + hgBlend * phaseParams.w;
             }
 
-            float Hash01(uint x)
-            {
-                // 24-bit mantissa friendly hash -> [0,1)
-                x ^= x >> 16;
-                x *= 2246822519u;
-                x ^= x >> 13;
-                x *= 3266489917u;
-                x ^= x >> 16;
-                return (x & 0x00FFFFFFu) * (1.0 / 16777216.0);
-            }
-
-            float3 Hash33(int3 p)
-            {
-                // Integer-only hash (much cheaper than sin())
-                uint ux = (uint)p.x;
-                uint uy = (uint)p.y;
-                uint uz = (uint)p.z;
-                return float3(
-                    Hash01(ux * 1597334677u ^ uy * 3812015801u ^ uz * 2798796415u ^ 0xA2C2A1u),
-                    Hash01(ux * 3812015801u ^ uy * 2798796415u ^ uz * 1597334677u ^ 0xC3E7B3u),
-                    Hash01(ux * 2798796415u ^ uy * 1597334677u ^ uz * 3812015801u ^ 0x9E3779u)
-                );
-            }
-
-            float Smooth01(float t) { return t * t * (3.0 - 2.0 * t); }
-            float3 Smooth013(float3 t) { return float3(Smooth01(t.x), Smooth01(t.y), Smooth01(t.z)); }
-
-            float3 SmoothHashOffset3(float3 p, float tileSize, float amp)
-            {
-                // Compute a seamless random offset per tile (math-only), trilinearly blended across 8 neighbors.
-                float3 q = p / tileSize;
-                int3 cell = (int3)floor(q);
-                float3 f = Smooth013(frac(q));
-
-                int3 c000 = cell + int3(0, 0, 0);
-                int3 c100 = cell + int3(1, 0, 0);
-                int3 c010 = cell + int3(0, 1, 0);
-                int3 c110 = cell + int3(1, 1, 0);
-                int3 c001 = cell + int3(0, 0, 1);
-                int3 c101 = cell + int3(1, 0, 1);
-                int3 c011 = cell + int3(0, 1, 1);
-                int3 c111 = cell + int3(1, 1, 1);
-
-                float3 o000 = Hash33(c000);
-                float3 o100 = Hash33(c100);
-                float3 o010 = Hash33(c010);
-                float3 o110 = Hash33(c110);
-                float3 o001 = Hash33(c001);
-                float3 o101 = Hash33(c101);
-                float3 o011 = Hash33(c011);
-                float3 o111 = Hash33(c111);
-
-                float3 ox00 = lerp(o000, o100, f.x);
-                float3 ox10 = lerp(o010, o110, f.x);
-                float3 ox01 = lerp(o001, o101, f.x);
-                float3 ox11 = lerp(o011, o111, f.x);
-                float3 oxy0 = lerp(ox00, ox10, f.y);
-                float3 oxy1 = lerp(ox01, ox11, f.y);
-                float3 o = lerp(oxy0, oxy1, f.z);
-
-                return (o - 0.5) * (amp * tileSize);
-            }
             
 
             // basic transmittance function
@@ -376,13 +313,8 @@ Shader "Hidden/Clouds"
                 );
             
                 // Keep shape relatively cheap; target the smallest-scale repetition in detail.
-                float3 shapeP = rotatedOffset * cloudScale;
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, shapeP, 0);
-
-                float3 detailP = rotatedOffset * detailScale;
-                // Anti-tiling for small-scale detail: one texture sample, plus a seamless hash-based coordinate warp.
-                float3 detailWarp = SmoothHashOffset3(detailP, 2.0, 0.85);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, detailP + detailWarp, 0);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
             
                 float3 dir = normalize(rotatedOffset);
@@ -419,13 +351,8 @@ Shader "Hidden/Clouds"
                     offset.x * sinAngle + offset.z * cosAngle
                 );
             
-                // Cheap path: avoid stochastic sampling here for performance.
-                float3 shapeP = rotatedOffset * cloudScale;
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, shapeP, 0);
-
-                float3 detailP = rotatedOffset * detailScale;
-                float3 detailWarp = SmoothHashOffset3(detailP, 2.0, 0.65);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, detailP + detailWarp, 0);
+                  float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
             
                 float3 dir = normalize(rotatedOffset);
@@ -505,13 +432,7 @@ Shader "Hidden/Clouds"
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
 
-                // offset the sample ray starting position using blue noise to avoid banding
-                // NOTE: BlueNoiseTex is periodic; on large planets (clouds covering big screen areas) its tiling becomes visible.
-                // Use a non-tiling per-pixel hash for the ray offset jitter, and keep the texture as a subtle shuffle term.
-                float2 pixel = floor(i.uv * _ScreenParams.xy);
-                float hashNoise = frac(52.9829189 * frac(0.06711056 * pixel.x + 0.00583715 * pixel.y + 0.071 * blueNoiseOffset.x + 0.113 * blueNoiseOffset.y));
-                float texNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
-                float blueNoise = frac(hashNoise + texNoise);
+                float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
                 float rayDist = startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5;
 
                 float phaseValue = CloudPhase(dot(viewDir, -lightDir), multiScatterBlend);

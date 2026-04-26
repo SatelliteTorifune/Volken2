@@ -41,7 +41,7 @@ namespace Assets.Scripts
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
             //PlanetRingsZWriteFix.Apply(harmony);
-            PlanetRingsShaderPatch.Apply(harmony);
+            //PlanetRingsShaderPatch.Apply(harmony);
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);

@@ -287,7 +287,15 @@ public class VolkenUserInterface:MonoBehaviour
                             {
                                 Volken.Instance.cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,name);
                                 Volken.Instance.currentConfigName = name;
-                                Volken.Instance.AddConfig("name");
+                                Volken.Instance.AddConfig(name);
+                                if (Volken.Instance.planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                                {
+                                    Volken.Instance.planetConfigList.SetConfig(Game.Instance.FlightScene.CraftNode.Parent.Name, name);
+                                }
+                                else
+                                {
+                                    Volken.Instance.planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name, name);
+                                }
                                 Volken.Instance.RefreshConfigList();
                                 inspectorPanel.Visible = false;
                                 RebuildInspectorPanel();
@@ -331,6 +339,10 @@ public class VolkenUserInterface:MonoBehaviour
                             if (Volken.Instance.planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
                             {
                                 Volken.Instance.planetConfigList.SetConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,Volken.Instance.currentConfigName);
+                            }
+                            else
+                            {
+                                Volken.Instance.planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,Volken.Instance.currentConfigName);
                             }
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Config '{newConfig}' loaded!");
                         }

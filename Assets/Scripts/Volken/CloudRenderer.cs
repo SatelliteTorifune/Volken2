@@ -39,8 +39,19 @@ public class CloudRenderer : MonoBehaviour
         Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
     }
 
+    private void SyncConfigReference()
+    {
+        if (Volken.Instance?.cloudConfig == null)
+        {
+            return;
+        }
+
+        config = Volken.Instance.cloudConfig;
+    }
+
     private void OnPlayerChangedSoi(ICraftNode playerCraftNode, IPlanetNode newParent)
     {
+        SyncConfigReference();
         if (playerCraftNode.Parent.Parent==null)
         {
         
@@ -102,6 +113,7 @@ public class CloudRenderer : MonoBehaviour
     {
         try
         {
+            SyncConfigReference();
             mat.SetFloat("cloudDensity", config.density);
             mat.SetFloat("cloudAbsorption", config.absorption);
             mat.SetFloat("ambientLight", config.ambientLight);
@@ -135,7 +147,7 @@ public class CloudRenderer : MonoBehaviour
             mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
             mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
         }
-        catch (Exception e)
+        catch (Exception)
         {
             Mod.LOG("Volken:CloudRenderer.SetShaderProperties"+Environment.StackTrace);
         }
@@ -258,6 +270,7 @@ public class CloudRenderer : MonoBehaviour
     {
         try
         {
+            SyncConfigReference();
             if (!config.enabled || FarCameraScript.farDepthTex == null)
             {
                 // return unchanged image
@@ -296,7 +309,7 @@ public class CloudRenderer : MonoBehaviour
             mat.SetTexture("SceneDepthTex", combinedDepthTex);
             Graphics.Blit(source, destination, mat, mat.FindPass("Composite"));
         }
-        catch (Exception e)
+        catch (Exception)
         {
             //igore 
         }

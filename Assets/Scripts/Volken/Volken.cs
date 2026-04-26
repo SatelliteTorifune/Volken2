@@ -166,30 +166,45 @@ public class Volken
         
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
+            RefreshConfigList();
+            string planetName = Game.Instance.FlightScene.CraftNode.Parent.Name;
+
             if (_availableConfigs.Count > 0)
             {
-                if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
+                if (!planetConfigList.ExistsInConfig(planetName))
                 {
                     currentConfigName = _availableConfigs[0];
-                    planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                    planetConfigList.AddConfig(planetName, currentConfigName);
                 }
                 else
                 {
-                    currentConfigName = planetConfigList.GetConfigName(Game.Instance.FlightScene.CraftNode.Parent.Name);
+                    currentConfigName = planetConfigList.GetConfigName(planetName);
+                    if (!_availableConfigs.Contains(currentConfigName))
+                    {
+                        currentConfigName = _availableConfigs[0];
+                        planetConfigList.SetConfig(planetName, currentConfigName);
+                    }
                 }
-                cloudConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                cloudConfig = CloudConfig.LoadFromFile(planetName, currentConfigName);
             }
             else
             {
                 currentConfigName = "Default";
                 cloudConfig = CloudConfig.CreateDefault();
-                cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
+                cloudConfig.SaveToFile(planetName, currentConfigName);
                 _availableConfigs.Add(currentConfigName);
+                if (!planetConfigList.ExistsInConfig(planetName))
+                {
+                    planetConfigList.AddConfig(planetName, currentConfigName);
+                }
+                else
+                {
+                    planetConfigList.SetConfig(planetName, currentConfigName);
+                }
             }
             
             cloudConfig.enabled = false;
             cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-            RefreshConfigList();
             
             VolkenUserInterface.Instance.RebuildInspectorPanel();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;

@@ -458,15 +458,15 @@ public class VolkenUserInterface:MonoBehaviour
             cloudShapeGroup.Add(globalRotationAngularModel);
             
             var cloudColorRedModel = new SliderModel("Cloud Color Red", () => Volken.Instance.cloudConfig.cloudColor.r, s => { Volken.Instance.cloudConfig.cloudColor.r = s;Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, false);
-            cloudColorRedModel.ValueFormatter = (f) => FormatValue(f, 2);
+            cloudColorRedModel.ValueFormatter = (f) => FormatColorValue(f);
             cloudShapeGroup.Add(cloudColorRedModel);
             
             var cloudColorGreenModel = new SliderModel("Cloud Color Green", () => Volken.Instance.cloudConfig.cloudColor.g, s => { Volken.Instance.cloudConfig.cloudColor.g = s;Volken.Instance.ValueChanged();}, 0.0f, 1.0f, false);
-            cloudColorGreenModel.ValueFormatter = (f) => FormatValue(f, 2);
+            cloudColorGreenModel.ValueFormatter = (f) => FormatColorValue(f);
             cloudShapeGroup.Add(cloudColorGreenModel);
             
             var cloudColorBlueModel = new SliderModel("Cloud Color Blue", () => Volken.Instance.cloudConfig.cloudColor.b, s => { Volken.Instance.cloudConfig.cloudColor.b = s;Volken.Instance.ValueChanged();}, 0.0f, 1.0f, false);
-            cloudColorBlueModel.ValueFormatter = (f) => FormatValue(f, 2);
+            cloudColorBlueModel.ValueFormatter = (f) => FormatColorValue(f);
             cloudShapeGroup.Add(cloudColorBlueModel);
             
             var scatterModel = new SliderModel("Scatter Strength", () => Volken.Instance.cloudConfig.scatterStrength, s => { Volken.Instance.cloudConfig.scatterStrength = s;Volken.Instance.ValueChanged(); }, 0.0f, 2.0f);
@@ -613,6 +613,11 @@ public class VolkenUserInterface:MonoBehaviour
     private string FormatValue(float arg, int decimals) 
     { 
         return arg.ToString("n" + Mathf.Max(0, decimals)); 
+    }
+    
+    private string FormatColorValue(float arg)
+    {
+        return ((arg / 1)*255).ToString("N0");
     }
    
     private void OnDestroy()

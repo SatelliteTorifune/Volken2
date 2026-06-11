@@ -17,12 +17,16 @@ public class ForceSetting : MonoBehaviourBase
     
     private void CheckWaterTransparency()
     {
+        // respect the user's choice: when AlterTransparency is off, leave the game's
+        // water settings completely alone (previously this forced transparency to false)
+        if (!ModSettings.Instance.AlterTransparency.Value) return;
+
         var flightScene = Game.Instance.FlightScene;
         if (flightScene == null) return;
         var flightData = flightScene.CraftNode.CraftScript.FlightData;
         if (flightData == null) return;
         
-        bool targetTransparency = flightData.AltitudeAboveSeaLevel <= ModSettings.Instance.MinHeight && ModSettings.Instance.AlterTransparency.Value;
+        bool targetTransparency = flightData.AltitudeAboveSeaLevel <= ModSettings.Instance.MinHeight;
 
         var actualWaterTransparency = Game.Instance.Settings.Quality.Water.Transparency;
 

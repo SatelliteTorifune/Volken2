@@ -208,7 +208,7 @@ public class CloudConfig
         }
     }
 
-    public static CloudConfig LaggyOne()
+    public static CloudConfig CreateDefault()
     {
         return new CloudConfig
         {
@@ -257,53 +257,45 @@ public class CloudConfig
             */
         };
     }
-    public static CloudConfig CreateDefault()
+    public static CloudConfig CreateAnotherDefault()
     {
         return new CloudConfig
         {
             enabled = true,
-            density = 0.025f,
-            absorption = 0.4f,
-            ambientLight = 0.15f,
-            coverage = 0f,
-            shapeScale = 25000.0f,
-            detailScale = 25000.0f,
-            detailStrength = 0.1f,
+            density = 0.00595869171f,
+            absorption = 0.279352337f,
+            ambientLight = 0.0310036615f,
+            coverage = 0.272746682f,
+            shapeScale = 38702.7734f,
+            detailScale = 7866.181f,
+            detailStrength = 0.7400386f,
             phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
-            offset = Vector3.zero,
-            windSpeed = 0.0f,
+            offset = new Vector3(0.015371074f, 0.131764963f, 0.0238080341f),
+            windSpeed = 0.001130818f,
             windDirection = 0.0f,
-            globalRotationAngular=0.5f,
-            scatterStrength = 1f,
-            atmoBlendFactor = 0.18f,
-            cloudColor = Color.white,
-            layerHeights = new Vector2(5765.137f, 7414.373f),
-            layerSpreads = new Vector2(2000.061f, 1421.315f),
-            layerStrengths = new Vector2(0.8f, 1.5f),
-            maxCloudHeight = 9400.0f,
-            resolutionScale = 1f,
-            stepSize = 300.0f,
-            stepSizeFalloff = 3.0f,
-            numLightSamplePoints = 15,
-            blueNoiseStrength = 2.0f,
+            globalRotationAngular = 0.07383323f,
+            scatterStrength = 0.0639246f,
+            atmoBlendFactor = 4.441673f,
+            cloudColor = new Color(1f, 1f, 1f, 1f),
+            layerHeights = new Vector2(17000f, 20000f),
+            layerSpreads = new Vector2(5000f, 5000f),
+            layerStrengths = new Vector2(2f, 2f),
+            maxCloudHeight = 25000f,
+            resolutionScale = 0.75203526f,
+            stepSize = 1865.18164f,
+            stepSizeFalloff = 1.52126586f,
+            numLightSamplePoints = 5,
+            blueNoiseStrength = 0.0f,
             depthThreshold = 0.12f,
             historyBlend = 0.0f,
             historyDepthThreshold = 0.05f,
-            scatterPower = 1.5f,
-            multiScatterBlend = 0.3f,
-            ambientScatterStrength = 0.62f,
+            scatterPower = 1.0f,
+            multiScatterBlend = 0.0f,
+            ambientScatterStrength = 0.0f,
             customWavelengths = new Vector3(680f, 550f, 450f),
-            silverLiningIntensity = 1.0f,
-            forwardScatteringBias = 0.65f,
-            nearThreshold = 0f,
-            /*
-            lowAltitudeThreshold = 10000f,
-            midAltitudeThreshold = 50000f,
-            highAltitudeThreshold = 150000,
-            minDistanceFactor = 0.1f,
-            maxStepSizeMultiplier = 3f,
-            minLightSamplesFactor = 0.3f
-            */
+            silverLiningIntensity = 0.0f,
+            forwardScatteringBias = 0.0f,
+            nearThreshold = 0.0f,
         };
     }
 

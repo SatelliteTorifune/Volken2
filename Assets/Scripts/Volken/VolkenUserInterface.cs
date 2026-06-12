@@ -229,48 +229,7 @@ public class VolkenUserInterface:MonoBehaviour
             }));
             configManagementGroup.Add(saveCurrentButton);
         
-            /*
-            var saveUniversalAsButton = new TextButtonModel("Save As New Universal Config", (Action<TextButtonModel>)(b => 
-            {
-                try
-                {
-                    var dialog = Game.Instance.UserInterface.CreateInputDialog();
-                    dialog.MessageText = "Enter new config name:";
-                    dialog.InputText = "NewConfig";
-                    dialog.OkayClicked += (inputDialog) =>
-                    {
-                        try
-                        {
-                            string name = inputDialog.InputText;
-                            if (!string.IsNullOrWhiteSpace(name))
-                            {
-                                Volken.Instance.cloudConfig.SaveToFile(name);
-                                Volken.Instance.currentConfigName = name;
-                                Volken.Instance.AddConfig("name");
-                                Volken.Instance.RefreshConfigList();
-                                inspectorPanel.Visible = false;
-                                RebuildInspectorPanel();
-                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage($"Universal Config saved as '{name}'!");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Mod.LOG("Volken: Error saving new config: " + ex);
-                            Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Error saving new config!");
-                        }
-                        finally
-                        {
-                            inputDialog?.Close();
-                        }
-                    };
-                }
-                catch (Exception ex)
-                {
-                    Mod.LOG("Volken: Error creating save dialog: " + ex);
-                }
-            }));
             
-            configManagementGroup.Add(saveUniversalAsButton);*/
             var savePlanetAsButton = new TextButtonModel("Save As New Config", (Action<TextButtonModel>)(b => 
             {
                 try
@@ -378,7 +337,7 @@ public class VolkenUserInterface:MonoBehaviour
             {
                 try
                 {
-                    Volken.Instance.cloudConfig.CopyFrom(CloudConfig.LaggyOne());
+                    Volken.Instance.cloudConfig.CopyFrom(CloudConfig.CreateAnotherDefault());
                     Volken.Instance.ValueChanged();
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage("Config set to default II!");
                 }

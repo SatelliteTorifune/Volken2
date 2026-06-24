@@ -28,10 +28,10 @@ public class Volken
     public PlanetConfigList planetConfigList;
     
     public const string BlueNoisePath = "Assets/Resources/Volken/BlueNoise.png";
-    public const string PerlinFullRough = "Assets/Resources/Volken/PerlinFullRough.png";
-    public const string PerlinFullSoft = "Assets/Resources/Volken/PerlinFullSoft.png";
+    public const string PerlinFullRough = "Assets/Resources/Volken/DragNoise.png";
+    public const string PerlinFullSoft = "Assets/Resources/Volken/flareNoise.png";
     public const string PerlinHalfRough = "Assets/Resources/Volken/PerlinHalfRough.png";
-    public const string PerlinHalfSoft = "Assets/Resources/Volken/PerlinHalfSoft.png";
+    public const string PerlinHalfSoft = "Assets/Resources/Volken/Noise.png";
 
     
 

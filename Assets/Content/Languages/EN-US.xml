@@ -50,6 +50,14 @@
     <s id="Volken.UI.Layer2Strength">Layer 2 Strength</s>
     <s id="Volken.UI.MaxCloudHeight">Max Cloud Height</s>
     
+    <!-- Layer 3 & Layer 4 -->
+    <s id="Volken.UI.Layer3Height">Layer 3 Height</s>
+    <s id="Volken.UI.Layer3Spread">Layer 3 Spread</s>
+    <s id="Volken.UI.Layer3Strength">Layer 3 Strength</s>
+    <s id="Volken.UI.Layer4Height">Layer 4 Height</s>
+    <s id="Volken.UI.Layer4Spread">Layer 4 Spread</s>
+    <s id="Volken.UI.Layer4Strength">Layer 4 Strength</s>
+    
     <!-- Cloud Quality -->
     <s id="Volken.UI.ResolutionScale">Resolution Scale</s>
     <s id="Volken.UI.StepSize">Step Size</s>

@@ -218,7 +218,7 @@ public class CloudRenderer : MonoBehaviour
         }
         config.offset += config.windSpeed* 0.1f * speedFactor * deltaTime * windDir;
         config.offset.x = Fractional(config.offset.x);
-        config.offset.y = Fractional(config.offset.y);  // 如果y有用，也加,但是我觉得没啥用
+        config.offset.y = Fractional(config.offset.y);
         config.offset.z = Fractional(config.offset.z);
         
         //self rotation part

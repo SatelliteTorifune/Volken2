@@ -50,6 +50,14 @@
     <s id="Volken.UI.Layer2Strength">层级 2 强度</s>
     <s id="Volken.UI.MaxCloudHeight">最大云层高度</s>
     
+    <!-- Layer 3 & Layer 4 -->
+    <s id="Volken.UI.Layer3Height">第3层高度</s>
+    <s id="Volken.UI.Layer3Spread">第3层厚度</s>
+    <s id="Volken.UI.Layer3Strength">第3层强度</s>
+    <s id="Volken.UI.Layer4Height">第4层高度</s>
+    <s id="Volken.UI.Layer4Spread">第4层厚度</s>
+    <s id="Volken.UI.Layer4Strength">第4层强度</s>
+    
     <!-- Cloud Quality -->
     <s id="Volken.UI.ResolutionScale">分辨率大小</s>
     <s id="Volken.UI.StepSize">步长</s>

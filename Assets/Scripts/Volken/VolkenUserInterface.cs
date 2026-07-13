@@ -488,6 +488,32 @@ public class VolkenUserInterface:MonoBehaviour
             layer2StrengthModel.ValueFormatter = (f) => FormatValue(f, 1);
             containerSettingsGroup.Add(layer2StrengthModel);
             
+            // Layer 3 controls
+            var layer3HeightModel = new SliderModel(Locale.GetString("Volken.UI.Layer3Height"), () => Volken.Instance.cloudConfig.layerHeights.z, s => { Volken.Instance.cloudConfig.layerHeights.z = s;Volken.Instance.ValueChanged(); }, 500.0f, 20000.0f);
+            layer3HeightModel.ValueFormatter = (f) => FormatValue(f, 0);
+            containerSettingsGroup.Add(layer3HeightModel);
+            
+            var layer3SpreadModel = new SliderModel(Locale.GetString("Volken.UI.Layer3Spread"), () => Volken.Instance.cloudConfig.layerSpreads.z, s => { Volken.Instance.cloudConfig.layerSpreads.z = s;Volken.Instance.ValueChanged(); }, 100.0f, 10000.0f);
+            layer3SpreadModel.ValueFormatter = (f) => FormatValue(f, 0);
+            containerSettingsGroup.Add(layer3SpreadModel);
+            
+            var layer3StrengthModel = new SliderModel(Locale.GetString("Volken.UI.Layer3Strength"), () => Volken.Instance.cloudConfig.layerStrengths.z, s => { Volken.Instance.cloudConfig.layerStrengths.z = s;Volken.Instance.ValueChanged(); }, 0.0f, 2.0f);
+            layer3StrengthModel.ValueFormatter = (f) => FormatValue(f, 1);
+            containerSettingsGroup.Add(layer3StrengthModel);
+            
+            // Layer 4 controls
+            var layer4HeightModel = new SliderModel(Locale.GetString("Volken.UI.Layer4Height"), () => Volken.Instance.cloudConfig.layerHeights.w, s => { Volken.Instance.cloudConfig.layerHeights.w = s;Volken.Instance.ValueChanged(); }, 500.0f, 20000.0f);
+            layer4HeightModel.ValueFormatter = (f) => FormatValue(f, 0);
+            containerSettingsGroup.Add(layer4HeightModel);
+            
+            var layer4SpreadModel = new SliderModel(Locale.GetString("Volken.UI.Layer4Spread"), () => Volken.Instance.cloudConfig.layerSpreads.w, s => { Volken.Instance.cloudConfig.layerSpreads.w = s;Volken.Instance.ValueChanged(); }, 100.0f, 10000.0f);
+            layer4SpreadModel.ValueFormatter = (f) => FormatValue(f, 0);
+            containerSettingsGroup.Add(layer4SpreadModel);
+            
+            var layer4StrengthModel = new SliderModel(Locale.GetString("Volken.UI.Layer4Strength"), () => Volken.Instance.cloudConfig.layerStrengths.w, s => { Volken.Instance.cloudConfig.layerStrengths.w = s;Volken.Instance.ValueChanged(); }, 0.0f, 2.0f);
+            layer4StrengthModel.ValueFormatter = (f) => FormatValue(f, 1);
+            containerSettingsGroup.Add(layer4StrengthModel);
+            
             var maxHeightModel = new SliderModel(Locale.GetString("Volken.UI.MaxCloudHeight"), () => Volken.Instance.cloudConfig.maxCloudHeight, s => { Volken.Instance.cloudConfig.maxCloudHeight = s;Volken.Instance.ValueChanged(); }, 1000.0f, 25000.0f);
             maxHeightModel.ValueFormatter = (f) => FormatValue(f, 0);
             containerSettingsGroup.Add(maxHeightModel);

@@ -236,7 +236,7 @@ public class Volken
     }
     private void GenerateNoiseTextures()
     {
-        whorleyTex = _noise.GetWhorleyFBM3D(128, 4, 4, 0.5f, 2.0f);
+        whorleyTex = _noise.GetWhorleyFBM3D(128, 8, 5, 0.38f, 2.0f);
         mat.SetTexture("CloudShapeTex", whorleyTex);
         
         whorleyDetailTex = _noise.GetWhorleyFBM3D(128, 8, 4, 0.5f, 2.0f);

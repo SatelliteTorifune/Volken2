@@ -37,12 +37,6 @@ namespace Assets.Scripts
         public GameObject forceSettingScriptLoadGameObject;
         public bool hasHarmony { get; private set; } = false;
         
-        protected override void OnModInitialized()
-        {
-            base.OnModInitialized();
-            CheckLocalizationFiles("ZH-CN");
-            CheckLocalizationFiles("EN-US");
-        }
         public override void OnModLoaded()
         {
             base.OnModInitialized();
@@ -61,25 +55,7 @@ namespace Assets.Scripts
             Volken.Initialize();
             RegisterCommands();
         }
-        private void CheckLocalizationFiles(string targetLanguage)
-        {
-            var targetPath = Path.Combine(Application.persistentDataPath, "Languages", targetLanguage, "StringsVolken.xml");
-            if (File.Exists(targetPath))
-            {
-                return; 
-            }
-            
-            var localizationFile = Mod.ResourceLoader.LoadAsset<TextAsset>("Assets/Resources/LocalizationFile/"+targetLanguage+"/StringsVolken.xml");
-            try
-            {
-                File.WriteAllBytes(targetPath, localizationFile.bytes);
-                Debug.LogFormat($"[Volken] Wrote {targetLanguage} localization file to: {targetPath}");
-            }
-            catch (Exception e)
-            {
-                Debug.LogErrorFormat($"[Volken] Failed to write {targetLanguage} localization file to '{targetPath}': {e}");
-            }
-        }
+        
         private void RegisterCommands()
         {
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);

@@ -1,0 +1,81 @@
+<Strings>
+    <s id="Volken.UI.CloudSettings">Cloud Settings</s>
+    
+    <!-- Group Names -->
+    <s id="Volken.UI.ConfigManagement">Config Management</s>
+    <s id="Volken.UI.Clouds">Clouds</s>
+    <s id="Volken.UI.CloudContainer">Cloud Container</s>
+    <s id="Volken.UI.CloudQuality">Cloud Quality</s>
+    
+    <!-- Config Management -->
+    <s id="Volken.UI.CurrentConfig">Current Config</s>
+    <s id="Volken.UI.SaveCurrentConfig">Save Current Config</s>
+    <s id="Volken.UI.SaveAsNewConfig">Save As New Config</s>
+    <s id="Volken.UI.EnterNewConfigName">Enter new config name:</s>
+    <s id="Volken.UI.DefaultConfigName">NewConfig</s>
+    <s id="Volken.UI.LoadConfig">Load Config</s>
+    <s id="Volken.UI.ResetCurrentToDefault">Reset Current to Default</s>
+    <s id="Volken.UI.TryAnotherConfig">Try Another Config</s>
+    
+    <!-- Cloud Settings -->
+    <s id="Volken.UI.MainToggle">Main Toggle</s>
+    <s id="Volken.UI.Density">Density</s>
+    <s id="Volken.UI.Absorption">Absorption</s>
+    <s id="Volken.UI.AmbientLight">Ambient Light</s>
+    <s id="Volken.UI.Coverage">Coverage</s>
+    <s id="Volken.UI.ShapeScale">Shape Scale</s>
+    <s id="Volken.UI.DetailScale">Detail Scale</s>
+    <s id="Volken.UI.DetailStrength">Detail Strength</s>
+    <s id="Volken.UI.CloudMovementSpeed">Cloud Movement Speed</s>
+    <s id="Volken.UI.WindDirection">Wind Direction</s>
+    <s id="Volken.UI.GlobalRotationAngular">Global Rotation Angular</s>
+    <s id="Volken.UI.CloudColorRed">Cloud Color Red</s>
+    <s id="Volken.UI.CloudColorGreen">Cloud Color Green</s>
+    <s id="Volken.UI.CloudColorBlue">Cloud Color Blue</s>
+    <s id="Volken.UI.ScatterStrength">Scatter Strength</s>
+    <s id="Volken.UI.AtmosphereBlendFactor">Atmosphere Blend Factor</s>
+    <s id="Volken.UI.NearThreshold">Near Threshold</s>
+    <s id="Volken.UI.ScatterPower">Scatter Power</s>
+    <s id="Volken.UI.MultiScatterBlend">Multi-Scatter Blend</s>
+    <s id="Volken.UI.AmbientScatter">Ambient Scatter</s>
+    <s id="Volken.UI.SilverLiningIntensity">Silver Lining Intensity</s>
+    <s id="Volken.UI.ForwardScatterBias">Forward Scatter Bias</s>
+    
+    <!-- Cloud Container -->
+    <s id="Volken.UI.Layer1Height">Layer 1 Height</s>
+    <s id="Volken.UI.Layer1Spread">Layer 1 Spread</s>
+    <s id="Volken.UI.Layer1Strength">Layer 1 Strength</s>
+    <s id="Volken.UI.Layer2Height">Layer 2 Height</s>
+    <s id="Volken.UI.Layer2Spread">Layer 2 Spread</s>
+    <s id="Volken.UI.Layer2Strength">Layer 2 Strength</s>
+    <s id="Volken.UI.MaxCloudHeight">Max Cloud Height</s>
+    
+    <!-- Cloud Quality -->
+    <s id="Volken.UI.ResolutionScale">Resolution Scale</s>
+    <s id="Volken.UI.StepSize">Step Size</s>
+    <s id="Volken.UI.StepSizeFalloff">Step Size Falloff</s>
+    <s id="Volken.UI.NumberOfLightSamples">Number of Light Samples</s>
+    <s id="Volken.UI.Threshold">Threshold</s>
+    <s id="Volken.UI.RayOffsetStrength">Ray Offset Strength</s>
+    <s id="Volken.UI.HistoryBlend">History Blend</s>
+    
+    <!-- Messages -->
+    <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>
+    <s id="Volken.UI.ErrorSavingConfig">Error saving config!</s>
+    <s id="Volken.UI.ErrorSavingNewConfig">Error saving new config!</s>
+    <s id="Volken.UI.ConfigSavedAs">{0} Config saved as '{1}'!</s>
+    <s id="Volken.UI.ConfigLoaded">Config '{0}' loaded!</s>
+    <s id="Volken.UI.ErrorLoadingConfig">Error loading config!</s>
+    <s id="Volken.UI.ConfigResetToDefaults">Config reset to defaults!</s>
+    <s id="Volken.UI.ErrorResettingConfig">Error resetting config!</s>
+    <s id="Volken.UI.ConfigSetToDefaultII">Config set to default II!</s>
+    <s id="Volken.UI.ErrorGettingConfig">Error getting config!</s>
+    <s id="Volken.UI.ErrorCreatingSaveDialog">Error creating save dialog: {0}</s>
+    <s id="Volken.UI.ErrorBuildingFlightUI">Error building flight UI: {0}</s>
+    <s id="Volken.UI.ErrorTogglingUI">Error toggling UI: {0}</s>
+    <s id="Volken.UI.ErrorCreatingPanel">Error creating panel: {0}</s>
+    <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Error OnSceneLoaded: {0}</s>
+    <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Error in OnPlayerChangedSoi: {0}</s>
+    <s id="Volken.UI.NoCloudsHere">°`_´° hey I don't think there should be clouds here</s>
+    <s id="Volken.UI.NoStarClouds">Why you are trying to give star cloud???</s>
+</Strings>

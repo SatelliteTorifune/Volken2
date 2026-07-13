@@ -312,9 +312,17 @@ Shader "Hidden/Clouds"
                     offset.x * sinAngle + offset.z * cosAngle
                 );
             
+                // Domain warping: small sinusoidal perturbation to break up visible tiling
+                float3 warpOffset = float3(
+                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+                ) * 0.15;
+                float3 warpedUv = rotatedOffset + warpOffset;
+            
                 // Keep shape relatively cheap; target the smallest-scale repetition in detail.
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
             
                 float3 dir = normalize(rotatedOffset);
@@ -351,8 +359,16 @@ Shader "Hidden/Clouds"
                     offset.x * sinAngle + offset.z * cosAngle
                 );
             
-                  float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, rotatedOffset * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, rotatedOffset * detailScale, 0);
+                // Domain warping: small sinusoidal perturbation to break up visible tiling
+                float3 warpOffset = float3(
+                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+                ) * 0.15;
+                float3 warpedUv = rotatedOffset + warpOffset;
+            
+                  float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
             
                 float3 dir = normalize(rotatedOffset);

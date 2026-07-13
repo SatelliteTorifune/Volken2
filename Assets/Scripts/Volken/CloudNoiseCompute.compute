@@ -36,5 +36,5 @@ void Whorley (uint3 id : SV_DispatchThreadID)
         }
     }
     
-    result[id] += weight * (1.0 - sqrt(dist) / cellSize);
+    result[id] += weight * max(0.0, 1.0 - sqrt(dist) / cellSize);
 }

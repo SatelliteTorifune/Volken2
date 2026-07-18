@@ -63,30 +63,30 @@ public class CloudConfig
     }
     
     [XmlIgnore]
-    public Vector2 layerHeights;
+    public Vector4 layerHeights;
     [XmlElement("layerHeights")]
-    public SerializableVector2 layerHeightsSerializable
+    public SerializableVector4 layerHeightsSerializable
     {
-        get => new SerializableVector2(layerHeights);
-        set => layerHeights = value.ToVector2();
+        get => new SerializableVector4(layerHeights);
+        set => layerHeights = value.ToVector4();
     }
     
     [XmlIgnore]
-    public Vector2 layerSpreads;
+    public Vector4 layerSpreads;
     [XmlElement("layerSpreads")]
-    public SerializableVector2 layerSpreadsSerializable
+    public SerializableVector4 layerSpreadsSerializable
     {
-        get => new SerializableVector2(layerSpreads);
-        set => layerSpreads = value.ToVector2();
+        get => new SerializableVector4(layerSpreads);
+        set => layerSpreads = value.ToVector4();
     }
     
     [XmlIgnore]
-    public Vector2 layerStrengths;
+    public Vector4 layerStrengths;
     [XmlElement("layerStrengths")]
-    public SerializableVector2 layerStrengthsSerializable
+    public SerializableVector4 layerStrengthsSerializable
     {
-        get => new SerializableVector2(layerStrengths);
-        set => layerStrengths = value.ToVector2();
+        get => new SerializableVector4(layerStrengths);
+        set => layerStrengths = value.ToVector4();
     }
     
     public float maxCloudHeight;
@@ -197,6 +197,18 @@ public class CloudConfig
             using (FileStream stream = new FileStream(filePath, FileMode.Open))
             {
                 CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
+                
+                // Migration: Old configs only had Vector2 (x,y) for layer params.
+                // Vector4 z/w default to 0. If all z/w are 0, it's an old config.
+                // Set Layer3/4 strength to 0 so they contribute no density.
+                if (config.layerStrengths.z == 0f && config.layerStrengths.w == 0f)
+                {
+                    Mod.LOG("Volken: Detected legacy config, disabling Layer3/4");
+                    // Ensure spreads are safe (avoid division by zero in shader)
+                    if (config.layerSpreads.z == 0f) config.layerSpreads.z = 1f;
+                    if (config.layerSpreads.w == 0f) config.layerSpreads.w = 1f;
+                }
+                
                 Mod.LOG($"Cloud config '{configName}' loaded from: {filePath}");
                 return config;
             }
@@ -228,9 +240,9 @@ public class CloudConfig
             scatterStrength = 0.21468132f,
             atmoBlendFactor = 0.3628809f,
             cloudColor = Color.white,
-            layerHeights = new Vector2(1671.05261f, 4717.10547f),
-            layerSpreads = new Vector2(670.083f, 5000f),
-            layerStrengths = new Vector2(0.300f, 2f),
+            layerHeights = new Vector4(1671.05261f, 4717.10547f, 0f, 0f),
+            layerSpreads = new Vector4(670.083f, 5000f, 1f, 1f),
+            layerStrengths = new Vector4(0.300f, 2f, 0f, 0f),
             maxCloudHeight = 11238.2275f,
             resolutionScale = 0.5001385f,
             stepSize = 193.29982f,
@@ -277,9 +289,9 @@ public class CloudConfig
             scatterStrength = 0.0639246f,
             atmoBlendFactor = 4.441673f,
             cloudColor = new Color(1f, 1f, 1f, 1f),
-            layerHeights = new Vector2(17000f, 20000f),
-            layerSpreads = new Vector2(5000f, 5000f),
-            layerStrengths = new Vector2(2f, 2f),
+            layerHeights = new Vector4(17000f, 20000f, 0f, 0f),
+            layerSpreads = new Vector4(5000f, 5000f, 1f, 1f),
+            layerStrengths = new Vector4(2f, 2f, 0f, 0f),
             maxCloudHeight = 25000f,
             resolutionScale = 0.75203526f,
             stepSize = 1865.18164f,

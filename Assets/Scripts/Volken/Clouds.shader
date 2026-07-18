@@ -213,10 +213,10 @@ Shader "Hidden/Clouds"
             float3 customWavelengths;
             float silverLiningIntensity;
             float forwardScatteringBias;
-            //Cloud Layers
-            float2 cloudLayerHeights;
-            float2 cloudLayerSpreads;
-            float2 cloudLayerStrengths;
+            //Cloud Layers (x=Layer1, y=Layer2, z=Layer3, w=Layer4)
+            float4 cloudLayerHeights;
+            float4 cloudLayerSpreads;
+            float4 cloudLayerStrengths;
 
             //Container
             float surfaceRadius;
@@ -338,12 +338,25 @@ Shader "Hidden/Clouds"
                 float latFactor = sin(spherical.y * 3.14159265); 
                 spherical.y += cloudOffset.z * 0.25 * latFactor; 
             
-                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
+                float4 layers;
+                layers.x = cloudLayerStrengths.x * planetMap.r;
+                layers.y = cloudLayerStrengths.y * planetMap.g;
+                layers.z = cloudLayerStrengths.z * planetMap.r;
+                layers.w = cloudLayerStrengths.w * planetMap.r;
             
-                float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
-                float2 falloff = exp(-falloffExponent * falloffExponent);
+                float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
+                float4 falloff = exp(-falloffExponent * falloffExponent);
                 
-                return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
+                // Gate: only active layers (strength > 0) contribute shape * falloff
+                // This preserves EXACT original behavior for Layer1&2 when Layer3/4 are disabled
+                float4 active = step(0.0001, cloudLayerStrengths);
+                float totalDensity = shape * (falloff.x + falloff.y + active.z * falloff.z + active.w * falloff.w)
+                                   + layers.x * falloff.x + layers.y * falloff.y
+                                   + layers.z * falloff.z + layers.w * falloff.w;
+                
+                return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
             }
 
             float SampleDensityCheap(float3 worldPos) 
@@ -382,12 +395,24 @@ Shader "Hidden/Clouds"
                 float latFactor = sin(spherical.y * 3.14159265);  
                 spherical.y += cloudOffset.z * 0.25 * latFactor;  
             
-                float2 layers = cloudLayerStrengths * PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+                // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
+                float4 layers;
+                layers.x = cloudLayerStrengths.x * planetMap.r;
+                layers.y = cloudLayerStrengths.y * planetMap.g;
+                layers.z = cloudLayerStrengths.z * planetMap.r;
+                layers.w = cloudLayerStrengths.w * planetMap.r;
             
-                float2 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
-                float2 falloff = exp(-falloffExponent * falloffExponent);
+                float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
+                float4 falloff = exp(-falloffExponent * falloffExponent);
                 
-                return ((shape * (falloff.x + falloff.y) + layers.x * falloff.x + layers.y * falloff.y) + cloudCoverage - 1.0) * cloudDensity;
+                // Gate: only active layers (strength > 0) contribute shape * falloff
+                float4 active = step(0.0001, cloudLayerStrengths);
+                float totalDensity = shape * (falloff.x + falloff.y + active.z * falloff.z + active.w * falloff.w)
+                                   + layers.x * falloff.x + layers.y * falloff.y
+                                   + layers.z * falloff.z + layers.w * falloff.w;
+                
+                return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
             }
 
             // approximate the light that reaches the given point

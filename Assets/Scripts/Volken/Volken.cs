@@ -20,14 +20,6 @@ public class Volken
     public CloudLayer MainLayer => layers.Count > 0 ? layers[0] : null;
     public IEnumerable<CloudLayer> ActiveLayers => layers.Where(l => l?.config != null && l.config.enabled);
 
-    // 向后兼容引用
-    public CloudConfig cloudConfig => MainLayer?.config;
-    public string currentConfigName
-    {
-        get => MainLayer?.currentConfigName ?? "Default";
-        set { if (MainLayer != null) MainLayer.currentConfigName = value; }
-    }
-
     public CloudRenderer cloudRenderer;
     public FarCameraScript farCam;
 
@@ -36,11 +28,7 @@ public class Volken
     public const string PerlinFullSoft = "Assets/Resources/Volken/flareNoise.png";
     public const string PerlinHalfRough = "Assets/Resources/Volken/PerlinHalfRough.png";
     public const string PerlinHalfSoft = "Assets/Resources/Volken/Noise.png";
-
-    public List<string> _availableConfigs = new List<string>();
-    private Shader _cloudShader;
-
-    private string GetNoiseMapPath()
+    public static string GetNoiseMapPath()
     {
         switch (ModSettings.Instance.NoiseMapIndex)
         {
@@ -52,6 +40,10 @@ public class Volken
             default: return PerlinFullRough;
         }
     }
+
+    public List<string> _availableConfigs = new List<string>();
+    private Shader _cloudShader;
+    
 
     public static void Initialize()
     {
@@ -72,7 +64,7 @@ public class Volken
         var main = new CloudLayer
         {
             layerIndex = 0, displayName = "Main",
-            noise = new CloudNoise(seed: 0),
+            noise =new CloudNoise(seed: UnityEngine.Random.Range(1, 99999)),
         };
         main.material = new Material(_cloudShader);
         main.config = CloudConfig.CreateDefault();
@@ -80,8 +72,7 @@ public class Volken
         main.currentResolutionScale = main.config.resolutionScale;
         main.runningOffset = main.config.offset;
         layers.Add(main);
-
-        // Layer 1: Extra 1 (默认禁用, Additive 模式, 零干扰)
+        
         var extra1 = new CloudLayer
         {
             layerIndex = 1, displayName = "Extra 1",
@@ -94,6 +85,7 @@ public class Volken
         extra1.runningOffset = extra1.config.offset;
         layers.Add(extra1);
 
+        //add more Rxtra here
         foreach (var layer in layers)
         {
             layer.GenerateNoiseTextures();

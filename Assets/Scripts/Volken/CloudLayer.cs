@@ -64,7 +64,7 @@ public class CloudLayer
         }
         else
         {
-            blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>(Volken.PerlinFullRough);
+            blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>(Volken.GetNoiseMapPath());
         }
         material.SetTexture("BlueNoiseTex", blueNoiseTex);
     }

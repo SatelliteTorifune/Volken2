@@ -10,8 +10,7 @@ public class CloudLayer
 {
     // === 标识 ===
     public int layerIndex;
-    public string displayName;       // 如 "Main", "Extra 1"
-    public bool isMainLayer;         // 主层有特殊 SOI 切换逻辑
+    public string displayName;     
 
     // === 配置 ===
     public CloudConfig config;

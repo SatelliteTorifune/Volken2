@@ -84,6 +84,19 @@
     <s id="Volken.UI.ErrorCreatingPanel">Error creating panel: {0}</s>
     <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Error OnSceneLoaded: {0}</s>
     <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Error in OnPlayerChangedSoi: {0}</s>
+    <!-- Extra Layer UI -->
+    <s id="Volken.UI.ExtraLayer">Extra Layer: {0}</s>
+    <s id="Volken.UI.ExtraLayerEnabled">{0} Enabled</s>
+    <s id="Volken.UI.CompositeMode">Composite Mode</s>
+    <s id="Volken.UI.ExtraLayerConfig">{0} Config</s>
+    <s id="Volken.UI.ExtraLayerSaveCurrent">{0} Save Current</s>
+    <s id="Volken.UI.ExtraLayerSaveAs">{0} Save As...</s>
+    <s id="Volken.UI.ExtraLayerLoadPreset">{0} Load Preset</s>
+    <s id="Volken.UI.ExtraLayerEnterPresetName">Enter preset name for {0}</s>
+    <s id="Volken.UI.ExtraLayerConfigSaved">{0} config saved!</s>
+    <s id="Volken.UI.ExtraLayerConfigSavedAs">{0} saved as: {1}</s>
+    <s id="Volken.UI.ExtraLayerConfigLoaded">{0} loaded: {1}</s>
+    
     <s id="Volken.UI.NoCloudsHere">°`_´° hey I don't think there should be clouds here</s>
     <s id="Volken.UI.NoStarClouds">Why you are trying to give star cloud???</s>
 </Strings>

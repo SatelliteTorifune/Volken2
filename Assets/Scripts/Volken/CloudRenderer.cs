@@ -52,7 +52,8 @@ public class CloudRenderer : MonoBehaviour
             bool hasAtmo = newParent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
             foreach (var layer in Volken.Instance.layers)
             {
-                if (layer?.config != null) layer.config.enabled = hasAtmo;
+                if (layer?.config != null)
+                    layer.config.enabled = hasAtmo && layer.config.enabled;
             }
         }
     }

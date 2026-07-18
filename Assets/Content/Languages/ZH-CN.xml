@@ -84,6 +84,19 @@
     <s id="Volken.UI.ErrorCreatingPanel">Error creating panel: {0}</s>
     <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Error OnSceneLoaded: {0}</s>
     <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Error in OnPlayerChangedSoi: {0}</s>
+    <!-- Extra Layer UI -->
+    <s id="Volken.UI.ExtraLayer">额外云层: {0}</s>
+    <s id="Volken.UI.ExtraLayerEnabled">{0} 启用</s>
+    <s id="Volken.UI.CompositeMode">合成模式</s>
+    <s id="Volken.UI.ExtraLayerConfig">{0} 配置</s>
+    <s id="Volken.UI.ExtraLayerSaveCurrent">{0} 保存当前</s>
+    <s id="Volken.UI.ExtraLayerSaveAs">{0} 另存为...</s>
+    <s id="Volken.UI.ExtraLayerLoadPreset">{0} 加载预设</s>
+    <s id="Volken.UI.ExtraLayerEnterPresetName">输入 {0} 的预设名</s>
+    <s id="Volken.UI.ExtraLayerConfigSaved">{0} 配置已保存!</s>
+    <s id="Volken.UI.ExtraLayerConfigSavedAs">{0} 另存为: {1}</s>
+    <s id="Volken.UI.ExtraLayerConfigLoaded">{0} 已加载: {1}</s>
+    
     <s id="Volken.UI.NoCloudsHere">°`_´°你觉得这里应该有云吗我请问了</s>
     <s id="Volken.UI.NoStarClouds">你为什么要给恒星加云???</s>
 </Strings>

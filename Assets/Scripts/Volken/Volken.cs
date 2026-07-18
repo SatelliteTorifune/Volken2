@@ -71,7 +71,7 @@ public class Volken
         // Layer 0: Main
         var main = new CloudLayer
         {
-            layerIndex = 0, displayName = "Main", isMainLayer = true,
+            layerIndex = 0, displayName = "Main",
             noise = new CloudNoise(seed: 0),
         };
         main.material = new Material(_cloudShader);
@@ -84,8 +84,8 @@ public class Volken
         // Layer 1: Extra 1 (默认禁用, Additive 模式, 零干扰)
         var extra1 = new CloudLayer
         {
-            layerIndex = 1, displayName = "Extra 1", isMainLayer = false,
-            noise = new CloudNoise(seed: 42),
+            layerIndex = 1, displayName = "Extra 1",
+            noise = new CloudNoise(seed: UnityEngine.Random.Range(1, 99999)),
         };
         extra1.material = new Material(_cloudShader);
         extra1.config = CreateExtraDefaultConfig();
@@ -167,7 +167,7 @@ public class Volken
         {
             if (!planetConfigList.ExistsInConfig(planet))
             { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
-            else main.currentConfigName = planetConfigList.GetConfigName(planet);
+            else main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
             main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
         }
         else
@@ -178,10 +178,33 @@ public class Volken
             _availableConfigs.Add(main.currentConfigName);
         }
 
+        // Load Extra layer config (remembered per-planet)
+        var extra = layers.Count > 1 ? layers[1] : null;
+        if (extra != null)
+        {
+            string extraCfgName = planetConfigList.ExistsInConfig(planet)
+                ? planetConfigList.GetConfigName(planet, 1) : null;
+            if (!string.IsNullOrEmpty(extraCfgName) && extraCfgName != extra.currentConfigName)
+            {
+                try
+                {
+                    var loaded = CloudConfig.LoadFromFile(planet, extraCfgName);
+                    extra.config.CopyFrom(loaded);
+                    extra.currentConfigName = extraCfgName;
+                }
+                catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+            }
+        }
+
         Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
-        bool wasEnabled = main.config.enabled;
-        main.config.enabled = false;
-        main.config.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere && wasEnabled;
+
+        // Apply atmosphere-based enable/disable to ALL layers
+        bool hasAtmo = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+        foreach (var layer in layers)
+        {
+            if (layer?.config != null)
+                layer.config.enabled = hasAtmo && layer.config.enabled;
+        }
 
         var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
         cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
@@ -216,9 +239,9 @@ public class Volken
                 { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
                 else
                 {
-                    main.currentConfigName = planetConfigList.GetConfigName(planet);
+                    main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
                     if (!_availableConfigs.Contains(main.currentConfigName))
-                    { main.currentConfigName = _availableConfigs[0]; planetConfigList.SetConfig(planet, main.currentConfigName); }
+                    { main.currentConfigName = _availableConfigs[0]; planetConfigList.SetConfig(planet, main.currentConfigName, 0); }
                 }
                 main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
             }
@@ -229,11 +252,34 @@ public class Volken
                 main.config.SaveToFile(planet, main.currentConfigName);
                 _availableConfigs.Add(main.currentConfigName);
                 if (!planetConfigList.ExistsInConfig(planet)) planetConfigList.AddConfig(planet, main.currentConfigName);
-                else planetConfigList.SetConfig(planet, main.currentConfigName);
+                else planetConfigList.SetConfig(planet, main.currentConfigName, 0);
             }
 
-            main.config.enabled = false;
-            main.config.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+            // Load Extra layer config for this planet (before atmosphere check)
+            var extra = layers.Count > 1 ? layers[1] : null;
+            if (extra != null)
+            {
+                string extraCfgName = planetConfigList.ExistsInConfig(planet)
+                    ? planetConfigList.GetConfigName(planet, 1) : null;
+                if (!string.IsNullOrEmpty(extraCfgName))
+                {
+                    try
+                    {
+                        var loaded = CloudConfig.LoadFromFile(planet, extraCfgName);
+                        extra.config.CopyFrom(loaded);
+                        extra.currentConfigName = extraCfgName;
+                    }
+                    catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                }
+            }
+
+            // Apply atmosphere-based enable to ALL layers (respecting loaded config.enabled)
+            bool hasAtmo = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+            foreach (var layer in layers)
+            {
+                if (layer?.config != null)
+                    layer.config.enabled = hasAtmo && layer.config.enabled;
+            }
 
             VolkenUserInterface.Instance?.RebuildInspectorPanel();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;

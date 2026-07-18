@@ -8,6 +8,12 @@ using System.Windows.Forms;
 using Assets.Scripts;
 using Application = UnityEngine.Application;
 
+public enum CompositeMode
+{
+    Additive,  // 加法合成: result.rgb += cloudColor (零视觉干扰, 默认)
+    Standard   // 标准合成: result = src * transmittance + cloudColor (物理遮挡)
+}
+
 [Serializable]
 public class CloudConfig
 {
@@ -16,6 +22,7 @@ public class CloudConfig
 
 
     #region parameter
+    public CompositeMode compositeMode = CompositeMode.Additive;
     public bool enabled;
     public float density;
     public float absorption;
@@ -315,6 +322,7 @@ public class CloudConfig
     {
         return new CloudConfig
         {
+            compositeMode = this.compositeMode,
             enabled = this.enabled,
             density = this.density,
             absorption = this.absorption,
@@ -363,6 +371,7 @@ public class CloudConfig
     
     public void CopyFrom(CloudConfig source)
     {
+        this.compositeMode = source.compositeMode;
         this.enabled = source.enabled;
         this.density = source.density;
         this.absorption = source.absorption;

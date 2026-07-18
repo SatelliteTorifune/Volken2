@@ -3,6 +3,7 @@ using Assets.Scripts;
 using ModApi.Scenes.Events;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
 
@@ -10,47 +11,45 @@ public class Volken
 {
     public static Volken Instance { get; private set; }
 
-    public CloudConfig cloudConfig;
-    public string currentConfigName = "Default";
-    public const string CloudConfigListName="PlanetConfigList";
+    public const string CloudConfigListName = "PlanetConfigList";
 
-    public Material mat;
+    // === 多实例云层系统 ===
+    public List<CloudLayer> layers = new List<CloudLayer>();
+    public PlanetConfigList planetConfigList;
+
+    public CloudLayer MainLayer => layers.Count > 0 ? layers[0] : null;
+    public IEnumerable<CloudLayer> ActiveLayers => layers.Where(l => l?.config != null && l.config.enabled);
+
+    // 向后兼容引用
+    public CloudConfig cloudConfig => MainLayer?.config;
+    public string currentConfigName
+    {
+        get => MainLayer?.currentConfigName ?? "Default";
+        set { if (MainLayer != null) MainLayer.currentConfigName = value; }
+    }
+
     public CloudRenderer cloudRenderer;
     public FarCameraScript farCam;
 
-    public RenderTexture whorleyTex;
-    public RenderTexture whorleyDetailTex;
-    public Texture2D planetMapTex;
-    public Texture2D blueNoiseTex;
-
-    private CloudNoise _noise;
-    public List<string> _availableConfigs=new List<string>();
-    public PlanetConfigList planetConfigList;
-    
     public const string BlueNoisePath = "Assets/Resources/Volken/BlueNoise.png";
     public const string PerlinFullRough = "Assets/Resources/Volken/DragNoise.png";
     public const string PerlinFullSoft = "Assets/Resources/Volken/flareNoise.png";
     public const string PerlinHalfRough = "Assets/Resources/Volken/PerlinHalfRough.png";
     public const string PerlinHalfSoft = "Assets/Resources/Volken/Noise.png";
 
-    
+    public List<string> _availableConfigs = new List<string>();
+    private Shader _cloudShader;
 
     private string GetNoiseMapPath()
     {
         switch (ModSettings.Instance.NoiseMapIndex)
         {
-            case 1:
-                return BlueNoisePath;
-            case 2:
-                return PerlinFullRough;
-            case 3:
-                return PerlinFullSoft;
-            case 4:
-                return PerlinHalfRough;
-            case 5:
-                return PerlinHalfSoft;
-            default:
-                return PerlinFullRough;
+            case 1: return BlueNoisePath;
+            case 2: return PerlinFullRough;
+            case 3: return PerlinFullSoft;
+            case 4: return PerlinHalfRough;
+            case 5: return PerlinHalfSoft;
+            default: return PerlinFullRough;
         }
     }
 
@@ -61,19 +60,78 @@ public class Volken
 
     private Volken()
     {
-        
-        mat = new Material(Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader"));
+        _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader");
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
-        _noise = new CloudNoise();
-        GenerateNoiseTextures();
-
+        InitializeLayers();
         Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded;
+    }
+
+    private void InitializeLayers()
+    {
+        // Layer 0: Main
+        var main = new CloudLayer
+        {
+            layerIndex = 0, displayName = "Main", isMainLayer = true,
+            noise = new CloudNoise(seed: 0),
+        };
+        main.material = new Material(_cloudShader);
+        main.config = CloudConfig.CreateDefault();
+        main.currentConfigName = "Default";
+        main.currentResolutionScale = main.config.resolutionScale;
+        main.runningOffset = main.config.offset;
+        layers.Add(main);
+
+        // Layer 1: Extra 1 (默认禁用, Additive 模式, 零干扰)
+        var extra1 = new CloudLayer
+        {
+            layerIndex = 1, displayName = "Extra 1", isMainLayer = false,
+            noise = new CloudNoise(seed: 42),
+        };
+        extra1.material = new Material(_cloudShader);
+        extra1.config = CreateExtraDefaultConfig();
+        extra1.currentConfigName = "ExtraDefault";
+        extra1.currentResolutionScale = extra1.config.resolutionScale;
+        extra1.runningOffset = extra1.config.offset;
+        layers.Add(extra1);
+
+        foreach (var layer in layers)
+        {
+            layer.GenerateNoiseTextures();
+            layer.SetStaticShaderProperties();
+        }
+    }
+
+    private static CloudConfig CreateExtraDefaultConfig()
+    {
+        return new CloudConfig
+        {
+            compositeMode = CompositeMode.Additive,
+            enabled = false,
+            density = 0.01f, absorption = 0.3f, ambientLight = 0.1f, coverage = 0.1f,
+            shapeScale = 15000f, detailScale = 10000f, detailStrength = 0.5f,
+            phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
+            offset = new Vector3(0.3f, 0.6f, 0.2f),
+            windSpeed = 0.0005f, windDirection = 45f, globalRotationAngular = 0.03f,
+            scatterStrength = 0.1f, atmoBlendFactor = 1.0f,
+            cloudColor = new Color(0.9f, 0.9f, 1.0f, 1f),
+            layerHeights = new Vector4(15000f, 25000f, 0f, 0f),
+            layerSpreads = new Vector4(5000f, 8000f, 1f, 1f),
+            layerStrengths = new Vector4(1.0f, 1.5f, 0f, 0f),
+            maxCloudHeight = 35000f, resolutionScale = 0.3f,
+            stepSize = 400f, stepSizeFalloff = 1.0f, numLightSamplePoints = 10,
+            blueNoiseStrength = 0f, depthThreshold = 0.5f,
+            historyBlend = 0f, historyDepthThreshold = 0.05f,
+            scatterPower = 1.5f, multiScatterBlend = 0.1f, ambientScatterStrength = 0.3f,
+            customWavelengths = new Vector3(680f, 550f, 450f),
+            silverLiningIntensity = 1.0f, forwardScatteringBias = 0.7f,
+            nearThreshold = 100000f,
+        };
     }
 
     public void AddConfig(string cfg)
     {
-        this._availableConfigs.Add(cfg);
-        Mod.LOG($"Volken: Added config {cfg} ,now has {this._availableConfigs.Count} configs");
+        _availableConfigs.Add(cfg);
+        Mod.LOG($"Volken: Added config {cfg}, now has {_availableConfigs.Count} configs");
     }
 
     public void RefreshConfigList()
@@ -81,19 +139,10 @@ public class Volken
         Mod.LOG("Refreshing config list");
         try
         {
-            this._availableConfigs = CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name);
-            Mod.LOG($"{CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name).Count}");
-            Mod.LOG($"{this._availableConfigs.Count}");
-            
-            if (this._availableConfigs.Count == 0)
-            {
-                this._availableConfigs.Add("Default");
-            }
-            
-            if (!this._availableConfigs.Contains(this.currentConfigName))
-            {
-                this._availableConfigs.Add(this.currentConfigName);
-            }
+            _availableConfigs = CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name);
+            if (_availableConfigs.Count == 0) _availableConfigs.Add("Default");
+            var nm = MainLayer?.currentConfigName ?? "Default";
+            if (!_availableConfigs.Contains(nm)) _availableConfigs.Add(nm);
         }
         catch (Exception ex)
         {
@@ -108,152 +157,105 @@ public class Volken
     {
         RefreshConfigList();
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
-        if (e.Scene == "Flight")
-        {
-            
-            if (_availableConfigs.Count > 0)
-            {
-                if (!planetConfigList.ExistsInConfig(Game.Instance.FlightScene.CraftNode.Parent.Name))
-                {
-                    currentConfigName = _availableConfigs[0];
-                    planetConfigList.AddConfig(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
-                }
-                else
-                {
-                    currentConfigName = planetConfigList.GetConfigName(Game.Instance.FlightScene.CraftNode.Parent.Name);
-                }
-                
-                cloudConfig = CloudConfig.LoadFromFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
-            }
-            else
-            {
-                currentConfigName = "Default";
-                cloudConfig = CloudConfig.CreateDefault();
-                cloudConfig.SaveToFile(Game.Instance.FlightScene.CraftNode.Parent.Name,currentConfigName);
-                _availableConfigs.Add(currentConfigName);
-            }
-            Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
-            bool beforeCgh = cloudConfig.enabled;
-            cloudConfig.enabled = false;
-            cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere&&beforeCgh;
-            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>() : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
-            farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>() : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+        if (e.Scene != "Flight") return;
 
-            Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
+        var main = MainLayer;
+        if (main == null) return;
+
+        string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
+        if (_availableConfigs.Count > 0)
+        {
+            if (!planetConfigList.ExistsInConfig(planet))
+            { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
+            else main.currentConfigName = planetConfigList.GetConfigName(planet);
+            main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
         }
         else
         {
-            try
-            {
-                Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
-            }
-            catch (Exception exception)
-            {
-                Mod.LOG("failed to unregister");
-            }
+            main.currentConfigName = "Default";
+            main.config = CloudConfig.CreateDefault();
+            main.config.SaveToFile(planet, main.currentConfigName);
+            _availableConfigs.Add(main.currentConfigName);
         }
+
+        Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+        bool wasEnabled = main.config.enabled;
+        main.config.enabled = false;
+        main.config.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere && wasEnabled;
+
+        var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+        cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
+            ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>()
+            : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+        farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
+            ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
+            : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+
+        Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+            Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
     }
+
     public void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
-        
-        if (craftNode.Parent.Parent==null)
+        if (craftNode.Parent.Parent == null)
         {
-            Instance.cloudConfig.enabled = false;
-            //dude,it's stupid to give sun cloud
+            foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
             return;
         }
-        
+
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
             RefreshConfigList();
-            string planetName = Game.Instance.FlightScene.CraftNode.Parent.Name;
+            string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
+            var main = MainLayer;
+            if (main == null) return;
 
             if (_availableConfigs.Count > 0)
             {
-                if (!planetConfigList.ExistsInConfig(planetName))
-                {
-                    currentConfigName = _availableConfigs[0];
-                    planetConfigList.AddConfig(planetName, currentConfigName);
-                }
+                if (!planetConfigList.ExistsInConfig(planet))
+                { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
                 else
                 {
-                    currentConfigName = planetConfigList.GetConfigName(planetName);
-                    if (!_availableConfigs.Contains(currentConfigName))
-                    {
-                        currentConfigName = _availableConfigs[0];
-                        planetConfigList.SetConfig(planetName, currentConfigName);
-                    }
+                    main.currentConfigName = planetConfigList.GetConfigName(planet);
+                    if (!_availableConfigs.Contains(main.currentConfigName))
+                    { main.currentConfigName = _availableConfigs[0]; planetConfigList.SetConfig(planet, main.currentConfigName); }
                 }
-                cloudConfig = CloudConfig.LoadFromFile(planetName, currentConfigName);
+                main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
             }
             else
             {
-                currentConfigName = "Default";
-                cloudConfig = CloudConfig.CreateDefault();
-                cloudConfig.SaveToFile(planetName, currentConfigName);
-                _availableConfigs.Add(currentConfigName);
-                if (!planetConfigList.ExistsInConfig(planetName))
-                {
-                    planetConfigList.AddConfig(planetName, currentConfigName);
-                }
-                else
-                {
-                    planetConfigList.SetConfig(planetName, currentConfigName);
-                }
+                main.currentConfigName = "Default";
+                main.config = CloudConfig.CreateDefault();
+                main.config.SaveToFile(planet, main.currentConfigName);
+                _availableConfigs.Add(main.currentConfigName);
+                if (!planetConfigList.ExistsInConfig(planet)) planetConfigList.AddConfig(planet, main.currentConfigName);
+                else planetConfigList.SetConfig(planet, main.currentConfigName);
             }
-            
-            cloudConfig.enabled = false;
-            cloudConfig.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-            
-            VolkenUserInterface.Instance.RebuildInspectorPanel();
+
+            main.config.enabled = false;
+            main.config.enabled = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+
+            VolkenUserInterface.Instance?.RebuildInspectorPanel();
             var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            if (gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null)
-            {
-                cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
-            }
-            else
-            {
-                cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
-            }
+            cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
+                ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>()
+                : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+            farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
+                ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
+                : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
 
-            if (gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null)
-            {
-                farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
-            }
-            else
-            {
-                farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
-            }
-
-            Mod.Instance.forceSettingScriptLoadGameObject.SetActive(Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
+            Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+                Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
         }
         else
         {
-            cloudConfig.enabled = false;
-            currentConfigName="Default";
+            foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
+            if (MainLayer != null) MainLayer.currentConfigName = "Default";
         }
     }
-    private void GenerateNoiseTextures()
-    {
-        whorleyTex = _noise.GetWhorleyFBM3D(128, 4, 4, 0.5f, 2.0f);
-        mat.SetTexture("CloudShapeTex", whorleyTex);
-        
-        whorleyDetailTex = _noise.GetWhorleyFBM3D(128, 8, 4, 0.5f, 2.0f);
-        mat.SetTexture("CloudDetailTex", whorleyDetailTex);
 
-        planetMapTex = _noise.GetPlanetMap(2048, 16.0f, 6, 0.5f, 2.0f);
-        mat.SetTexture("PlanetMapTex", planetMapTex);
-        
-        //blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>("Assets/Resources/Volken/PerlinFullRough.png");
-        blueNoiseTex = Mod.Instance.ResourceLoader.LoadAsset<Texture2D>(GetNoiseMapPath());
-        mat.SetTexture("BlueNoiseTex", blueNoiseTex);
-    }
     public void ValueChanged()
     {
-        if(cloudRenderer != null) 
-        {
-            cloudRenderer.SetShaderProperties();
-        }
+        cloudRenderer?.SetAllLayersShaderProperties();
     }
 }

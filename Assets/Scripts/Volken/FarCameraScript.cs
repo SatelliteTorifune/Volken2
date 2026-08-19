@@ -26,7 +26,7 @@ public class FarCameraScript : MonoBehaviour
     {
         _cam = GetComponent<Camera>();
         _cam.depthTextureMode |= DepthTextureMode.Depth;
-        _depthMat = new Material(Volken.Instance.mat.shader);
+        _depthMat = new Material(Volken.Instance.MainLayer?.material?.shader);
     }
 
     private void OnEnable()

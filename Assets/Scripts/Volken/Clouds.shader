@@ -710,59 +710,22 @@ Shader "Hidden/Clouds"
             float3 sphereCenter;
             float surfaceRadius;
             float _NearThreshold;
-            
-            
-            
-            //I give up,chaotic was fucking right
-            
-            /*
-            float4 frag(v2f i) : SV_Target
-            {
-                _NearThreshold=5000;
-                float4 source = tex2D(_MainTex, i.uv); 
-                float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
-                float rawDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv).r;
-                
-                float sceneDepth = LinearEyeDepth(rawDepth);
-        
-                
-            
-                float nearThreshold = _NearThreshold;
-            
-                if (sceneDepth > 0.0 && sceneDepth < nearThreshold)
-                {
-                   
-                    float nearFactor = smoothstep(0.0, nearThreshold, sceneDepth);
-                    nearFactor = lerp(0.2, 1.0, nearFactor);  
-                    
-                    float3 finalCloudColor = clouds.rgb * nearFactor;
-                    float finalTransmittance = lerp(0.8, clouds.a, nearFactor);
-                    
-                   
-                    return float4(source.rgb * finalTransmittance + finalCloudColor, source.a);
-                }
-                else
-                {
-                    
-                    float depthThreshold = 5000.0; 
-                    float depthMask = saturate(sceneDepth / depthThreshold);
-                    
-                    float3 maskedCloudColor = clouds.rgb * depthMask;
-                    float maskedTransmittance = lerp(1.0, clouds.a, depthMask);
-                    
-                    return float4(source.rgb * maskedTransmittance + maskedCloudColor, source.a);
-                }
-            }
-            */
-            
-
+            float _CompositeMode;  // 0.0 = Additive (零干扰), 1.0 = Standard (物理遮挡)
             
             float4 frag(v2f i) : SV_Target
             {
                 float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
-                
+
+                // === Additive Mode (零视觉干扰) ===
+                // 直接将云光加到场景上，不改变场景透过率
+                if (_CompositeMode < 0.5)
+                {
+                    return float4(source.rgb + clouds.rgb, source.a);
+                }
+
+                // === Standard Mode (物理遮挡) ===
                 float nearThreshold = _NearThreshold;
                 if (sceneDepth > 0.0 && sceneDepth < nearThreshold)
                 {
@@ -773,11 +736,9 @@ Shader "Hidden/Clouds"
                     float finalTransmittance = lerp(0.8, clouds.a, nearFactor);
                     return float4(source.rgb * finalTransmittance + finalCloudColor, source.a);
                 }
-                
-                //when there is no cloud
-                else 
+                else
                 {
-                    float depthThreshold = 5000.0;  
+                    float depthThreshold = 5000.0;
                     float depthMask = saturate(sceneDepth / depthThreshold);
                     float3 maskedCloudColor = clouds.rgb * depthMask;
                     float maskedTransmittance = lerp(1.0, clouds.a, depthMask);

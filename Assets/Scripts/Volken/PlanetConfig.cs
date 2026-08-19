@@ -12,17 +12,33 @@ public class PlanetConfig
     public string PlanetName;
     [XmlAttribute]
     public string CloudConfigName;
+    [XmlAttribute]
+    public string ExtraCloudConfigName;  // Layer 1 (Extra) 的配置名
 
-    public PlanetConfig(string planetName,string cloudConfigName)
+    public PlanetConfig(string planetName, string cloudConfigName, string extraCloudConfigName = null)
     {
         PlanetName = planetName;
         CloudConfigName = cloudConfigName;
+        ExtraCloudConfigName = extraCloudConfigName;
     }
     public PlanetConfig()
     {
         
     }
-    
+
+    /// <summary>
+    /// 根据层索引获取或设置配置名。layerIndex 0=Main, 1=Extra1, ...
+    /// </summary>
+    public string GetConfigName(int layerIndex)
+    {
+        return layerIndex == 0 ? CloudConfigName : ExtraCloudConfigName;
+    }
+
+    public void SetConfigName(int layerIndex, string configName)
+    {
+        if (layerIndex == 0) CloudConfigName = configName;
+        else ExtraCloudConfigName = configName;
+    }
 }
 [Serializable]
 public class PlanetConfigList
@@ -98,22 +114,17 @@ public class PlanetConfigList
         newP.SaveToFile(Volken.CloudConfigListName);
         return newP ;
     }
-    public string GetConfigName(string planetName)
+    public string GetConfigName(string planetName, int layerIndex = 0)
     {
-        Mod.LOG($"Looking for config for planet: {planetName}");
-        Mod.LOG($"Available configs: {configList.Count}");
-    
         foreach (var planetConfig in configList)
         {
-            Mod.LOG($"Found planet config - Name: {planetConfig.PlanetName}, Config: {planetConfig.CloudConfigName}");
             if (planetConfig.PlanetName == planetName)
             {
-                Mod.LOG($"Match found! Returning config: {planetConfig.CloudConfigName}");
-                return planetConfig.CloudConfigName;
+                var name = planetConfig.GetConfigName(layerIndex);
+                return string.IsNullOrEmpty(name) ? "Default" : name;
             }
         }
-    
-        Mod.LOG($"No match found for {planetName}, returning Default");
+
         return "Default";
     }
 
@@ -131,20 +142,20 @@ public class PlanetConfigList
         return false;
     }
 
-    public void AddConfig(string planetName, string ConfigName)
+    public void AddConfig(string planetName, string ConfigName, string extraConfigName = null)
     {
-        PlanetConfig cfg=new PlanetConfig(planetName,ConfigName);
+        PlanetConfig cfg = new PlanetConfig(planetName, ConfigName, extraConfigName);
         configList.Add(cfg);
         this.SaveToFile(Volken.CloudConfigListName);
     }
 
-    public void SetConfig(string planetName, string ConfigName)
+    public void SetConfig(string planetName, string ConfigName, int layerIndex = 0)
     {
         foreach (PlanetConfig cfg in configList)
         {
             if (cfg.PlanetName == planetName)
             {
-                cfg.CloudConfigName = ConfigName;
+                cfg.SetConfigName(layerIndex, ConfigName);
             }
         }
         this.SaveToFile(Volken.CloudConfigListName);

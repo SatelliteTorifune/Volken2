@@ -16,7 +16,7 @@
     <s id="Volken.UI.LoadConfig">Load Config</s>
     <s id="Volken.UI.ResetCurrentToDefault">Reset Current to Default</s>
     <s id="Volken.UI.TryAnotherConfig">Try Another Config</s>
-    
+    <s id="Volken.UI.CompositeMode">Composite Mode</s>
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">Main Toggle</s>
     <s id="Volken.UI.Density">Density</s>

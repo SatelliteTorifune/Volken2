@@ -542,7 +542,7 @@ public class VolkenUserInterface : MonoBehaviour
         group.Add(renderToggleModel);
 
         // Composite Mode
-        var compositeDropdown = new DropdownModel("Composite Mode",
+        var compositeDropdown = new DropdownModel(Locale.GetString("Volken.UI.CompositeMode"),
             () => cfg.compositeMode == CompositeMode.Additive ? "Additive" : "Standard",
             (val) =>
             {

@@ -16,6 +16,7 @@
     <s id="Volken.UI.LoadConfig">加载配置</s>
     <s id="Volken.UI.ResetCurrentToDefault">重置为默认配置</s>
     <s id="Volken.UI.TryAnotherConfig">试试另一个配置</s>
+    <s id="Volken.UI.CompositeMode">云层合成模式</s>
     
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">启用</s>

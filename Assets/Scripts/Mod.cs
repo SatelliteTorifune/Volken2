@@ -54,6 +54,8 @@ namespace Assets.Scripts
             forceSettingScriptLoadGameObject.SetActive(false);
             Volken.Initialize();
             RegisterCommands();
+
+            Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
         }
         
         private void RegisterCommands()

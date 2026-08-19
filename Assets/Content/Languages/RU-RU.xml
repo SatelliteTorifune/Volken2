@@ -16,7 +16,7 @@
     <s id="Volken.UI.LoadConfig">Загрузить Конфиг</s>
     <s id="Volken.UI.ResetCurrentToDefault">Сбросить Текущее к Default</s>
     <s id="Volken.UI.TryAnotherConfig">Попробовать Другой Конфиг</s>
-    
+    <s id="Volken.UI.CompositeMode">режим наложения</s>
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">Главный Параметр</s>
     <s id="Volken.UI.Density">Плотность</s>

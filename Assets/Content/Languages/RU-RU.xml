@@ -1,11 +1,11 @@
 <Strings>
-    <s id="Volken.UI.CloudSettings">Настройки Облаков</s>
+    <s id="Volken.UI.CloudSettings">Настройка Облаков</s>
     
     <!-- Group Names -->
-    <s id="Volken.UI.ConfigManagement">Редактирование Конфига</s>
+    <s id="Volken.UI.ConfigManagement">Редактирование Конфигурации</s>
     <s id="Volken.UI.Clouds">Облака</s>
     <s id="Volken.UI.CloudContainer">Контейнер Облака</s>
-    <s id="Volken.UI.CloudQuality">Качество Облака</s>
+    <s id="Volken.UI.CloudQuality">Качество Облаков</s>
     
     <!-- Config Management -->
     <s id="Volken.UI.CurrentConfig">Текущий Конфиг</s>
@@ -13,20 +13,20 @@
     <s id="Volken.UI.SaveAsNewConfig">Сохранить Как Новый Конфиг</s>
     <s id="Volken.UI.EnterNewConfigName">Введите новое имя конфига:</s>
     <s id="Volken.UI.DefaultConfigName">НовыйКонфиг</s>
-    <s id="Volken.UI.LoadConfig">Загрузить Конфиг</s>
+    <s id="Volken.UI.LoadConfig">Загруженный Конфиг</s>
     <s id="Volken.UI.ResetCurrentToDefault">Сбросить Текущее к Default</s>
     <s id="Volken.UI.TryAnotherConfig">Попробовать Другой Конфиг</s>
-    <s id="Volken.UI.CompositeMode">режим наложения</s>
+    <s id="Volken.UI.CompositeMode">Режим Смешивания</s>
     <!-- Cloud Settings -->
-    <s id="Volken.UI.MainToggle">Главный Параметр</s>
+    <s id="Volken.UI.MainToggle">ВКЛ/ВЫКЛ [MAIN]</s>
     <s id="Volken.UI.Density">Плотность</s>
-    <s id="Volken.UI.Absorption">Поглощение</s>
+    <s id="Volken.UI.Absorption">Поглощение света</s>
     <s id="Volken.UI.AmbientLight">Свет Окружения</s>
     <s id="Volken.UI.Coverage">Покрытие</s>
     <s id="Volken.UI.ShapeScale">Масштаб Формы</s>
     <s id="Volken.UI.DetailScale">Масштаб Детализации</s>
-    <s id="Volken.UI.DetailStrength">Детализированность</s>
-    <s id="Volken.UI.CloudMovementSpeed">Скорость Движения Облаков</s>
+    <s id="Volken.UI.DetailStrength">Детализация</s>
+    <s id="Volken.UI.CloudMovementSpeed">Скорость Движения От Ветра</s>
     <s id="Volken.UI.WindDirection">Направление Ветра</s>
     <s id="Volken.UI.GlobalRotationAngular">Глобальное Угловое Вращение</s>
     <s id="Volken.UI.CloudColorRed">Красный Оттенок Облака</s>
@@ -85,12 +85,11 @@
     <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Ошибка OnSceneLoaded: {0}</s>
     <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Ошибка в OnPlayerChangedSoi: {0}</s>
     <!-- Extra Layer UI -->
-    <s id="Volken.UI.ExtraLayer">Дополнительный Слой: {0}</s>
-    <s id="Volken.UI.ExtraLayerEnabled">{0} Включен</s>
-    <s id="Volken.UI.CompositeMode">Композитный Режим</s>
+    <s id="Volken.UI.ExtraLayer">Слой-Дополнение: {0}</s>
+    <s id="Volken.UI.ExtraLayerEnabled">{0} ВКЛ</s>
     <s id="Volken.UI.ExtraLayerConfig">{0} Конфиг</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} Сохранить Текущее</s>
-    <s id="Volken.UI.ExtraLayerSaveAs">{0} Сохранить Как...</s>
+    <s id="Volken.UI.ExtraLayerSaveAs">Сохранить {0} Как...</s>
     <s id="Volken.UI.ExtraLayerLoadPreset">{0} Загрузить Пресет</s>
     <s id="Volken.UI.ExtraLayerEnterPresetName">Введите название Пресета для {0}</s>
     <s id="Volken.UI.ExtraLayerConfigSaved">{0} конфиг сохранён!</s>
@@ -98,5 +97,5 @@
     <s id="Volken.UI.ExtraLayerConfigLoaded">{0} загружен: {1}</s>
     
     <s id="Volken.UI.NoCloudsHere">°`_´° эй, я не думаю что здесь должны быть облака</s>
-    <s id="Volken.UI.NoStarClouds">Какой смысл давать звезде облака???</s>
+    <s id="Volken.UI.NoStarClouds">Какой смысл у облаков на звезде???</s>
 </Strings>

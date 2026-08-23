@@ -17,6 +17,17 @@
     <s id="Volken.UI.ResetCurrentToDefault">Сбросить Текущее к Default</s>
     <s id="Volken.UI.TryAnotherConfig">Попробовать Другой Конфиг</s>
     <s id="Volken.UI.CompositeMode">Режим Смешивания</s>
+    <s id="Volken.UI.UseStockCloudMap">Использовать карту облаков игры</s>
+    <s id="Volken.UI.StockCloudUnavailable">Для этой планеты нет карты облаков.</s>
+    <s id="Volken.UI.StockMapStrength">Сила карты</s>
+    <s id="Volken.UI.StockMaskInfluence">Влияние маски</s>
+    <s id="Volken.UI.StockAlignSign">Знак выравнивания</s>
+    <s id="Volken.UI.StockAlignAngleOffset">Угол выравнивания (град)</s>
+    <s id="Volken.UI.StockMapLayer">Слой облаков для карты</s>
+    <s id="Volken.UI.StockLayerLow">Низкие облака</s>
+    <s id="Volken.UI.StockLayerMid">Средние облака</s>
+    <s id="Volken.UI.StockLayerHigh">Высокие облака</s>
+    <s id="Volken.UI.StockLayerPerBand">По слоям</s>
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">ВКЛ/ВЫКЛ [MAIN]</s>
     <s id="Volken.UI.Density">Плотность</s>

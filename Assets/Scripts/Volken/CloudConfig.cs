@@ -110,6 +110,15 @@ public class CloudConfig
     public float ambientScatterStrength = 0.5f;
 
     public float nearThreshold = 1e5f;
+
+    // === 游戏自带云作为全球分布形状(方案 B) ===
+    // 全部为新字段;旧 XML 无这些节点时保留默认值 → 行为与之前一致。
+    public bool useStockCloudMap = false;   // 总开关:用游戏 Clouds cubemap 替代 PlanetMapTex 做全球分布
+    public float stockMapStrength = 1f;     // 0..1 混合强度(eff=0 时与现状逐字节一致)
+    public float stockMaskInfluence = 1f;   // 0..1 纬度/行星遮罩(A 通道)影响
+    public float stockAlignSign = 1f;       // ±1 对齐旋转方向(镜像/方向反了翻号)
+    public float stockAlignAngleOffset = 0f;// 度,一次性对齐微调角
+    public int stockMapLayer = 3;           // 用游戏哪一层云作为分布:0=低云(R), 1=中云(G), 2=高云(B), 3=按层对应(默认)
     
     [XmlIgnore]
     public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
@@ -358,6 +367,12 @@ public class CloudConfig
             silverLiningIntensity = this.silverLiningIntensity,
             forwardScatteringBias = this.forwardScatteringBias,
             nearThreshold = this.nearThreshold,
+            useStockCloudMap = this.useStockCloudMap,
+            stockMapStrength = this.stockMapStrength,
+            stockMaskInfluence = this.stockMaskInfluence,
+            stockAlignSign = this.stockAlignSign,
+            stockAlignAngleOffset = this.stockAlignAngleOffset,
+            stockMapLayer = this.stockMapLayer,
             /*
             lowAltitudeThreshold = this.lowAltitudeThreshold,
             midAltitudeThreshold = this.midAltitudeThreshold,
@@ -407,6 +422,12 @@ public class CloudConfig
         this.silverLiningIntensity = source.silverLiningIntensity;
         this.forwardScatteringBias = source.forwardScatteringBias;
         this.nearThreshold= source.nearThreshold;
+        this.useStockCloudMap = source.useStockCloudMap;
+        this.stockMapStrength = source.stockMapStrength;
+        this.stockMaskInfluence = source.stockMaskInfluence;
+        this.stockAlignSign = source.stockAlignSign;
+        this.stockAlignAngleOffset = source.stockAlignAngleOffset;
+        this.stockMapLayer = source.stockMapLayer;
         /*
         this.lowAltitudeThreshold= source.lowAltitudeThreshold;
         this.midAltitudeThreshold= source.midAltitudeThreshold;

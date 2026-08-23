@@ -4,6 +4,9 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
+        // Must be a Properties-block texture property: TextureCube declared only inside CGPROGRAM
+        // is not fully registered as a material texture property, so SetTexture silently fails on it.
+        StockCloudCube("Stock Cloud Cube", Cube) = "" {}
     }
         SubShader
     {
@@ -185,6 +188,18 @@ Shader "Hidden/Clouds"
             Texture2D<float2> PlanetMapTex;
             SamplerState samplerPlanetMapTex;
 
+            // Game stock cloud cubemap as global distribution shape (plan B)
+            TextureCube<float4> StockCloudCube;
+            SamplerState samplerStockCloudCube;
+            float useStockCloudMap;        // 0/1 master switch (forced 0 when no cubemap loaded)
+            float stockMapStrength;        // 0..1 blend strength
+            float stockMaskInfluence;      // 0..1 latitude/planet mask (A channel) influence
+            float stockMapLayer;           // 0=low(R), 1=mid(G), 2=high(B), 3=per-band mapping
+            float4 stockLayerValid;        // load-time check: (R=low, G=mid, B=high, A=mask) layer presence; 0 = fall back that band to planetMap
+            float stockAlignSign;          // +-1 rotation direction
+            float stockAlignAngleOffset;   // degrees, one-time alignment
+            float4x4 planetToBody;         // reference-frame -> planet-body rotation
+
             Texture2D<float4> BlueNoiseTex;
             SamplerState samplerBlueNoiseTex;
 
@@ -298,6 +313,20 @@ Shader "Hidden/Clouds"
                 return float2((-b - sqrtD) / (2 * a), (-b + sqrtD) / (2 * a));
             }
 
+            // 方案 B: sample the game stock Clouds cubemap as the global distribution shape.
+            // dir is in the reference frame (already rotated by currentRotation);
+            // we apply E/W wind as a Y rotation (approximation of the planetMap UV shift),
+            // then rotate into the planet-body space where the cubemap was baked.
+            float4 SampleStockDistribution(float3 dir, float windAngle)
+            {
+                float yAngle = windAngle + stockAlignSign * (stockAlignAngleOffset * 0.0174532925);
+                float ca = cos(yAngle);
+                float sa = sin(yAngle);
+                float3 sd = float3(dir.x * ca - dir.z * sa, dir.y, dir.x * sa + dir.z * ca);
+                sd = mul(planetToBody, float4(sd, 0.0)).xyz;
+                return StockCloudCube.SampleLevel(samplerStockCloudCube, sd, 0);
+            }
+
             //those 2 functions made me wanna kill myself tbh
             float SampleDensity(float3 worldPos, float detailFalloff) 
             {
@@ -339,12 +368,37 @@ Shader "Hidden/Clouds"
                 spherical.y += cloudOffset.z * 0.25 * latFactor; 
             
                 float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+
+                // 方案 B: game stock Clouds cubemap as the global distribution shape.
+                // stockEff == 0 keeps the exact previous behavior (pure fallback).
+                // Uniform branch: when the feature is off (or no cubemap is bound) we skip
+                // the cubemap fetch entirely so there is zero added cost vs the original.
+                float4 stock = 0.0;
+                if (useStockCloudMap > 0.5)
+                {
+                    stock = SampleStockDistribution(dir, cloudOffset.x * 6.28318530718);
+                }
+                float stockEff = useStockCloudMap * stockMapStrength;
+                // 兜底(方案 B):load 时检测该星球游戏各云层是否真实存在(R/G/B=低/中/高,A=遮罩)。
+                // 某层不存在(valid=0)→ 该层回退到老 Volken 的 planetMap;遮罩不存在 → mask 置中性。
+                float selValid = lerp(lerp(stockLayerValid.x, stockLayerValid.y, step(0.5, stockMapLayer)), stockLayerValid.z, step(1.5, stockMapLayer));
+                float4 valid = lerp(selValid.xxxx, float4(stockLayerValid.x, stockLayerValid.y, stockLayerValid.z, stockLayerValid.x), step(2.5, stockMapLayer));
+                float stockMaskValid = stockLayerValid.w;
+                float stockMask = lerp(1.0, stock.a, stockMaskInfluence * stockEff * stockMaskValid);
+                // 方案 B layer source: 0=low(R), 1=mid(G), 2=high(B), 3=per-band mapping
+                float selChannel = lerp(lerp(stock.r, stock.g, step(0.5, stockMapLayer)), stock.b, step(1.5, stockMapLayer));
+                float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
+                float4 stockBand = stockBandRaw * stockMask;
+
                 // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
+                // Stock replaces the data source: R=low, G=mid, B=high, A=mask.
+                // valid==0 的层保持 planetMap(老 Volken 行为)
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
                 float4 layers;
-                layers.x = cloudLayerStrengths.x * planetMap.r;
-                layers.y = cloudLayerStrengths.y * planetMap.g;
-                layers.z = cloudLayerStrengths.z * planetMap.r;
-                layers.w = cloudLayerStrengths.w * planetMap.r;
+                layers.x = cloudLayerStrengths.x * mapVal.x;
+                layers.y = cloudLayerStrengths.y * mapVal.y;
+                layers.z = cloudLayerStrengths.z * mapVal.z;
+                layers.w = cloudLayerStrengths.w * mapVal.w;
             
                 float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float4 falloff = exp(-falloffExponent * falloffExponent);
@@ -352,7 +406,9 @@ Shader "Hidden/Clouds"
                 // Gate: only active layers (strength > 0) contribute shape * falloff
                 // This preserves EXACT original behavior for Layer1&2 when Layer3/4 are disabled
                 float4 active = step(0.0001, cloudLayerStrengths);
-                float totalDensity = shape * (falloff.x + falloff.y + active.z * falloff.z + active.w * falloff.w)
+                // 方案 B: gate the 3D shape by the stock distribution per band (valid==0 → dist=1, 不回退门)
+                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff * valid);
+                float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
                                    + layers.x * falloff.x + layers.y * falloff.y
                                    + layers.z * falloff.z + layers.w * falloff.w;
                 
@@ -396,19 +452,45 @@ Shader "Hidden/Clouds"
                 spherical.y += cloudOffset.z * 0.25 * latFactor;  
             
                 float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+
+                // 方案 B: game stock Clouds cubemap as the global distribution shape.
+                // stockEff == 0 keeps the exact previous behavior (pure fallback).
+                // Uniform branch: when the feature is off (or no cubemap is bound) we skip
+                // the cubemap fetch entirely so there is zero added cost vs the original.
+                float4 stock = 0.0;
+                if (useStockCloudMap > 0.5)
+                {
+                    stock = SampleStockDistribution(dir, cloudOffset.x * 6.28318530718);
+                }
+                float stockEff = useStockCloudMap * stockMapStrength;
+                // 兜底(方案 B):load 时检测该星球游戏各云层是否真实存在(R/G/B=低/中/高,A=遮罩)。
+                // 某层不存在(valid=0)→ 该层回退到老 Volken 的 planetMap;遮罩不存在 → mask 置中性。
+                float selValid = lerp(lerp(stockLayerValid.x, stockLayerValid.y, step(0.5, stockMapLayer)), stockLayerValid.z, step(1.5, stockMapLayer));
+                float4 valid = lerp(selValid.xxxx, float4(stockLayerValid.x, stockLayerValid.y, stockLayerValid.z, stockLayerValid.x), step(2.5, stockMapLayer));
+                float stockMaskValid = stockLayerValid.w;
+                float stockMask = lerp(1.0, stock.a, stockMaskInfluence * stockEff * stockMaskValid);
+                // 方案 B layer source: 0=low(R), 1=mid(G), 2=high(B), 3=per-band mapping
+                float selChannel = lerp(lerp(stock.r, stock.g, step(0.5, stockMapLayer)), stock.b, step(1.5, stockMapLayer));
+                float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
+                float4 stockBand = stockBandRaw * stockMask;
+
                 // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
+                // Stock replaces the data source: R=low, G=mid, B=high, A=mask.
+                // valid==0 的层保持 planetMap(老 Volken 行为)
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
                 float4 layers;
-                layers.x = cloudLayerStrengths.x * planetMap.r;
-                layers.y = cloudLayerStrengths.y * planetMap.g;
-                layers.z = cloudLayerStrengths.z * planetMap.r;
-                layers.w = cloudLayerStrengths.w * planetMap.r;
+                layers.x = cloudLayerStrengths.x * mapVal.x;
+                layers.y = cloudLayerStrengths.y * mapVal.y;
+                layers.z = cloudLayerStrengths.z * mapVal.z;
+                layers.w = cloudLayerStrengths.w * mapVal.w;
             
                 float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
                 float4 falloff = exp(-falloffExponent * falloffExponent);
                 
-                // Gate: only active layers (strength > 0) contribute shape * falloff
+                // 方案 B: gate the 3D shape by the stock distribution per band
                 float4 active = step(0.0001, cloudLayerStrengths);
-                float totalDensity = shape * (falloff.x + falloff.y + active.z * falloff.z + active.w * falloff.w)
+                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff);
+                float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
                                    + layers.x * falloff.x + layers.y * falloff.y
                                    + layers.z * falloff.z + layers.w * falloff.w;
                 

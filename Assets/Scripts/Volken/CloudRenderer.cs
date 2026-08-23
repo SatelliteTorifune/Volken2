@@ -188,6 +188,22 @@ public class CloudRenderer : MonoBehaviour
         // Surface radius (shared across layers)
         mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
 
+        // 方案 B: 游戏自带云 cubemap + 参考系→星球本体系旋转(每帧更新,因参考系随飞行/轨道变化)
+        mat.SetTexture("StockCloudCube", StockCloudMap.Current);
+        var referenceFrame = craftNode.ReferenceFrame;
+        if (referenceFrame != null)
+        {
+            Matrix4x4 bodyFromFrame = new Matrix4x4();
+            var bx = referenceFrame.FrameToPlanetVector(Vector3.right);
+            var by = referenceFrame.FrameToPlanetVector(Vector3.up);
+            var bz = referenceFrame.FrameToPlanetVector(Vector3.forward);
+            bodyFromFrame.m00 = (float)bx.x; bodyFromFrame.m10 = (float)bx.y; bodyFromFrame.m20 = (float)bx.z;
+            bodyFromFrame.m01 = (float)by.x; bodyFromFrame.m11 = (float)by.y; bodyFromFrame.m21 = (float)by.z;
+            bodyFromFrame.m02 = (float)bz.x; bodyFromFrame.m12 = (float)bz.y; bodyFromFrame.m22 = (float)bz.z;
+            bodyFromFrame.m33 = 1f;
+            mat.SetMatrix("planetToBody", bodyFromFrame);
+        }
+
         // Update reprojection matrix for next frame
         layer.prevViewProjMat = cam.projectionMatrix * cam.worldToCameraMatrix;
     }

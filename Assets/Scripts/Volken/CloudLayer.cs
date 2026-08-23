@@ -104,6 +104,16 @@ public class CloudLayer
         material.SetVector("customWavelengths", config.customWavelengths);
         material.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
         material.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
+
+        // 方案 B: 游戏自带云作为全球分布形状(无 cubemap 时强制关闭 → 完全回退程序化分布)
+        bool hasStock = StockCloudMap.Current != null;
+        material.SetFloat("useStockCloudMap", (config.useStockCloudMap && hasStock) ? 1f : 0f);
+        material.SetFloat("stockMapStrength", Mathf.Clamp01(config.stockMapStrength));
+        material.SetFloat("stockMaskInfluence", Mathf.Clamp01(config.stockMaskInfluence));
+        material.SetFloat("stockMapLayer", Mathf.Clamp(config.stockMapLayer, 0, 3));
+        material.SetVector("stockLayerValid", StockCloudMap.LayerValid);
+        material.SetFloat("stockAlignSign", Mathf.Sign(config.stockAlignSign));
+        material.SetFloat("stockAlignAngleOffset", config.stockAlignAngleOffset);
     }
 
     /// <summary>

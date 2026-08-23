@@ -552,6 +552,48 @@ public class VolkenUserInterface : MonoBehaviour
             new System.Collections.Generic.List<string> { "Additive", "Standard" });
         group.Add(compositeDropdown);
 
+        // === 方案 B: 游戏自带云作为全球分布形状(对比用) ===
+        var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
+            () => cfg.useStockCloudMap, s =>
+            {
+                if (s && StockCloudMap.Current == null)
+                {
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.StockCloudUnavailable"));
+                    cfg.useStockCloudMap = false;
+                    return;
+                }
+                cfg.useStockCloudMap = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(stockToggleModel);
+
+        // 选择用游戏哪一层云作为分布(0=低,1=中,2=高,3=按层对应)
+        var stockLayerOptions = new System.Collections.Generic.List<string>
+        {
+            Locale.GetString("Volken.UI.StockLayerLow"),
+            Locale.GetString("Volken.UI.StockLayerMid"),
+            Locale.GetString("Volken.UI.StockLayerHigh"),
+            Locale.GetString("Volken.UI.StockLayerPerBand")
+        };
+        var stockLayerDropdown = new DropdownModel(Locale.GetString("Volken.UI.StockMapLayer"),
+            () => stockLayerOptions[Mathf.Clamp(cfg.stockMapLayer, 0, 3)],
+            (val) =>
+            {
+                int idx = stockLayerOptions.IndexOf(val);
+                if (idx >= 0) cfg.stockMapLayer = idx;
+                Volken.Instance.ValueChanged();
+            },
+            stockLayerOptions);
+        group.Add(stockLayerDropdown);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
+            s => { cfg.stockMapStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
+            s => { cfg.stockMaskInfluence = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
+            s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignAngleOffset"), () => cfg.stockAlignAngleOffset,
+            s => { cfg.stockAlignAngleOffset = s; Volken.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
+
         // === Cloud Shape ===
         CreateSlider(group, Locale.GetString("Volken.UI.Density"), () => cfg.density,
             s => { cfg.density = s; Volken.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);

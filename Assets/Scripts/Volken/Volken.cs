@@ -198,6 +198,16 @@ public class Volken
                 layer.config.enabled = hasAtmo && layer.config.enabled;
         }
 
+        // 方案 B: 首次进入飞行场景时加载当前星球的自带云 cubemap
+        if (hasAtmo)
+        {
+            StockCloudMap.LoadFor(Game.Instance.FlightScene.CraftNode.Parent);
+        }
+        else
+        {
+            StockCloudMap.Release();
+        }
+
         var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
         cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
             ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>()
@@ -215,11 +225,14 @@ public class Volken
         if (craftNode.Parent.Parent == null)
         {
             foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
+            StockCloudMap.Release();
             return;
         }
 
         if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
         {
+            // 方案 B: 进入有大气星球 → 加载游戏自带云 cubemap(无则回退)
+            StockCloudMap.LoadFor(craftNode.Parent);
             RefreshConfigList();
             string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
             var main = MainLayer;

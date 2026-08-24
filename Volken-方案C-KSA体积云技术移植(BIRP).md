@@ -272,6 +272,9 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 
 > 若一期嫌矩阵复合复杂,可先做**近似版**:重投影时把历史 UV 沿"云自转方向"做角度偏移(即把 `_ReproMat` 简化为"上一帧视角 + 云旋转增量"),先跑通时序链路,再换完整矩阵。验收时重点观察"云缓慢旋转时是否拖影/断裂"。
 
+> **实现状态(2026-08-24):近似版已落地。** 复现:时序开关关闭时,历史混合路径(Clouds pass 尾部,与 `_UseTemporal` 无关)仍用纯世界空间 `reprojMat=prevViewProj` 重投影 → 云自转/风平移时 `reprojUV` 采到旧位置的云 → 运动残影/鬼影,二值 `depthWeight` 翻动边界形成**水平割裂线**。修复(与上面完整公式等价):φ = `accumulatedRotation + 2π·runningOffset.x`(风平移折算为经度旋转),`reproj = prevViewProj * RotAroundCenter(C, +Δφ)`(`CloudRenderer.BuildCloudSpaceRepro`,逐层缓存 `prevCloudAngle`,RT重建/切天体时置 NaN 回退)。时序开/关共用该矩阵,两处重投影(新鲜路径 + `!isFresh` 路径)一起修好。
+> **已知局限**:N/S 风(`cloudOffset.z` 纬度相关平移)不是刚体 Y 旋转,近似版未覆盖;若开强南北风仍见残影,需走完整 worldToCloud 矩阵或在该方向做额外补偿。
+
 ---
 
 ## 6. CPU 侧改动清单

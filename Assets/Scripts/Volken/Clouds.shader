@@ -298,8 +298,7 @@ Shader "Hidden/Clouds"
             float2 _SampleCell;      // 本帧要步进的格 (cellX, cellY)
             float2 _Upscale;         // 格网尺寸 (upscaleX, upscaleY)
             float2 _LowResSize;      // 低清步进 RT 的像素尺寸(uv -> 格坐标换算用)
-            float _DiagPattern;      // 排障:1 = uv 渐变;2 = 新鲜格显射线方向/非新鲜格显重投影uv
-            
+                    
             // magic functions for better lighting
             float HenyeyGreenstein(float a, float g)
             {
@@ -576,13 +575,6 @@ Shader "Hidden/Clouds"
             CloudOut frag(vert2Frag i)
             {
                 CloudOut o;
-                // === 排障:测试图案 mode1(uv 渐变,红=u,绿=v;仅 0.5<x<1.5,让模式2/3通过) ===
-                if (_DiagPattern > 0.5 && _DiagPattern < 1.5)
-                {
-                    o.col = float4(i.uv, 0.0, 1.0);
-                    o.cloudDepth = 1.0;
-                    return o;
-                }
                 float3 camPos = _WorldSpaceCameraPos;
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
@@ -592,48 +584,6 @@ Shader "Hidden/Clouds"
                 float2 cellCoord = floor(i.uv * _LowResSize);
                 float2 inCell = fmod(cellCoord, _Upscale);
                 bool isFresh = (_UseTemporal <= 0.5) || all(inCell == _SampleCell);
-
-                // === 排障模式2:新鲜格→当前射线方向(RGB=(viewDir+1)/2),非新鲜格→重投影uv(R=u,G=v) ===
-                if (_DiagPattern > 1.5 && _DiagPattern < 2.5)
-                {
-                    if (isFresh)
-                    {
-                        o.col = float4(viewDir * 0.5 + 0.5, 1.0);
-                    }
-                    else
-                    {
-                        float pd = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, i.uv, 0);
-                        float3 cp = camPos + max(pd, 0.0) * viewDir;
-                        float4 rp = mul(reprojMat, float4(cp, 1.0));
-                        float2 ruv = 0.5 * (rp.xy / rp.w) + 0.5;
-                        o.col = float4(ruv, 0.0, 1.0);
-                    }
-                    o.cloudDepth = 1.0;
-                    return o;
-                }
-                // === 排障模式3:原版射线 = mul(CameraToWorld, mul(CameraInvProj, float4(ndc,0,-1))) ===
-                // 逐字复刻原版代码,对比其 forward 项符号。
-                if (_DiagPattern > 2.5 && _DiagPattern < 3.5)
-                {
-                    float4 rp = mul(unity_CameraInvProjection, float4(i.uv * 2.0 - 1.0, 0.0, -1.0));
-                    float3 orig = mul(unity_CameraToWorld, float4(rp.xyz, 0.0)).xyz;
-                    o.col = float4(orig * 0.5 + 0.5, 1.0);
-                    o.cloudDepth = 1.0;
-                    return o;
-                }
-                // === 排障模式4:验证 _WorldSpaceCameraPos(射线原点)是否等于 C# cam.transform.position ===
-                // R = saturate(altitude / (surfaceRadius*0.002)); G,B = 相机从行星中心看去的方向(编码)。
-                // 若 shader 的 camPos 在地面(alt≈324m): R≈0.13; 若 camPos 错误(远在天外): R≈1。
-                if (_DiagPattern > 3.5)
-                {
-                    float3 toCam = camPos - sphereCenter;
-                    float camDist = length(toCam);
-                    float altitude = camDist - surfaceRadius;
-                    float3 camDir = toCam / max(camDist, 1e-4);
-                    o.col = float4(saturate(altitude / (surfaceRadius * 0.002)), camDir.x * 0.5 + 0.5, camDir.y * 0.5 + 0.5, 1.0);
-                    o.cloudDepth = 1.0;
-                    return o;
-                }
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
@@ -794,13 +744,26 @@ Shader "Hidden/Clouds"
                 reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
                 float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV.xy, 0);
                 
+                // === 割裂线修复(2026-08-24):历史接受判据从二值改为软过渡 ===
+                // 现象:屏幕中段出现随相机俯仰张开/收拢的两条水平割裂线(TSS关+运动残影开),
+                //       TSS开时线附近云闪烁。根因:depthWeight 用场景深度做硬 0/1 判据,
+                //       在等深度轮廓/云壳边界处整排翻转 → 一侧混历史、一侧纯新鲜 → 硬接缝。
                 float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
                 float historyDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV.xy, 0);
                 float depthDiff = abs(currentDepth - historyDepth) / max(currentDepth, 0.001);
-                float depthWeight = depthDiff < historyDepthThreshold ? 1.0 : 0.0;
-                
-                bool badSample = cloudSurfaceDist >= maxRayDist || (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
-                float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight;
+                // 1) 深度权重软过渡:depthDiff 从 0.5×threshold 平滑升到 threshold
+                float depthWeight = 1.0 - smoothstep(historyDepthThreshold * 0.5, historyDepthThreshold, depthDiff);
+
+                // 2) 云结束边渐变:cloudSurfaceDist 接近 maxRayDist 时混合淡出(约 2 步长),
+                //    避免"有云整段混合/无云完全不混合"的硬接缝
+                float edgeFade = saturate((maxRayDist - cloudSurfaceDist) / max(2.0 * stepSize, 1.0));
+
+                // 3) 历史处有云才混(用上一帧云面距离):防止"云移动后把上一帧无云处当历史"的残影
+                float prevCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV.xy, 0);
+                float cloudGate = prevCloudDepth > 0.0 ? 1.0 : 0.0;
+
+                bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
+                float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight * edgeFade * cloudGate;
                 
                 o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
                 o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;

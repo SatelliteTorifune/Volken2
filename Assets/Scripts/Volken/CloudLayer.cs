@@ -27,9 +27,6 @@ public class CloudLayer
     public RenderTexture cloudDepthTex;       // current frame cloud surface distance (MRT output)
     public RenderTexture historyCloudDepthTex; // previous frame cloud surface distance (for reprojection)
     public float currentResolutionScale;
-    public bool diagLogged;             // 阶段二排障:几何/矩阵日志只打一次
-    public bool probeLogged;            // 阶段二排障:cloudTex 垂直分布只读一次
-    public bool diagTemporalLogged;     // 阶段二排障:时序参数日志只打一次
 
     // === 噪声纹理 (完全独立，不同种子) ===
     public CloudNoise noise;
@@ -42,6 +39,7 @@ public class CloudLayer
     public float accumulatedRotation;
     public Vector3 runningOffset;     // 运行时累积的 offset（不污染序列化的 config.offset）
     public Matrix4x4 prevViewProjMat;
+    public float prevCloudAngle = float.NaN; // 方案 C §5:云空间重投影用——上一帧的云转角相位 θ+2π·offset.x(风平移折算为经度旋转)
 
     // === 时序超采样(方案 C) ===
     public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动(该帧全步进)
@@ -133,6 +131,7 @@ public class CloudLayer
         // 方案 C:RT 重建 → 历史失效 → 冷启动全步进
         frameNumber = 0;
         temporalSequence = null;
+        prevCloudAngle = float.NaN;   // 云转角相位随重建作废,首帧回退纯世界空间重投影
 
         float scale = Mathf.Max(0.1f, currentResolutionScale);
         Vector2Int cloudRes = Vector2Int.RoundToInt(scale * new Vector2(screenW, screenH));

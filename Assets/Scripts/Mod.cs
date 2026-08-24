@@ -88,24 +88,30 @@ namespace Assets.Scripts
         #region LOG
         public static void LOG(object message)
         {
-            if (ModSettings.Instance.ShowDevLog)
+            try
             {
+                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
                 Debug.unityLogger.Log(message);
             }
+            catch { }
         }
         public static void LOG(string format, params object[] args)
         {
-            if (ModSettings.Instance.ShowDevLog)
+            try
             {
+                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
                 Debug.unityLogger.LogFormat(LogType.Log, format, args);
             }
+            catch { }
         }
         public static void LOG(UnityEngine.Object context, string format, params object[] args)
         {
-            if (ModSettings.Instance.ShowDevLog)
+            try
             {
+                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
                 Debug.unityLogger.LogFormat(LogType.Log, context, format, args);
             }
+            catch { }
         }
         #endregion
     }

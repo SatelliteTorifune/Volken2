@@ -78,6 +78,8 @@
     <s id="Volken.UI.Threshold">阈值</s>
     <s id="Volken.UI.RayOffsetStrength">光线偏移强度</s>
     <s id="Volken.UI.HistoryBlend">运动残影</s>
+    <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
+    <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">配置 '{0}' 已保存!</s>

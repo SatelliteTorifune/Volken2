@@ -58,7 +58,10 @@ public class VolkenUserInterface : MonoBehaviour
         {
             try
             {
-                Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+                if (Game.Instance?.FlightScene != null)
+                {
+                    Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+                }
             }
             catch (Exception exception)
             {
@@ -688,6 +691,16 @@ public class VolkenUserInterface : MonoBehaviour
 
         // === Quality ===
         GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
+        // === 方案 C: 时序超采样(A/B 对比用) ===
+        var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
+            () => cfg.useTemporalUpscale, s =>
+            {
+                cfg.useTemporalUpscale = s;
+                Volken.Instance.ValueChanged();
+            });
+        qualityGroup.Add(temporalToggleModel);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
+            s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Instance.ValueChanged(); }, 1, 6, 0, true);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
             s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,
@@ -836,6 +849,16 @@ public class VolkenUserInterface : MonoBehaviour
         // === Quality ===
         GroupModel qualityGroup = new GroupModel(
             Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
+        // === 方案 C: 时序超采样(A/B 对比用) ===
+        var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
+            () => cfg.useTemporalUpscale, s =>
+            {
+                cfg.useTemporalUpscale = s;
+                Volken.Instance.ValueChanged();
+            });
+        qualityGroup.Add(temporalToggleModel);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
+            s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Instance.ValueChanged(); }, 1, 6, 0, true);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
             s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,

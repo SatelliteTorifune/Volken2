@@ -77,6 +77,8 @@
     <s id="Volken.UI.Threshold">Порог</s>
     <s id="Volken.UI.RayOffsetStrength">Сила Разброса Лучей</s>
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
+    <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг (шаг 1/N)</s>
+    <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Конфиг '{0}' сохранён!</s>

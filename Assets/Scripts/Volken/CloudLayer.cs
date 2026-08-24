@@ -24,7 +24,12 @@ public class CloudLayer
     public RenderTexture upscaledCloudTex;
     public RenderTexture historyTex;
     public RenderTexture historyDepthTex;
+    public RenderTexture cloudDepthTex;       // current frame cloud surface distance (MRT output)
+    public RenderTexture historyCloudDepthTex; // previous frame cloud surface distance (for reprojection)
     public float currentResolutionScale;
+    public bool diagLogged;             // 阶段二排障:几何/矩阵日志只打一次
+    public bool probeLogged;            // 阶段二排障:cloudTex 垂直分布只读一次
+    public bool diagTemporalLogged;     // 阶段二排障:时序参数日志只打一次
 
     // === 噪声纹理 (完全独立，不同种子) ===
     public CloudNoise noise;
@@ -37,6 +42,10 @@ public class CloudLayer
     public float accumulatedRotation;
     public Vector3 runningOffset;     // 运行时累积的 offset（不污染序列化的 config.offset）
     public Matrix4x4 prevViewProjMat;
+
+    // === 时序超采样(方案 C) ===
+    public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动(该帧全步进)
+    public int[] temporalSequence;   // 当前 upscale 格网的采样序列(缓存,格网变化时重建)
 
     /// <summary>
     /// 生成该层的独立噪声纹理并设置到 material 上。
@@ -121,13 +130,19 @@ public class CloudLayer
     /// </summary>
     public void CreateRenderTextures(int screenW, int screenH)
     {
+        // 方案 C:RT 重建 → 历史失效 → 冷启动全步进
+        frameNumber = 0;
+        temporalSequence = null;
+
         float scale = Mathf.Max(0.1f, currentResolutionScale);
         Vector2Int cloudRes = Vector2Int.RoundToInt(scale * new Vector2(screenW, screenH));
 
-        cloudTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "CloudTex" + layerIndex);
+        cloudTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "CloudTex" + layerIndex, 16);
         upscaledCloudTex = CreateRT(screenW, screenH, RenderTextureFormat.ARGB32, "UpscaledCloudTex" + layerIndex);
         historyTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "HistoryTex" + layerIndex);
         historyDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "HistoryDepthTex" + layerIndex);
+        cloudDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "CloudDepthTex" + layerIndex);
+        historyCloudDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layerIndex);
     }
 
     /// <summary>
@@ -139,11 +154,13 @@ public class CloudLayer
         ReleaseRT(ref upscaledCloudTex);
         ReleaseRT(ref historyTex);
         ReleaseRT(ref historyDepthTex);
+        ReleaseRT(ref cloudDepthTex);
+        ReleaseRT(ref historyCloudDepthTex);
     }
 
-    private static RenderTexture CreateRT(int w, int h, RenderTextureFormat fmt, string name)
+    private static RenderTexture CreateRT(int w, int h, RenderTextureFormat fmt, string name, int depthBits = 0)
     {
-        var rt = new RenderTexture(Mathf.Max(1, w), Mathf.Max(1, h), 0, fmt);
+        var rt = new RenderTexture(Mathf.Max(1, w), Mathf.Max(1, h), depthBits, fmt);
         rt.name = name;
         rt.Create();
         return rt;

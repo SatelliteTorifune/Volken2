@@ -111,6 +111,13 @@ public class CloudConfig
 
     public float nearThreshold = 1e5f;
 
+    // === 时序超采样(方案 C) ===
+    // 每帧只步进 1/(upscaleX*upscaleY) 的低清像素(按最优采样序列取格),其余像素由历史累积补齐。
+    // 默认关闭 → 走现状路径,行为与之前逐字节一致。
+    public bool useTemporalUpscale = false;   // 总开关
+    public int upscaleX = 3;                  // 采样格网宽(N=upscaleX*upscaleY)
+    public int upscaleY = 3;                  // 采样格网高
+
     // === 游戏自带云作为全球分布形状(方案 B) ===
     // 全部为新字段;旧 XML 无这些节点时保留默认值 → 行为与之前一致。
     public bool useStockCloudMap = false;   // 总开关:用游戏 Clouds cubemap 替代 PlanetMapTex 做全球分布
@@ -367,6 +374,9 @@ public class CloudConfig
             silverLiningIntensity = this.silverLiningIntensity,
             forwardScatteringBias = this.forwardScatteringBias,
             nearThreshold = this.nearThreshold,
+            useTemporalUpscale = this.useTemporalUpscale,
+            upscaleX = this.upscaleX,
+            upscaleY = this.upscaleY,
             useStockCloudMap = this.useStockCloudMap,
             stockMapStrength = this.stockMapStrength,
             stockMaskInfluence = this.stockMaskInfluence,
@@ -422,6 +432,9 @@ public class CloudConfig
         this.silverLiningIntensity = source.silverLiningIntensity;
         this.forwardScatteringBias = source.forwardScatteringBias;
         this.nearThreshold= source.nearThreshold;
+        this.useTemporalUpscale = source.useTemporalUpscale;
+        this.upscaleX = source.upscaleX;
+        this.upscaleY = source.upscaleY;
         this.useStockCloudMap = source.useStockCloudMap;
         this.stockMapStrength = source.stockMapStrength;
         this.stockMaskInfluence = source.stockMaskInfluence;

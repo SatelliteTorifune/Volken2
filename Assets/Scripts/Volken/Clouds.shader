@@ -4,8 +4,24 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        // Must be a Properties-block texture property: TextureCube declared only inside CGPROGRAM
-        // is not fully registered as a material texture property, so SetTexture silently fails on it.
+
+        // 关键修复:所有通过 material.SetTexture 在运行时绑定的纹理都必须在此声明。
+        // 只在 CGPROGRAM 里声明(Texture2D/Texture3D/TextureCube)不会被注册为材质纹理属性,
+        // SetTexture 会静默失败 → shader 采样到空 → 全 0 → 无云。
+        // 之前只有 StockCloudCube 声明在此(所以它绑定成功),其余全静默失败。
+        CloudShapeTex("CloudShapeTex", 3D) = "" {}
+        CloudDetailTex("CloudDetailTex", 3D) = "" {}
+        PlanetMapTex("PlanetMapTex", 2D) = "" {}
+        BlueNoiseTex("BlueNoiseTex", 2D) = "" {}
+        DepthTex("DepthTex", 2D) = "" {}
+        HistoryTex("HistoryTex", 2D) = "" {}
+        HistoryDepthTex("HistoryDepthTex", 2D) = "" {}
+        CombinedDepthTex("CombinedDepthTex", 2D) = "" {}
+        LowResDepthTex("LowResDepthTex", 2D) = "" {}
+        CloudDepthTex("CloudDepthTex", 2D) = "" {}
+        HistoryCloudDepthTex("HistoryCloudDepthTex", 2D) = "" {}
+        UpscaledCloudTex("UpscaledCloudTex", 2D) = "" {}
+        SceneDepthTex("SceneDepthTex", 2D) = "" {}
         StockCloudCube("Stock Cloud Cube", Cube) = "" {}
     }
         SubShader
@@ -162,14 +178,31 @@ Shader "Hidden/Clouds"
                 float3 viewDir : TEXCOORD1;
             };
 
+            float3 _CamFwd;
+            float3 _CamRight;
+            float3 _CamUp;
+            float _TanHalfFovV;
+            float _Aspect;
+
             vert2Frag vert(appdata v)
             {
                 vert2Frag o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                // generate the world space view vectors for the edges of the frustum
-                o.viewDir = mul(unity_CameraInvProjection, float4(v.uv * 2 - 1, 0, -1));
-                o.viewDir = mul(unity_CameraToWorld, float4(o.viewDir, 0));
+                // 阶段二:使用 DrawMeshNow + 全屏三角形(clip-space 顶点),
+                // 以实现 MRT(SV_Target0=颜色, SV_Target1=云面距离)。
+                o.vertex = v.vertex;  // 直接传递 clip-space 位置
+                // 观察射线:直接用 clip 坐标(NDC) + 相机 transform 轴 + fov/aspect 构造。
+                // 用 cam.transform.forward/right/up(C# 传入,无歧义),不要从 cameraToWorldMatrix
+                // 第2列取 fwd(那是 -forward,会反向导致云随相机旋转/缩放漂移)。
+                float2 ndc = v.vertex.xy;   // NDC:-1..1,y=+1 为屏幕顶部
+                // 注意:up 项用【减】号。实测(模式2/云图)显示加号会把云垂直反置:
+                // 太空看行星时云跑到上空(倒扣穹顶)、贴地场景云掉地底。减号修正垂直方向。
+                o.viewDir = _CamFwd + _CamRight * (ndc.x * _TanHalfFovV * _Aspect) - _CamUp * (ndc.y * _TanHalfFovV);
+                // uv:必须与后续 Upscale/Composite(走 Graphics.Blit)的约定一致,
+                // 否则 cloudTex 会被它们上下翻转显示(云全被压到地平线下)。
+                // Blit 在 D3D(_ProjectionParams.x<0)上 uv.y=0 在顶部 → 此处翻转 Y。
+                float2 uv = float2(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5);
+                uv.y = _ProjectionParams.x < 0.0 ? 1.0 - uv.y : uv.y;
+                o.uv = uv;
                 return o;
             }
 
@@ -207,6 +240,12 @@ Shader "Hidden/Clouds"
             SamplerState samplerHistoryTex;
             Texture2D<float> HistoryDepthTex;
             SamplerState samplerHistoryDepthTex;
+
+            Texture2D<float> HistoryCloudDepthTex;
+            SamplerState samplerHistoryCloudDepthTex;
+
+            Texture2D<float> CloudDepthTex;
+            SamplerState samplerCloudDepthTex;
 
             //Cloud Shape
             float cloudDensity;
@@ -254,6 +293,12 @@ Shader "Hidden/Clouds"
             float historyBlend;
             matrix reprojMat;
             float currentRotation;
+            // === 方案 C: 时序超采样 ===
+            float _UseTemporal;      // 0 = 现状路径(每格都步进);1 = 时序子集步进
+            float2 _SampleCell;      // 本帧要步进的格 (cellX, cellY)
+            float2 _Upscale;         // 格网尺寸 (upscaleX, upscaleY)
+            float2 _LowResSize;      // 低清步进 RT 的像素尺寸(uv -> 格坐标换算用)
+            float _DiagPattern;      // 排障:1 = uv 渐变;2 = 新鲜格显射线方向/非新鲜格显重投影uv
             
             // magic functions for better lighting
             float HenyeyGreenstein(float a, float g)
@@ -513,6 +558,7 @@ Shader "Hidden/Clouds"
 
                 float d = 0.0;
 
+                [loop]
                 for (int i = 0; i < lightSamples; i++) {
                     rayPos += step * rayDir;
                     d += step * max(0.0, SampleDensityCheap(rayPos));
@@ -521,11 +567,73 @@ Shader "Hidden/Clouds"
                 return float2(d, intersect.y - max(0.0, intersect.x));
             }
 
-            float4 frag(vert2Frag i) : SV_Target 
+            struct CloudOut
             {
+                float4 col : SV_Target0;
+                float cloudDepth : SV_Target1;
+            };
+
+            CloudOut frag(vert2Frag i)
+            {
+                CloudOut o;
+                // === 排障:测试图案 mode1(uv 渐变,红=u,绿=v;仅 0.5<x<1.5,让模式2/3通过) ===
+                if (_DiagPattern > 0.5 && _DiagPattern < 1.5)
+                {
+                    o.col = float4(i.uv, 0.0, 1.0);
+                    o.cloudDepth = 1.0;
+                    return o;
+                }
                 float3 camPos = _WorldSpaceCameraPos;
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
+
+                // === 方案 C: 本像素是否属于"本帧要步进的格子" ===
+                // 关闭时(_UseTemporal<=0.5)或冷启动帧(_Upscale=1)恒为真 → 走原路径。
+                float2 cellCoord = floor(i.uv * _LowResSize);
+                float2 inCell = fmod(cellCoord, _Upscale);
+                bool isFresh = (_UseTemporal <= 0.5) || all(inCell == _SampleCell);
+
+                // === 排障模式2:新鲜格→当前射线方向(RGB=(viewDir+1)/2),非新鲜格→重投影uv(R=u,G=v) ===
+                if (_DiagPattern > 1.5 && _DiagPattern < 2.5)
+                {
+                    if (isFresh)
+                    {
+                        o.col = float4(viewDir * 0.5 + 0.5, 1.0);
+                    }
+                    else
+                    {
+                        float pd = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, i.uv, 0);
+                        float3 cp = camPos + max(pd, 0.0) * viewDir;
+                        float4 rp = mul(reprojMat, float4(cp, 1.0));
+                        float2 ruv = 0.5 * (rp.xy / rp.w) + 0.5;
+                        o.col = float4(ruv, 0.0, 1.0);
+                    }
+                    o.cloudDepth = 1.0;
+                    return o;
+                }
+                // === 排障模式3:原版射线 = mul(CameraToWorld, mul(CameraInvProj, float4(ndc,0,-1))) ===
+                // 逐字复刻原版代码,对比其 forward 项符号。
+                if (_DiagPattern > 2.5 && _DiagPattern < 3.5)
+                {
+                    float4 rp = mul(unity_CameraInvProjection, float4(i.uv * 2.0 - 1.0, 0.0, -1.0));
+                    float3 orig = mul(unity_CameraToWorld, float4(rp.xyz, 0.0)).xyz;
+                    o.col = float4(orig * 0.5 + 0.5, 1.0);
+                    o.cloudDepth = 1.0;
+                    return o;
+                }
+                // === 排障模式4:验证 _WorldSpaceCameraPos(射线原点)是否等于 C# cam.transform.position ===
+                // R = saturate(altitude / (surfaceRadius*0.002)); G,B = 相机从行星中心看去的方向(编码)。
+                // 若 shader 的 camPos 在地面(alt≈324m): R≈0.13; 若 camPos 错误(远在天外): R≈1。
+                if (_DiagPattern > 3.5)
+                {
+                    float3 toCam = camPos - sphereCenter;
+                    float camDist = length(toCam);
+                    float altitude = camDist - surfaceRadius;
+                    float3 camDir = toCam / max(camDist, 1e-4);
+                    o.col = float4(saturate(altitude / (surfaceRadius * 0.002)), camDir.x * 0.5 + 0.5, camDir.y * 0.5 + 0.5, 1.0);
+                    o.cloudDepth = 1.0;
+                    return o;
+                }
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
@@ -534,7 +642,9 @@ Shader "Hidden/Clouds"
                 
                 // no intersection in front of the camera
                 if (intersect.y < 0.0) {
-                    return float4(0.0, 0.0, 0.0, 1.0);
+                    o.col = float4(0.0, 0.0, 0.0, 1.0);
+                    o.cloudDepth = 0.0;
+                    return o;
                 }
                 
                 
@@ -552,7 +662,43 @@ Shader "Hidden/Clouds"
                 
 
                 if (maxRayDist <= startRayDist) {
-                    return float4(0.0, 0.0, 0.0, 1.0);
+                    o.col = float4(0.0, 0.0, 0.0, 1.0);
+                    o.cloudDepth = 0.0;
+                    return o;
+                }
+
+                // === 方案 C 阶段二: 非新鲜格 → 重投影采样历史 ===
+                if (!isFresh)
+                {
+                    float prevCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, i.uv, 0);
+                    if (prevCloudDepth <= 0.0)
+                    {
+                        o.col = HistoryTex.SampleLevel(samplerHistoryTex, i.uv, 0);
+                        o.cloudDepth = 0.0;
+                        return o;
+                    }
+                    float3 cloudPos = camPos + prevCloudDepth * viewDir;
+                    float4 reproj = mul(reprojMat, float4(cloudPos, 1.0));
+                    float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
+                    // reprojUV 来自 GL 风格 clip(uv.y=0 在底部),必须翻转为与 HistoryTex
+                    // 相同的约定(uv.y=0 在顶部,D3D),否则时序重投影采错行 → 云随镜头漂移/掉地底。
+                    reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
+                    float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV, 0);
+                    float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
+                    float historySceneDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV, 0);
+                    float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
+                    bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0) || (depthDiff >= historyDepthThreshold);
+                    if (badSample)
+                    {
+                        history = HistoryTex.SampleLevel(samplerHistoryTex, i.uv, 0);
+                        o.cloudDepth = prevCloudDepth;
+                    }
+                    else
+                    {
+                        o.cloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV, 0);
+                    }
+                    o.col = history;
+                    return o;
                 }
 
                 float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
@@ -587,6 +733,7 @@ Shader "Hidden/Clouds"
                 
 
 
+                [loop]
                 while(rayDist < maxRayDist && iter < 350) {
                     rayPos = camPos + rayDist * viewDir;
                     // get full or partial density sample at the current ray position and interpolate at the transition
@@ -644,17 +791,20 @@ Shader "Hidden/Clouds"
 
                 float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
+                reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
                 float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV.xy, 0);
                 
-                float currentDepth = DepthTex.Sample(samplerDepthTex, i.uv);
-                float historyDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV.xy);
+                float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
+                float historyDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV.xy, 0);
                 float depthDiff = abs(currentDepth - historyDepth) / max(currentDepth, 0.001);
                 float depthWeight = depthDiff < historyDepthThreshold ? 1.0 : 0.0;
                 
                 bool badSample = cloudSurfaceDist >= maxRayDist || (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
                 float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight;
                 
-                return (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
+                o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
+                o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
+                return o;
 
             }
             ENDCG

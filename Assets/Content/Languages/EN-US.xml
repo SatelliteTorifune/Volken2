@@ -77,6 +77,8 @@
     <s id="Volken.UI.Threshold">Threshold</s>
     <s id="Volken.UI.RayOffsetStrength">Ray Offset Strength</s>
     <s id="Volken.UI.HistoryBlend">History Blend</s>
+    <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale (1/N stepping)</s>
+    <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>

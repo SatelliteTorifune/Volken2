@@ -52,10 +52,29 @@ public class Volken
 
     private Volken()
     {
-        _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader");
+        try
+        {
+            _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader");
+        }
+        catch (Exception ex) { Mod.LOG("Volken: Cloud shader load error: " + ex); }
+
+        if (_cloudShader == null)
+        {
+            try { _cloudShader = Shader.Find("Hidden/Clouds"); }
+            catch (Exception ex) { Mod.LOG("Volken: Shader.Find fallback error: " + ex); }
+        }
+
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
         InitializeLayers();
         Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded;
+
+        // 尽早订阅 SOI(加载期 FlightScene 通常尚不可用则静默,由 OnSceneLoaded 再订阅)
+        try
+        {
+            Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+            Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+        }
+        catch { }
     }
 
     private void InitializeLayers()
@@ -131,7 +150,13 @@ public class Volken
         Mod.LOG("Refreshing config list");
         try
         {
-            _availableConfigs = CloudConfig.GetAllConfigNames(Game.Instance.FlightScene.CraftNode.Parent.Name);
+            var planetNode = Game.Instance?.FlightScene?.CraftNode?.Parent;
+            if (planetNode == null)
+            {
+                _availableConfigs = new List<string> { "Default" };
+                return;
+            }
+            _availableConfigs = CloudConfig.GetAllConfigNames(planetNode.Name);
             if (_availableConfigs.Count == 0) _availableConfigs.Add("Default");
             var nm = MainLayer?.currentConfigName ?? "Default";
             if (!_availableConfigs.Contains(nm)) _availableConfigs.Add(nm);
@@ -147,28 +172,32 @@ public class Volken
 
     private void OnSceneLoaded(object sender, SceneEventArgs e)
     {
-        RefreshConfigList();
-        planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
-        if (e.Scene != "Flight") return;
-
-        var main = MainLayer;
-        if (main == null) return;
-
-        string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
-        if (_availableConfigs.Count > 0)
+        try
         {
-            if (!planetConfigList.ExistsInConfig(planet))
-            { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
-            else main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
-            main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
-        }
-        else
-        {
-            main.currentConfigName = "Default";
-            main.config = CloudConfig.CreateDefault();
-            main.config.SaveToFile(planet, main.currentConfigName);
-            _availableConfigs.Add(main.currentConfigName);
-        }
+            RefreshConfigList();
+            planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
+            if (e.Scene != "Flight") return;
+
+            var main = MainLayer;
+            if (main == null) return;
+
+            var planetNode = Game.Instance?.FlightScene?.CraftNode?.Parent;
+            if (planetNode == null) return;
+            string planet = planetNode.Name;
+            if (_availableConfigs.Count > 0)
+            {
+                if (!planetConfigList.ExistsInConfig(planet))
+                { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
+                else main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
+                main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
+            }
+            else
+            {
+                main.currentConfigName = "Default";
+                main.config = CloudConfig.CreateDefault();
+                main.config.SaveToFile(planet, main.currentConfigName);
+                _availableConfigs.Add(main.currentConfigName);
+            }
 
         // Load Extra layer config (remembered per-planet)
         var extra = layers.Count > 1 ? layers[1] : null;
@@ -188,10 +217,24 @@ public class Volken
             }
         }
 
-        Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+        try
+        {
+            Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+            Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+        }
+        catch { }
 
         // Apply atmosphere-based enable/disable to ALL layers
-        bool hasAtmo = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
+        bool hasAtmo = false;
+        try
+        {
+            var pd = planetNode.PlanetData;
+            if (pd != null)
+            {
+                hasAtmo = pd.AtmosphereData.HasPhysicsAtmosphere;
+            }
+        }
+        catch { }
         foreach (var layer in layers)
         {
             if (layer?.config != null)
@@ -201,7 +244,7 @@ public class Volken
         // 方案 B: 首次进入飞行场景时加载当前星球的自带云 cubemap
         if (hasAtmo)
         {
-            StockCloudMap.LoadFor(Game.Instance.FlightScene.CraftNode.Parent);
+            StockCloudMap.LoadFor(planetNode);
         }
         else
         {
@@ -215,93 +258,116 @@ public class Volken
         farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
             ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
             : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
-
         Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
-            Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
+            planetNode.PlanetData.HasWater);
+        }
+        catch (Exception ex)
+        {
+            Mod.LOG("Volken: OnSceneLoaded ERROR: " + ex);
+        }
     }
 
     public void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
     {
-        if (craftNode.Parent.Parent == null)
+        try
         {
-            foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
-            StockCloudMap.Release();
-            return;
-        }
+            if (craftNode?.Parent == null) return;
 
-        if (craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere)
-        {
-            // 方案 B: 进入有大气星球 → 加载游戏自带云 cubemap(无则回退)
-            StockCloudMap.LoadFor(craftNode.Parent);
-            RefreshConfigList();
-            string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
-            var main = MainLayer;
-            if (main == null) return;
-
-            if (_availableConfigs.Count > 0)
+            if (craftNode.Parent.Parent == null)
             {
-                if (!planetConfigList.ExistsInConfig(planet))
-                { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
+                foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
+                StockCloudMap.Release();
+                return;
+            }
+
+            bool hasAtmo = false;
+            try
+            {
+                var pd = craftNode.Parent.PlanetData;
+                if (pd != null)
+                {
+                    hasAtmo = pd.AtmosphereData.HasPhysicsAtmosphere;
+                }
+            }
+            catch { }
+
+            if (hasAtmo)
+            {
+                // 方案 B: 进入有大气星球 → 加载游戏自带云 cubemap(无则回退)
+                StockCloudMap.LoadFor(craftNode.Parent);
+                RefreshConfigList();
+                string planet = Game.Instance?.FlightScene?.CraftNode?.Parent?.Name ?? craftNode.Parent.Name;
+                var main = MainLayer;
+                if (main == null) return;
+
+                if (_availableConfigs.Count > 0)
+                {
+                    if (!planetConfigList.ExistsInConfig(planet))
+                    { main.currentConfigName = _availableConfigs[0]; planetConfigList.AddConfig(planet, main.currentConfigName); }
+                    else
+                    {
+                        main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
+                        if (!_availableConfigs.Contains(main.currentConfigName))
+                        { main.currentConfigName = _availableConfigs[0]; planetConfigList.SetConfig(planet, main.currentConfigName, 0); }
+                    }
+                    main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
+                }
                 else
                 {
-                    main.currentConfigName = planetConfigList.GetConfigName(planet, 0);
-                    if (!_availableConfigs.Contains(main.currentConfigName))
-                    { main.currentConfigName = _availableConfigs[0]; planetConfigList.SetConfig(planet, main.currentConfigName, 0); }
+                    main.currentConfigName = "Default";
+                    main.config = CloudConfig.CreateDefault();
+                    main.config.SaveToFile(planet, main.currentConfigName);
+                    _availableConfigs.Add(main.currentConfigName);
+                    if (!planetConfigList.ExistsInConfig(planet)) planetConfigList.AddConfig(planet, main.currentConfigName);
+                    else planetConfigList.SetConfig(planet, main.currentConfigName, 0);
                 }
-                main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
+
+                // Load Extra layer config for this planet (before atmosphere check)
+                var extra = layers.Count > 1 ? layers[1] : null;
+                if (extra != null)
+                {
+                    string extraCfgName = planetConfigList.ExistsInConfig(planet)
+                        ? planetConfigList.GetConfigName(planet, 1) : null;
+                    if (!string.IsNullOrEmpty(extraCfgName))
+                    {
+                        try
+                        {
+                            var loaded = CloudConfig.LoadFromFile(planet, extraCfgName);
+                            extra.config.CopyFrom(loaded);
+                            extra.currentConfigName = extraCfgName;
+                        }
+                        catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                    }
+                }
+
+                // Apply atmosphere-based enable to ALL layers (respecting loaded config.enabled)
+                foreach (var layer in layers)
+                {
+                    if (layer?.config != null)
+                        layer.config.enabled = hasAtmo && layer.config.enabled;
+                }
+
+                VolkenUserInterface.Instance?.RebuildInspectorPanel();
+                var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+                cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
+                    ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>()
+                    : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
+                farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
+                    ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
+                    : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+
+                Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+                    craftNode.Parent.PlanetData.HasWater);
             }
             else
             {
-                main.currentConfigName = "Default";
-                main.config = CloudConfig.CreateDefault();
-                main.config.SaveToFile(planet, main.currentConfigName);
-                _availableConfigs.Add(main.currentConfigName);
-                if (!planetConfigList.ExistsInConfig(planet)) planetConfigList.AddConfig(planet, main.currentConfigName);
-                else planetConfigList.SetConfig(planet, main.currentConfigName, 0);
+                foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
+                if (MainLayer != null) MainLayer.currentConfigName = "Default";
             }
-
-            // Load Extra layer config for this planet (before atmosphere check)
-            var extra = layers.Count > 1 ? layers[1] : null;
-            if (extra != null)
-            {
-                string extraCfgName = planetConfigList.ExistsInConfig(planet)
-                    ? planetConfigList.GetConfigName(planet, 1) : null;
-                if (!string.IsNullOrEmpty(extraCfgName))
-                {
-                    try
-                    {
-                        var loaded = CloudConfig.LoadFromFile(planet, extraCfgName);
-                        extra.config.CopyFrom(loaded);
-                        extra.currentConfigName = extraCfgName;
-                    }
-                    catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
-                }
-            }
-
-            // Apply atmosphere-based enable to ALL layers (respecting loaded config.enabled)
-            bool hasAtmo = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-            foreach (var layer in layers)
-            {
-                if (layer?.config != null)
-                    layer.config.enabled = hasAtmo && layer.config.enabled;
-            }
-
-            VolkenUserInterface.Instance?.RebuildInspectorPanel();
-            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-            cloudRenderer = gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>() == null
-                ? gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>()
-                : gameCam.NearCamera.gameObject.GetComponent<CloudRenderer>();
-            farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
-                ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
-                : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
-
-            Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
-                Game.Instance.FlightScene.CraftNode.Parent.PlanetData.HasWater);
         }
-        else
+        catch (Exception ex)
         {
-            foreach (var l in layers) { if (l?.config != null) l.config.enabled = false; }
-            if (MainLayer != null) MainLayer.currentConfigName = "Default";
+            Mod.LOG("Volken: OnPlayerChangedSoi ERROR: " + ex);
         }
     }
 

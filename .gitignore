@@ -118,3 +118,5 @@ InitTestScene*.unity*
 #*.meta
 /Assets/ModTools
 /.dsh-vision-router
+*.jpg
+*.png

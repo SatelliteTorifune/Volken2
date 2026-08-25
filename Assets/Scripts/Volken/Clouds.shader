@@ -291,6 +291,7 @@ Shader "Hidden/Clouds"
             float atmoBlendFactor;
             float maxDepth;
             float historyBlend;
+            float _DiagBlend;   // 诊断:>0 时把历史混合各项因子编码到输出(排查割裂线用,正常=0)
             matrix reprojMat;
             float currentRotation;
             // === 方案 C: 时序超采样 ===
@@ -764,6 +765,23 @@ Shader "Hidden/Clouds"
 
                 bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
                 float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight * edgeFade * cloudGate;
+
+                // === 诊断:把历史混合各项因子编码到输出(排查割裂线用,正常时 _DiagBlend=0) ===
+                // 1=depthWeight 2=edgeFade 3=cloudGate 4=finalBlend/historyBlend
+                // 5=depthDiff/threshold(>1=超阈值) 6=|reprojUV-i.uv|(历史采样位移量) 7=noCloud(1=当前无云)
+                if (_DiagBlend > 0.5)
+                {
+                    float dv = _DiagBlend < 1.5 ? depthWeight
+                            : _DiagBlend < 2.5 ? edgeFade
+                            : _DiagBlend < 3.5 ? cloudGate
+                            : _DiagBlend < 4.5 ? (finalHistoryBlend / max(historyBlend, 1e-3))
+                            : _DiagBlend < 5.5 ? saturate(depthDiff / max(historyDepthThreshold, 1e-4))
+                            : _DiagBlend < 6.5 ? length(reprojUV - i.uv)
+                            : (cloudSurfaceDist >= maxRayDist ? 1.0 : 0.0);
+                    o.col = float4(dv, dv, dv, dv);
+                    o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
+                    return o;
+                }
                 
                 o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
                 o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;

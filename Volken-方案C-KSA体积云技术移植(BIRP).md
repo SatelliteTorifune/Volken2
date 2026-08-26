@@ -341,30 +341,49 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 
 ---
 
-## 12. 实施状态(2026-08-25 更新)
+## 12. 实施状态(2026-08-27 更新)
 
 ### 已完成
 
 | 项 | 位置 | 说明 |
 |---|---|---|
 | 最优采样序列 | `UpscalingPixelSequence.cs` | KSA 算法直接移植,格网变化时重建缓存 |
-| 每帧 1/N 子集步进 | `Clouds.shader` `isFresh`(L584) | `_UseTemporal=0` 或冷启动帧恒真 → 纯回退 |
-| 冷启动 | `CloudRenderer` frameNumber==0 | 该帧全步进(`_Upscale=1`),RT重建/切天体/切SOI 时重置 |
-| 云空间重投影(近似版) | `CloudRenderer.BuildCloudSpaceRepro` + `prevCloudAngle` | 自转+东西风折算经度角,时序/非时序共用 |
-| **割裂线根因修复(前置)** | `CloudRenderer.L282` | reprojMat 改用 GPU 投影,修好重投影 Y 镜像(时序/非时序同步受益) |
-| `!isFresh` 重投影+深度校验 | `Clouds.shader` L617-665 | 校验通过才用重投影历史;失败→上一帧全分辨率 `PrevUpscaledTex` 兜底;再无→透明 |
+| **KSA 完整结构(2026-08-25)** | `Clouds.shader` / `CloudRenderer.cs` / `CloudLayer.cs` | 低清每帧全量 raymarch + 全清时序上采样(行细节见下) |
+| Clouds pass = 纯 raymarch | `Clouds.shader` `Pass "Clouds"` | 每帧全量 raymarch(低清),MRT:颜色 + 云面距离 + 本帧运动矢量 `mv=reprojUV−i.uv`;已去掉 isFresh 子集 / !isFresh 历史路径 / fresh 格历史混合 |
+| DilateMV | `Clouds.shader` `Pass "DilateMV"` | 本帧 3×3 反距离加权膨胀 ×3 → 供同帧 Upscale 使用(**无 1 帧滞后**) |
+| **Upscale = KSA 时序核心** | `Clouds.shader` `Pass "Upscale"`(单目标颜色,走 Graphics.Blit) | TSS 开:新鲜格取本帧 raymarch;非新鲜格 `lerp(重投影历史, 本帧, tssBlend)`。**运动自适应(2026-08-26)**:`tssBlend = lerp(_TssBlend=0.5, 1.0, saturate(|MV|·200))`——快拖时非新鲜格取纯本帧(边缘不拖影),静止时回到 0.5 降噪。**本帧无云但历史有云 → `lerp(历史, 本帧, ≥0.85)` 收敛(不再整份保留旧云,消除快速拖动的边缘鬼影)**。历史接受:深度软过渡 + 历史处有云。TSS 关:运动残影 `lerp(本帧, 重投影历史, historyBlend=0.90)`。⚠ 曾用双 MRT+DrawMeshNow(0 深度)不渲染 → 改回 Blit |
+| 历史全清写回 | `CloudRenderer.OnRenderImage` | Upscale 输出 → `historyTex`;全清场景深度 → `historyDepthTex`;低清 `cloudDepthTex` Blit 上采样 → `historyCloudDepthTex`(云面距离历史) |
+| 低清 RT 布局 | `CloudLayer.CreateRenderTextures` | TSS 开:`cloudTex/cloudDepth/cloudMV` = 全清÷格网(ray 数≈原 1/N 子集,每帧全量);历史一律全清。TSS 关:cloudRes = 全清(基线),上采样即运动残影 |
+| **移除运动门控** | `CloudRenderer` | KSA 结构下每像素每帧都有本帧数据,运动由本帧 MV 重投影 + 本帧 lerp 处理;删除 `kMotionGateUv` 及 prevCamPos/prevCamRot 估计与 TSSMOTION 日志 |
 
 ### 已知缺口(建议后续)
 
+- **N/S 风**(§5 已知局限):非刚体 Y 旋转,强南北风下云空间重投影近似失效 → 该方向的 MV 也不准,需完整 worldToCloud 矩阵。
 - **flip/flop 双缓冲**(§4.5/§6):现为单 `historyTex`。当前架构 pass 内读历史、pass 后写历史,无读写竞争,单缓冲可用;若追求与 KSA 完全一致或排查跨帧串扰再升级。
-- **运动矢量 + 膨胀**(§4.3/4.4):云自转时无 MV 的理论鬼影上限,靠深度校验 + 云空间重投影已基本覆盖;高速相机边角仍有极限情况,可后续补 3×3 膨胀。
-- **repair pass**(§4.2):冷启动已被 frameNumber=0 全步进覆盖;运动瞬移靠 `PrevUpscaledTex` 兜底覆盖,暂不需要。
-- **N/S 风**(§5 已知局限):非刚体 Y 旋转,强南北风下重投影近似失效,需完整 worldToCloud 矩阵。
+- **repair pass**(§4.2):冷启动(历史为空)已被 Upscale 的"本帧有效"分支覆盖(全屏直接拿本帧 raymarch);运动失效由"历史校验失败 → 本帧兜底"覆盖,暂不需要。
+- **低清 raymarch 的蓝噪声**:blueNoiseOffset 逐帧变化,低清全量 raymarch 每帧不同 → 时序累积同时起降噪与超采样作用(不拖影的代价是静态时降噪收敛由 `_TssBlend` 控制)。
 
 ### 验收建议(下次进游戏)
 
-1. 关 `useTemporalUpscale` → 与本次修复前逐字节一致(纯回退)。
+1. 关 `useTemporalUpscale` → 运动残影(历史权重 0.90)恢复,行为与旧版一致(全清纯 raymarch + MV 重投影历史)。
 2. 开 3×3:静止视角静止云体,画面随时间锐化到近似全分辨率、无扫描网格。
-3. 相机平移/旋转 + 云自转:无鬼影、断层、闪烁;割裂线不再复发。
+3. **相机平移/缩放 + 云自转:无拖影、无鬼影、无断层**(KSA 结构核心目标)。
 4. 冷启动(切星球/首帧):1~2 帧收敛,无持久黑洞。
-5. 帧率:同档位 ≥ 现状,或同帧率下 `resolutionScale` 可再降一档。
+5. 帧率:同档位 ≥ 现状(低清 raymarch 的 ray 数 ≈ 原 1/N 子集)。
+
+### 2026-08-27 收工状态
+
+**拖影结论**:网格 2 + 快速拖动云层边缘的残影已降到可接受程度(非零但轻微,不再干扰)。
+- 运动自适应阈值 `|MV|·120` → `|MV|·200`(约 7 屏像素/帧即切纯本帧,边缘像素更早饱和)。
+- 本帧无云分支 `≥0.75` → `≥0.85`(旧云 1 帧内降到 15%、2 帧内 ~2%)。
+- 若静止出现噪点/闪 → 回调 `200→150`、`0.85→0.75`。
+
+**诊断清理(2026-08-27)**:删除全部 TSS 诊断回读——`CloudRenderer.cs` 的 `LogMVStats`/`_mvReadTex`(含 MVSTATS 日志)。
+`Mod.LOG` 仅保留错误处理(OnRenderImage ERROR / 配置读写错误等)。CloudRenderer.cs 现 484 行,大括号平衡。
+
+**JNO 冲突(2026-08-27,已定位,详见 `Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md`)**:
+"看不到云 + 自带云开关锁死"根因 = JNOmultiplayerTest 的 `MultiPlayerUI.OnSceneLoaded` 在
+`inspectorPanel == null` 时抛 NRE → 中断 SceneLoaded 事件链 → Volken.OnSceneLoaded 被跳过
+(未建 CloudRenderer + 未加载 StockCloudMap)。修复:JNO 侧 `MultiPlayerUI.OnSceneLoaded` 加 null 保护(手动应用);
+Volken 侧曾加"自愈"(`EnsureCloudInitIfNeeded` + `Update` 驱动)兜底,**已按需撤除**,Volken 回到纯事件驱动。
+

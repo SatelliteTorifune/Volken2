@@ -244,11 +244,11 @@ Shader "Hidden/Clouds"
             Texture2D<float> HistoryCloudDepthTex;
             SamplerState samplerHistoryCloudDepthTex;
 
-            Texture2D<float4> PrevUpscaledTex;   // 上一帧全分辨率结果(时序 !isFresh 失败兜底)
-            SamplerState samplerPrevUpscaledTex;
-
             Texture2D<float> CloudDepthTex;
             SamplerState samplerCloudDepthTex;
+
+            Texture2D<float4> CloudMVDilatedTex;   // 本帧 3×3 膨胀后的运动矢量(Upscale 重投影用)
+            SamplerState samplerCloudMVDilatedTex;
 
             //Cloud Shape
             float cloudDensity;
@@ -571,6 +571,7 @@ Shader "Hidden/Clouds"
             {
                 float4 col : SV_Target0;
                 float cloudDepth : SV_Target1;
+                float2 motionVector : SV_Target2;   // 运动矢量 = reprojUV−i.uv(仅新鲜格写真实值,其余 0)
             };
 
             CloudOut frag(vert2Frag i)
@@ -580,11 +581,7 @@ Shader "Hidden/Clouds"
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
 
-                // === 方案 C: 本像素是否属于"本帧要步进的格子" ===
-                // 关闭时(_UseTemporal<=0.5)或冷启动帧(_Upscale=1)恒为真 → 走原路径。
-                float2 cellCoord = floor(i.uv * _LowResSize);
-                float2 inCell = fmod(cellCoord, _Upscale);
-                bool isFresh = (_UseTemporal <= 0.5) || all(inCell == _SampleCell);
+                // (KSA 结构:本 pass 每帧全量 raymarch,isFresh 格网判断移到 Upscale pass)
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
@@ -595,6 +592,7 @@ Shader "Hidden/Clouds"
                 if (intersect.y < 0.0) {
                     o.col = float4(0.0, 0.0, 0.0, 1.0);
                     o.cloudDepth = 0.0;
+                    o.motionVector = float2(0.0, 0.0);
                     return o;
                 }
                 
@@ -611,59 +609,11 @@ Shader "Hidden/Clouds"
                 if (maxRayDist <= startRayDist) {
                     o.col = float4(0.0, 0.0, 0.0, 1.0);
                     o.cloudDepth = 0.0;
+                    o.motionVector = float2(0.0, 0.0);
                     return o;
                 }
 
-                // === 方案 C 阶段二: 非新鲜格 → 重投影采样历史 ===
-                if (!isFresh)
-                {
-                    // 用上一帧该像素的云面距离重建云点,经云空间重投影到上一帧屏幕位置。
-                    // reprojMat 已用 GPU 投影(CloudRenderer 割裂线修复),reprojUV 与 i.uv 同约定,
-                    // Y 翻转与新鲜路径(L733)一致。
-                    // 旧实现的硬回退 HistoryTex.Sample(i.uv) 在运动/旋转时会采到"本像素、上一帧
-                    // 位置"的错位历史 → 鬼影闪烁;现改为:校验通过才用重投影历史,否则用上一帧
-                    // 全分辨率兜底(PrevUpscaledTex),再不行输出透明(合成层忽略,本格下个周期补齐)。
-                    float prevCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, i.uv, 0);
-                    float4 history = float4(0.0, 0.0, 0.0, 0.0);
-                    float histCloudDepth = 0.0;
-                    bool historyOk = false;
-                    if (prevCloudDepth > 0.0)
-                    {
-                        float3 cloudPos = camPos + prevCloudDepth * viewDir;
-                        float4 reproj = mul(reprojMat, float4(cloudPos, 1.0));
-                        float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
-                        reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
-                        bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
-                        if (inBounds)
-                        {
-                            float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
-                            float historySceneDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV, 0);
-                            float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
-                            histCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV, 0);
-                            historyOk = (depthDiff < historyDepthThreshold) && (histCloudDepth > 0.0);
-                            if (historyOk)
-                                history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV, 0);
-                        }
-                    }
-                    if (historyOk)
-                    {
-                        o.col = history;
-                        o.cloudDepth = histCloudDepth;
-                        return o;
-                    }
-                    // 兜底:上一帧全分辨率已收敛结果(位置相邻,不引入错位鬼影);无内容则透明。
-                    float4 fallback = PrevUpscaledTex.SampleLevel(samplerPrevUpscaledTex, i.uv, 0);
-                    if (fallback.a > 0.01)
-                    {
-                        o.col = fallback;
-                        o.cloudDepth = prevCloudDepth;
-                        return o;
-                    }
-                    o.col = float4(0.0, 0.0, 0.0, 0.0);
-                    o.cloudDepth = 0.0;
-                    return o;
-                }
-
+                // (KSA 结构:isFresh 格网 + 时序混合已移到 Upscale pass;本 pass 每帧全量 raymarch)
                 float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
                 float rayDist = startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5;
 
@@ -747,43 +697,24 @@ Shader "Hidden/Clouds"
                 float atmoBlend = exp(-atmoBlendFactor * (cloudSurfaceDist - startRayDist));
                 float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor.rgb, min(1.0, transmittance + 1.0 - atmoBlend));
 
+                // 运动矢量(云空间重投影):云面点 本帧屏幕位置 → 上一帧屏幕位置。
+                // KSA 结构:本 pass 纯 raymarch(每帧全量,低清),时序混合/重投影移到 Upscale pass。
                 float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
                 reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
-                float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV.xy, 0);
-                
-                // === 割裂线修复(2026-08-24):历史接受判据从二值改为软过渡 ===
-                // 现象:屏幕中段出现随相机俯仰张开/收拢的两条水平割裂线(TSS关+运动残影开),
-                //       TSS开时线附近云闪烁。根因:depthWeight 用场景深度做硬 0/1 判据,
-                //       在等深度轮廓/云壳边界处整排翻转 → 一侧混历史、一侧纯新鲜 → 硬接缝。
-                float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
-                float historyDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV.xy, 0);
-                float depthDiff = abs(currentDepth - historyDepth) / max(currentDepth, 0.001);
-                // 1) 深度权重软过渡:depthDiff 从 0.5×threshold 平滑升到 threshold
-                float depthWeight = 1.0 - smoothstep(historyDepthThreshold * 0.5, historyDepthThreshold, depthDiff);
 
-                // 2) 云结束边渐变:cloudSurfaceDist 接近 maxRayDist 时混合淡出(约 2 步长),
-                //    避免"有云整段混合/无云完全不混合"的硬接缝
-                float edgeFade = saturate((maxRayDist - cloudSurfaceDist) / max(2.0 * stepSize, 1.0));
-
-                // 3) 历史处有云才混(用上一帧云面距离):防止"云移动后把上一帧无云处当历史"的残影
-                float prevCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV.xy, 0);
-                float cloudGate = prevCloudDepth > 0.0 ? 1.0 : 0.0;
-
-                bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
-                float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight * edgeFade * cloudGate;
-
-                o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
+                o.col = raymarchOutput;
                 o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
+                o.motionVector = (cloudSurfaceDist < maxRayDist) ? (reprojUV - i.uv) : float2(0.0, 0.0);
                 return o;
 
             }
             ENDCG
         }
-        
+
         Pass
         {
-            Name "Upscale"
+            Name "DilateMV"
 
             CGPROGRAM
             #pragma vertex vert
@@ -811,61 +742,168 @@ Shader "Hidden/Clouds"
                 return o;
             }
 
-            sampler2D _CameraDepthTexture;
-
             Texture2D<float4> _MainTex;
             SamplerState sampler_MainTex;
 
-            Texture2D<float> CombinedDepthTex;
-            SamplerState samplerCombinedDepthTex;
-
-            Texture2D<float> LowResDepthTex;
-            SamplerState samplerLowResDepthTex;
-
-            bool isNativeRes;
-            float depthThreshold;
-
-            // compare lowres upscaled depth to fullres depth and use closest matching neighbour to reduce aliasing
-            float4 DepthAwareUpsample(float2 uv)
-            {
-                float d0 = CombinedDepthTex.Sample(samplerCombinedDepthTex, uv);
-                float d1 = LowResDepthTex.Sample(samplerLowResDepthTex, uv);
-                float d2 = LowResDepthTex.Sample(samplerLowResDepthTex, uv, int2(0, 1));
-                float d3 = LowResDepthTex.Sample(samplerLowResDepthTex, uv, int2(0, -1));
-                float d4 = LowResDepthTex.Sample(samplerLowResDepthTex, uv, int2(1, 0));
-                float d5 = LowResDepthTex.Sample(samplerLowResDepthTex, uv, int2(-1, 0));
-
-                d1 = abs(d0 - d1);
-                d2 = abs(d0 - d2);
-                d3 = abs(d0 - d3);
-                d4 = abs(d0 - d4);
-                d5 = abs(d0 - d5);
-
-                float dmin = min(min(min(min(d1,d2),d3),d4),d5);
-                float4 value;
-
-                if (dmin / d0 < depthThreshold)
-                    value = _MainTex.Sample(sampler_MainTex, uv);
-                else if (dmin == d1)
-                    value = _MainTex.Sample(sampler_MainTex, uv);
-                else if (dmin == d2)
-                    value = _MainTex.Sample(sampler_MainTex, uv, int2(0, 1));
-                else if (dmin == d3)
-                    value = _MainTex.Sample(sampler_MainTex, uv, int2(0, -1));
-                else if (dmin == d4)
-                    value = _MainTex.Sample(sampler_MainTex, uv, int2(1, 0));
-                else
-                    value = _MainTex.Sample(sampler_MainTex, uv, int2(-1, 0));
-                
-                return value;
-            }
-
+            // 运动矢量膨胀:3×3 邻域对【非零 MV】做反距离加权平均,把新鲜格的 MV 平滑传遍全屏,
+            // 让 !isFresh 路径任意像素都有可用的重投影位移。不用"模长最大"的原因是:
+            // 缩放/推进(相机沿视轴移动)的 MV 场是径向的(中心 0、边缘最大),取最大会把外侧
+            // 大 MV 扩散进内侧 → 重投影过冲 → 缩放拖影;反距离加权在径向场下平滑插值不过冲,
+            // 在均匀场(平移)下仍得到均匀值。重复多次可覆盖整个 3×3 采样格网(每帧连跑 3 次)。
             float4 frag(v2f i) : SV_Target
             {
-                if (isNativeRes)
-                    return _MainTex.Sample(sampler_MainTex, i.uv);
+                float2 acc = float2(0.0, 0.0);
+                float wsum = 0.0;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    float2 mv = _MainTex.Sample(sampler_MainTex, i.uv, int2(dx, dy)).xy;
+                    if (dot(mv, mv) > 1e-9)
+                    {
+                        float w = 1.0 / (max(abs((float)dx), abs((float)dy)) + 0.5);
+                        acc += mv * w;
+                        wsum += w;
+                    }
+                }
+                return float4((wsum > 0.0) ? acc / wsum : float2(0.0, 0.0), 0.0, 0.0);
+            }
+            ENDCG
+        }
+        
+        Pass
+        {
+            Name "Upscale"
 
-                return DepthAwareUpsample(i.uv);
+            // === KSA 完整结构:本 pass 是全清时序上采样核心 ===
+            // 每帧低清 raymarch(Clouds pass)已含全部像素的【本帧】数据 + 运动矢量;
+            // 这里对每个全清像素:
+            //   TSS 开:新鲜格(格网 1/N)取本帧 raymarch 写入历史;非新鲜格 lerp(重投影历史, 本帧)
+            //           → 本帧分量始终在场 → 运动/缩放也不拖影(不再依赖滞后的上一帧数据)。
+            //   TSS 关:运动残影 = lerp(本帧, 重投影历史, historyBlend)。
+            // 历史接受判据(割裂线修复的软过渡)从 Clouds pass 移到这里。
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                return o;
+            }
+
+            Texture2D<float4> _MainTex;             // 本帧低清 raymarch 颜色(CloudTex)
+            SamplerState sampler_MainTex;
+            Texture2D<float> CloudDepthTex;         // 本帧低清 raymarch 云面距离
+            SamplerState samplerCloudDepthTex;
+            Texture2D<float4> CloudMVDilatedTex;    // 本帧膨胀后的运动矢量(当前帧,无 1 帧滞后)
+            SamplerState samplerCloudMVDilatedTex;
+            Texture2D<float> CombinedDepthTex;      // 全清场景深度
+            SamplerState samplerCombinedDepthTex;
+            Texture2D<float4> HistoryTex;           // 上一帧全清上采样结果
+            SamplerState samplerHistoryTex;
+            Texture2D<float> HistoryDepthTex;       // 上一帧全清场景深度
+            SamplerState samplerHistoryDepthTex;
+            Texture2D<float> HistoryCloudDepthTex;  // 上一帧全清云面距离
+            SamplerState samplerHistoryCloudDepthTex;
+
+            float _UseTemporal;       // 0=TSS关(运动残影),1=TSS开(KSA时序)
+            float _TssBlend;          // TSS 非新鲜格的本帧混合权重(本帧分量越大越追运动)
+            float historyBlend;       // TSS关:历史权重(运动残影,如 0.90)
+            float historyDepthThreshold;
+            float2 _SampleCell;
+            float2 _Upscale;
+            float2 _LowResSize;
+
+            // 单目标输出:颜色走 Graphics.Blit(自动绑 _MainTex,已由 Dilate/深度 pass 验证可靠)。
+            // 云面距离历史由 CloudRenderer 直接 Blit 低清 cloudDepthTex → 全清 historyCloudDepthTex。
+            float4 frag(v2f i) : SV_Target
+            {
+                // 本帧低清 raymarch(双线性上采样到全清)+ 本帧膨胀 MV
+                float4 fresh = _MainTex.Sample(sampler_MainTex, i.uv);
+                float freshDepth = CloudDepthTex.Sample(samplerCloudDepthTex, i.uv);
+                // 本帧 raymarch 在此像素是否找到云:看云面距离(>0 有云)。
+                // 注意不能用 fresh.a:无云时 raymarchOutput.a≈1(不透明黑),a 无法区分云/无云。
+                bool hasFreshCloud = freshDepth > 0.0;
+                float2 mv = CloudMVDilatedTex.Sample(samplerCloudMVDilatedTex, i.uv).xy;
+                float2 reprojUV = i.uv + mv;
+                bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
+
+                // 历史接受判据:深度软过渡 + 历史处有云(割裂线修复,从 Clouds pass 移入)
+                float currentDepth = CombinedDepthTex.Sample(samplerCombinedDepthTex, i.uv);
+                float historySceneDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV);
+                float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
+                float depthWeight = 1.0 - smoothstep(historyDepthThreshold * 0.5, historyDepthThreshold, depthDiff);
+                float prevCloudDepth = HistoryCloudDepthTex.Sample(samplerHistoryCloudDepthTex, reprojUV);
+                float cloudGate = prevCloudDepth > 0.0 ? 1.0 : 0.0;
+                float validHist = (inBounds ? 1.0 : 0.0) * depthWeight * cloudGate;
+
+                float4 history = HistoryTex.Sample(samplerHistoryTex, reprojUV);
+                float4 result;
+
+                if (_UseTemporal < 0.5)
+                {
+                    // === TSS 关:运动残影(全清 raymarch + 重投影历史) ===
+                    float blend = historyBlend * validHist;
+                    result = (1.0 - blend) * fresh + blend * history;
+                }
+                else
+                {
+                    // === TSS 开:KSA 时序 ===
+                    // 运动自适应混合:快速拖动(|MV| 大)时非新鲜格加大本帧分量 → 边缘不拖影;
+                    // 静止时回到 _TssBlend 时序降噪。MV 单位是低清 UV(0..1):
+                    // ~0.005 UV(网格2 时约 7 屏像素/帧)即视为快移 → 纯本帧。
+                    float mvLen = length(mv);
+                    float motionW = saturate(mvLen * 200.0);
+                    float tssBlend = lerp(_TssBlend, 1.0, motionW);
+
+                    float2 cellCoord = floor(i.uv * _LowResSize);
+                    float2 inCell = fmod(cellCoord, _Upscale);
+                    bool isFresh = all(inCell == _SampleCell);
+
+                    if (isFresh && hasFreshCloud)
+                    {
+                        result = fresh;                 // 新鲜格:本帧 raymarch 直接写历史
+                    }
+                    else if (hasFreshCloud && validHist > 0.5)
+                    {
+                        // 非新鲜格:lerp(重投影历史, 本帧) → 历史降噪,本帧追运动;快移 → 纯本帧
+                        result = lerp(history, fresh, tssBlend);
+                    }
+                    else if (hasFreshCloud)
+                    {
+                        result = fresh;                 // 本帧有效、历史不可用 → 直接本帧
+                    }
+                    else if (validHist > 0.5)
+                    {
+                        // 本帧无云、历史有云:拖影主因。当前帧是真实值 → 向"无云"(本帧)收敛,
+                        // 不再整份保留旧云(旧逻辑 result=history 会让鬼影跟着云一直拖)。
+                        // 0.85:残影 1 帧内降到 15%、2 帧内 ~2%,边缘后撤痕迹基本不可见。
+                        result = lerp(history, fresh, max(tssBlend, 0.85));
+                    }
+                    else
+                    {
+                        result = float4(0.0, 0.0, 0.0, 0.0);
+                    }
+                }
+
+                return result;
             }
             ENDCG
         }

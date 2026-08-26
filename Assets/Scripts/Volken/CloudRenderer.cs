@@ -31,6 +31,10 @@ public class CloudRenderer : MonoBehaviour
     private Camera cam;
     private static Mesh _fullscreenTriangle; // 阶段二 MRT 全屏三角形
 
+    // KSA 完整结构:非新鲜格的本帧 raymarch 混合权重(lerp(重投影历史, 本帧, _TssBlend))。
+    // 本帧分量越大越追运动(不拖影),历史降噪越弱;0.5 平衡追踪与降噪。
+    private const float kTssFreshBlend = 0.5f;
+
     public CloudRenderer()
     {
         cam = GetComponent<Camera>();
@@ -233,41 +237,40 @@ public class CloudRenderer : MonoBehaviour
             mat.SetMatrix("planetToBody", bodyFromFrame);
         }
 
-        // === 方案 C: 时序超采样(每帧 1/N 子集步进 + 历史累积) ===
-        // 关闭 → _UseTemporal=0,shader 走现状路径(逐字节一致)。
-        // 开启 → frameNumber==0 冷启动全步进(_Upscale=1 → 所有格都新鲜),此后每帧按最优采样序列
-        //        只步进 1/(upscaleX*upscaleY) 的格子,其余格在 shader 里复用上一帧累积历史。
+        // === 方案 C: KSA 完整结构(2026-08-25) ===
+        // 每帧流程:Clouds pass 低清全量 raymarch(+ 本帧 MV)→ DilateMV 膨胀本帧 MV →
+        // Upscale pass 全清时序累积(新鲜格取本帧、非新鲜格 lerp(重投影历史, 本帧))。
+        // 每个像素每帧都有【本帧】raymarch 数据 → 运动/缩放也不再拖影(不依赖滞后的上一帧数据),
+        // 因此运动门控已移除;格网只决定"哪些格把本帧直接写历史"。
         var tcfg = layer.config;
         int upX = Mathf.Max(1, tcfg.upscaleX);
         int upY = Mathf.Max(1, tcfg.upscaleY);
         int totalCells = upX * upY;
+
+        // 时序混合权重:
+        //   _TssBlend  = 非新鲜格的本帧分量(追运动;越大越追、历史降噪越弱)
+        //   historyBlend = TSS 关时的历史权重(运动残影 0.90);TSS 开时 shader 不使用
+        mat.SetFloat("_TssBlend", kTssFreshBlend);
+        mat.SetFloat("historyBlend", tcfg.historyBlend);
+
         if (tcfg.useTemporalUpscale)
         {
             if (layer.temporalSequence == null || layer.temporalSequence.Length != totalCells)
             {
                 layer.temporalSequence = UpscalingPixelSequence.FindOptimalSamplingSequence(upX, upY);
-                layer.frameNumber = 0;   // 格网变化 → 历史相位作废 → 冷启动全步进一帧
+                layer.frameNumber = 0;   // 格网变化 → 历史相位作废 → 冷启动
             }
-
-            if (layer.frameNumber == 0)
-            {
-                // 冷启动/重建:该帧所有格子都步进,避免历史为空时的起步大洞
-                mat.SetVector("_SampleCell", Vector2.zero);
-                mat.SetVector("_Upscale", Vector2.one);
-            }
-            else
-            {
-                int cell = layer.temporalSequence[(layer.frameNumber - 1) % totalCells];
-                mat.SetVector("_SampleCell", new Vector2(cell % upX, cell / upX));
-                mat.SetVector("_Upscale", new Vector2(upX, upY));
-            }
-            layer.frameNumber++;
+            // 冷启动无需特判全步进:历史为空时 Upscale 走"本帧有效"分支 → 全屏直接拿本帧 raymarch。
+            int cell = layer.temporalSequence[layer.frameNumber % totalCells];
+            mat.SetVector("_SampleCell", new Vector2(cell % upX, cell / upX));
+            mat.SetVector("_Upscale", new Vector2(upX, upY));
             mat.SetFloat("_UseTemporal", 1f);
+            layer.frameNumber++;
         }
         else
         {
             mat.SetVector("_SampleCell", Vector2.zero);
-            mat.SetVector("_Upscale", Vector2.one);
+            mat.SetVector("_Upscale", new Vector2(upX, upY));
             mat.SetFloat("_UseTemporal", 0f);
         }
         mat.SetVector("_LowResSize", new Vector2(
@@ -340,11 +343,17 @@ public class CloudRenderer : MonoBehaviour
                 return;
             }
 
-            // 1. Check RTs for all active layers (create on first frame or resolution change)
+            // 1. Check RTs for all active layers (create on first frame or config change:
+            //    分辨率 / TSS 开关 / 格网变化都会改变 cloudRes 与历史尺寸 → 重建)
             foreach (var layer in activeLayers)
             {
+                bool tss = layer.config.useTemporalUpscale;
+                int upX = Mathf.Max(1, layer.config.upscaleX);
+                int upY = Mathf.Max(1, layer.config.upscaleY);
                 bool needsCreate = layer.cloudTex == null || !layer.cloudTex.IsCreated() ||
-                    Mathf.Abs(layer.currentResolutionScale - layer.config.resolutionScale) > 0.001f;
+                    Mathf.Abs(layer.currentResolutionScale - layer.config.resolutionScale) > 0.001f ||
+                    layer.currentTemporal != (tss ? 1 : 0) ||
+                    layer.currentUpX != upX || layer.currentUpY != upY;
                 if (needsCreate)
                 {
                     layer.ReleaseRenderTextures();
@@ -396,33 +405,47 @@ public class CloudRenderer : MonoBehaviour
             {
                 SetLayerDynamicProperties(layer);
 
-                layer.material.SetTexture("DepthTex", lowResDepthTex);
-                layer.material.SetTexture("HistoryTex", layer.historyTex);
-                layer.material.SetTexture("HistoryDepthTex", layer.historyDepthTex);
-                layer.material.SetTexture("HistoryCloudDepthTex", layer.historyCloudDepthTex);
-                layer.material.SetTexture("PrevUpscaledTex", layer.upscaledCloudTex);
-
-                // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat)
-                var mrt = new RenderBuffer[] { layer.cloudTex.colorBuffer, layer.cloudDepthTex.colorBuffer };
+                layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
+                // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat) + cloudMVTex(RG 本帧运动矢量)
+                var mrt = new RenderBuffer[] { layer.cloudTex.colorBuffer, layer.cloudDepthTex.colorBuffer, layer.cloudMVTex.colorBuffer };
                 Graphics.SetRenderTarget(mrt, layer.cloudTex.depthBuffer);
                 layer.material.SetPass(cloudsPass);
                 Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
 
-                // Copy to history
-                Graphics.Blit(layer.cloudTex, layer.historyTex);
-                Graphics.Blit(lowResDepthTex, layer.historyDepthTex);
-                Graphics.Blit(layer.cloudDepthTex, layer.historyCloudDepthTex);
+                // 运动矢量膨胀:cloudMVTex → tmp1 → tmp2 → cloudMVDilatedTex(3 次 3×3)。
+                // KSA 结构下这是【本帧】膨胀,供同帧 Upscale 使用(消除 1 帧滞后)。
+                int dilatePass = layer.material.FindPass("DilateMV");
+                if (dilatePass >= 0)
+                {
+                    var mvTmp1 = RenderTexture.GetTemporary(layer.cloudMVTex.width, layer.cloudMVTex.height, 0, layer.cloudMVTex.format);
+                    var mvTmp2 = RenderTexture.GetTemporary(layer.cloudMVTex.width, layer.cloudMVTex.height, 0, layer.cloudMVTex.format);
+                    Graphics.Blit(layer.cloudMVTex, mvTmp1, layer.material, dilatePass);
+                    Graphics.Blit(mvTmp1, mvTmp2, layer.material, dilatePass);
+                    Graphics.Blit(mvTmp2, layer.cloudMVDilatedTex, layer.material, dilatePass);
+                    RenderTexture.ReleaseTemporary(mvTmp1);
+                    RenderTexture.ReleaseTemporary(mvTmp2);
+                }
             }
 
-            // 4. Upscale each layer
+            // 4. Upscale each layer (KSA 时序核心,走 Graphics.Blit 单目标输出,_MainTex 自动绑 cloudTex。
+            //    不用 MRT+DrawMeshNow:此前双 MRT(0 深度)在该路径上不渲染 → upscaled 恒黑 → 看不到云)
             int upscalePass = matRef.FindPass("Upscale");
             foreach (var layer in activeLayers)
             {
-                layer.material.SetTexture("CombinedDepthTex", combinedDepthTex);
-                layer.material.SetTexture("LowResDepthTex", lowResDepthTex);
-                layer.material.SetInt("isNativeRes",
-                    (layer.cloudTex.width == source.width && layer.cloudTex.height == source.height) ? 1 : 0);
+                var mat = layer.material;
+                mat.SetTexture("CloudDepthTex", layer.cloudDepthTex);
+                mat.SetTexture("CloudMVDilatedTex", layer.cloudMVDilatedTex);   // 本帧膨胀 MV
+                mat.SetTexture("CombinedDepthTex", combinedDepthTex);
+                mat.SetTexture("HistoryTex", layer.historyTex);
+                mat.SetTexture("HistoryDepthTex", layer.historyDepthTex);
+                mat.SetTexture("HistoryCloudDepthTex", layer.historyCloudDepthTex);
                 Graphics.Blit(layer.cloudTex, layer.upscaledCloudTex, layer.material, upscalePass);
+
+                // 时序写回:全清上采样结果 → 历史(下一帧在 Upscale 里按 MV 重投影采样);
+                // 云面距离历史 = 本帧低清 cloudDepth 上采样到全清(供下一帧 cloudGate 校验)
+                Graphics.Blit(layer.upscaledCloudTex, layer.historyTex);
+                Graphics.Blit(combinedDepthTex, layer.historyDepthTex);
+                Graphics.Blit(layer.cloudDepthTex, layer.historyCloudDepthTex);
             }
 
             // 5. Chain-composite: iterate layers, applying composite mode

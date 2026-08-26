@@ -26,6 +26,8 @@ public class CloudLayer
     public RenderTexture historyDepthTex;
     public RenderTexture cloudDepthTex;       // current frame cloud surface distance (MRT output)
     public RenderTexture historyCloudDepthTex; // previous frame cloud surface distance (for reprojection)
+    public RenderTexture cloudMVTex;           // 本帧新鲜格运动矢量(reprojUV−i.uv,MRT 第三通道)
+    public RenderTexture cloudMVDilatedTex;    // 3×3 膨胀后的运动矢量(供下一帧 !isFresh 重投影)
     public float currentResolutionScale;
 
     // === 噪声纹理 (完全独立，不同种子) ===
@@ -41,9 +43,13 @@ public class CloudLayer
     public Matrix4x4 prevViewProjMat;
     public float prevCloudAngle = float.NaN; // 方案 C §5:云空间重投影用——上一帧的云转角相位 θ+2π·offset.x(风平移折算为经度旋转)
 
-    // === 时序超采样(方案 C) ===
-    public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动(该帧全步进)
+    // === 时序超采样(方案 C,KSA 完整结构) ===
+    public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动
     public int[] temporalSequence;   // 当前 upscale 格网的采样序列(缓存,格网变化时重建)
+    // TSS 配置签名:重建 RT 的依据(分辨率/时序开关/格网变化都触发重建)
+    public int currentUpX = -1;
+    public int currentUpY = -1;
+    public int currentTemporal = -1;
 
     /// <summary>
     /// 生成该层的独立噪声纹理并设置到 material 上。
@@ -133,15 +139,31 @@ public class CloudLayer
         temporalSequence = null;
         prevCloudAngle = float.NaN;   // 云转角相位随重建作废,首帧回退纯世界空间重投影
 
+        // KSA 完整结构:
+        //   TSS 开 → cloudRes = 低清(全清/格网),每帧全量 raymarch 低清;上采样在全清做时序累积。
+        //   TSS 关 → cloudRes = 全清(现状基线),上采样=运动残影混合。
+        //   历史一律全清(时序混合在上采样/全清层面采样历史)。
         float scale = Mathf.Max(0.1f, currentResolutionScale);
-        Vector2Int cloudRes = Vector2Int.RoundToInt(scale * new Vector2(screenW, screenH));
+        bool tss = config.useTemporalUpscale;
+        int upX = Mathf.Max(1, config.upscaleX);
+        int upY = Mathf.Max(1, config.upscaleY);
+        Vector2Int cloudRes = tss
+            ? new Vector2Int(Mathf.Max(1, Mathf.RoundToInt(screenW * scale / upX)), Mathf.Max(1, Mathf.RoundToInt(screenH * scale / upY)))
+            : new Vector2Int(Mathf.Max(1, Mathf.RoundToInt(screenW * scale)), Mathf.Max(1, Mathf.RoundToInt(screenH * scale)));
 
         cloudTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "CloudTex" + layerIndex, 16);
-        upscaledCloudTex = CreateRT(screenW, screenH, RenderTextureFormat.ARGB32, "UpscaledCloudTex" + layerIndex);
-        historyTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "HistoryTex" + layerIndex);
-        historyDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "HistoryDepthTex" + layerIndex);
         cloudDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "CloudDepthTex" + layerIndex);
-        historyCloudDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layerIndex);
+        cloudMVTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGBHalf, "CloudMVTex" + layerIndex);
+        cloudMVDilatedTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGBHalf, "CloudMVDilatedTex" + layerIndex);
+
+        upscaledCloudTex = CreateRT(screenW, screenH, RenderTextureFormat.ARGB32, "UpscaledCloudTex" + layerIndex);
+        historyTex = CreateRT(screenW, screenH, RenderTextureFormat.ARGB32, "HistoryTex" + layerIndex);
+        historyDepthTex = CreateRT(screenW, screenH, RenderTextureFormat.RFloat, "HistoryDepthTex" + layerIndex);
+        historyCloudDepthTex = CreateRT(screenW, screenH, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layerIndex);
+
+        currentUpX = upX;
+        currentUpY = upY;
+        currentTemporal = tss ? 1 : 0;
     }
 
     /// <summary>
@@ -155,6 +177,8 @@ public class CloudLayer
         ReleaseRT(ref historyDepthTex);
         ReleaseRT(ref cloudDepthTex);
         ReleaseRT(ref historyCloudDepthTex);
+        ReleaseRT(ref cloudMVTex);
+        ReleaseRT(ref cloudMVDilatedTex);
     }
 
     private static RenderTexture CreateRT(int w, int h, RenderTextureFormat fmt, string name, int depthBits = 0)

@@ -338,3 +338,33 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 - **FlowMap 风场**(KSA `VolumetricFlowMap` + `FlowMapPhase` + `FlowMapNoise`)——替代统一平移,风感自然。
 - **照地云影**(KSA `CloudShadowVolume` 256×32 角体积,每帧 24 片渐进烘焙 + 重采样)——二期独立子系统。
 - **远距 2D 云壳**(KSA `OrbitTransitionStart/End` 切换)——轨道视角性能。
+
+---
+
+## 12. 实施状态(2026-08-25 更新)
+
+### 已完成
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| 最优采样序列 | `UpscalingPixelSequence.cs` | KSA 算法直接移植,格网变化时重建缓存 |
+| 每帧 1/N 子集步进 | `Clouds.shader` `isFresh`(L584) | `_UseTemporal=0` 或冷启动帧恒真 → 纯回退 |
+| 冷启动 | `CloudRenderer` frameNumber==0 | 该帧全步进(`_Upscale=1`),RT重建/切天体/切SOI 时重置 |
+| 云空间重投影(近似版) | `CloudRenderer.BuildCloudSpaceRepro` + `prevCloudAngle` | 自转+东西风折算经度角,时序/非时序共用 |
+| **割裂线根因修复(前置)** | `CloudRenderer.L282` | reprojMat 改用 GPU 投影,修好重投影 Y 镜像(时序/非时序同步受益) |
+| `!isFresh` 重投影+深度校验 | `Clouds.shader` L617-665 | 校验通过才用重投影历史;失败→上一帧全分辨率 `PrevUpscaledTex` 兜底;再无→透明 |
+
+### 已知缺口(建议后续)
+
+- **flip/flop 双缓冲**(§4.5/§6):现为单 `historyTex`。当前架构 pass 内读历史、pass 后写历史,无读写竞争,单缓冲可用;若追求与 KSA 完全一致或排查跨帧串扰再升级。
+- **运动矢量 + 膨胀**(§4.3/4.4):云自转时无 MV 的理论鬼影上限,靠深度校验 + 云空间重投影已基本覆盖;高速相机边角仍有极限情况,可后续补 3×3 膨胀。
+- **repair pass**(§4.2):冷启动已被 frameNumber=0 全步进覆盖;运动瞬移靠 `PrevUpscaledTex` 兜底覆盖,暂不需要。
+- **N/S 风**(§5 已知局限):非刚体 Y 旋转,强南北风下重投影近似失效,需完整 worldToCloud 矩阵。
+
+### 验收建议(下次进游戏)
+
+1. 关 `useTemporalUpscale` → 与本次修复前逐字节一致(纯回退)。
+2. 开 3×3:静止视角静止云体,画面随时间锐化到近似全分辨率、无扫描网格。
+3. 相机平移/旋转 + 云自转:无鬼影、断层、闪烁;割裂线不再复发。
+4. 冷启动(切星球/首帧):1~2 帧收敛,无持久黑洞。
+5. 帧率:同档位 ≥ 现状,或同帧率下 `resolutionScale` 可再降一档。

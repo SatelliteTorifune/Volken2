@@ -31,11 +31,6 @@ public class CloudRenderer : MonoBehaviour
     private Camera cam;
     private static Mesh _fullscreenTriangle; // 阶段二 MRT 全屏三角形
 
-    // === 割裂线排查诊断(2026-08-24,排查完可整体删除) ===
-    private int _probeFrame;
-    private const int PROBE_FRAMES = 15;     // 启动/重臂后连续探查的帧数
-    private const bool DIAG_PROBE = true;    // 总开关
-
     public CloudRenderer()
     {
         cam = GetComponent<Camera>();
@@ -326,236 +321,6 @@ public class CloudRenderer : MonoBehaviour
         return Mathf.Lerp(2.0f, 1.0f, t);
     }
 
-    // === 割裂线排查诊断(2026-08-24) ===
-    // 排查:按 F1 重新武装诊断探查(重跑 PROBE_FRAMES 帧)
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.F1))
-        {
-            _probeFrame = 0;
-            Mod.LOG("Volken:DIAG probe re-armed (F1)");
-        }
-    }
-
-    // 排查:相机姿态 + 一层参数(每探查帧打一次)
-    private void LogCamDiag()
-    {
-        try
-        {
-            var craftNode = Game.Instance.FlightScene.CraftNode;
-            Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
-            float planetRadius = (float)craftNode.Parent.PlanetData.Radius;
-            Vector3 p = cam.transform.position;
-            float dist = (p - planetCenter).magnitude;
-            float altitude = dist - planetRadius;
-            Vector3 nadir = (planetCenter - p).normalized;
-            float pitch = Vector3.Angle(cam.transform.forward, -nadir); // 0=水平,90=正俯视行星中心
-            var l0 = Volken.Instance.ActiveLayers.FirstOrDefault();
-            float cloudPhi = (l0 == null) ? 0f : l0.accumulatedRotation + 2f * Mathf.PI * l0.runningOffset.x;
-            float dPhi = (l0 == null || float.IsNaN(l0.prevCloudAngle)) ? 0f : cloudPhi - l0.prevCloudAngle; // 本帧云空间旋转增量
-            Mod.LOG($"Volken:DIAGCAM alt={altitude:F0} distPlanet={dist:F0} radius={planetRadius:F0} pitch={pitch:F1} camPos={p:F1} near={cam.nearClipPlane:F1} far={cam.farClipPlane:F0} maxFarDepth={FarCameraScript.maxFarDepth:F0} resScale={(l0?.config.resolutionScale ?? -1f):F3} histBlend={(l0?.config.historyBlend ?? -1f):F2} temporal={(l0?.config.useTemporalUpscale ?? false)} frameNo={(l0?.frameNumber ?? -1)} accRot={(l0?.accumulatedRotation ?? 0f):F3} prevCloudAngle={(l0?.prevCloudAngle ?? 0f):F3} offX={(l0?.runningOffset.x ?? 0f):F3} cloudPhi={cloudPhi:F3} dPhi={dPhi:F3} screen={Screen.width}x{Screen.height}");
-
-            // === 决定性探针:重投影矩阵 vs 射线重建是否一致 ===
-            // reprojUV 位移(mode6)在静态相机下应为 ~0;若 prevViewProjMat 与 viewDir 重建
-            // 的 FOV/平移不一致,会产生固定的径向错位 → 历史采样错位 → 云边残影/割裂线。
-            try
-            {
-                var P = cam.projectionMatrix;
-                float projTanHalfV = Mathf.Abs(1f / P.m11);   // 投影矩阵隐含的 tan(半垂直视场)
-                float projTanHalfH = Mathf.Abs(1f / P.m00);   // tan(半水平视场)
-                float reconTanHalfV = Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                var invView = cam.worldToCameraMatrix.inverse;
-                Vector3 camPosFromView = new Vector3(invView.m03, invView.m13, invView.m23);
-                float viewShift = (p - camPosFromView).magnitude; // view矩阵平移 vs transform 位置差
-                Mod.LOG($"Volken:DIAGPROJ m00={P.m00:F4} m11={P.m11:F4} m22={P.m22:F4} m23={P.m23:F4} camFov={cam.fieldOfView:F2} camAspect={cam.aspect:F4} reconTanV={reconTanHalfV:F4} projTanV={projTanHalfV:F4} projTanH={projTanHalfH:F4} viewShift={viewShift:F1}");
-
-                // === DIAGPROJ2:空间一致性 ===
-                // mode6 位移在静止相机下仍 0.07~1.0,而 FOV/平移全部自洽 →
-                // 嫌疑:shader 的 _WorldSpaceCameraPos(camPos)与 prevViewProjMat 所在空间不一致,
-                // 或 prevViewProjMat 陈旧。此探针在 CPU 上直接复算中心像素的重投影。
-                try
-                {
-                    Vector3 wsp = Shader.GetGlobalVector("_WorldSpaceCameraPos");
-                    float camPosShift = (wsp - p).magnitude;                 // 渲染用相机位置 vs transform 差
-                    var rp = l0 != null ? l0.prevViewProjMat : Matrix4x4.identity;
-                    var invRP = rp.inverse;
-                    Vector3 rpCamPos = new Vector3(invRP.m03, invRP.m13, invRP.m23);
-                    float rpStale = (rpCamPos - p).magnitude;                // prevViewProjMat 隐含相机位置 vs 当前
-                    float projFlip = Shader.GetGlobalVector("_ProjectionParams").x; // <0 = D3D Y 翻转
-                    // 中心像素(ndc=(0,0) 前方射线)在几个深度下的 reprojUV;自洽时应恒为 (0.5,0.5)
-                    Vector3 fwd = cam.transform.forward;
-                    var sb2 = new System.Text.StringBuilder();
-                    foreach (float D in new float[] { 1000f, 100000f, 100000000f })
-                    {
-                        Vector3 Pw = wsp + D * fwd;
-                        Vector4 clip = rp * new Vector4(Pw.x, Pw.y, Pw.z, 1f);
-                        Vector2 ruv = new Vector2(0.5f * (clip.x / clip.w) + 0.5f, 0.5f * (clip.y / clip.w) + 0.5f);
-                        if (projFlip < 0f) ruv.y = 1f - ruv.y;               // 模拟 shader Y 翻转
-                        sb2.Append(" D" + D + "->(" + ruv.x.ToString("F3") + "," + ruv.y.ToString("F3") + ")");
-                    }
-                    Mod.LOG($"Volken:DIAGPROJ2 wsp={wsp} camPosShift={camPosShift:F1} rpCamPos={rpCamPos} rpStale={rpStale:F1} projFlip={projFlip:F2}{sb2}");
-                }
-                catch (Exception e3) { Mod.LOG("Volken:DIAGPROJ2 error " + e3); }
-            }
-            catch (Exception e2) { Mod.LOG("Volken:DIAGPROJ error " + e2); }
-        }
-        catch (Exception e) { Mod.LOG("Volken:DIAGCAM error " + e); }
-    }
-
-    // 排查:读回 RT 中心列,输出 16 段粗剖面 + 最大跳变行 + 云带范围(定位割裂线/深度缝的屏幕行)
-    private static string CenterColumnProfile(RenderTexture rt, bool depth)
-    {
-        if (rt == null || !rt.IsCreated()) return "(null)";
-        int W = rt.width, H = rt.height;
-        var old = RenderTexture.active;
-        var tex = new Texture2D(W, H, depth ? TextureFormat.RGBAFloat : TextureFormat.RGBA32, false);
-        RenderTexture.active = rt;
-        tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
-        tex.Apply();
-        RenderTexture.active = old;
-        int x = W / 2;
-        var sb = new System.Text.StringBuilder();
-        sb.Append(" centerCol x=" + x + " [");
-        for (int i = 0; i < 16; i++)
-        {
-            int y = Mathf.Clamp(H * i / 15, 0, H - 1);
-            if (depth)
-                sb.Append((i == 0 ? "" : ",") + tex.GetPixel(x, y).r.ToString("F0"));
-            else
-            {
-                var c = tex.GetPixel(x, y);
-                sb.Append((i == 0 ? "" : ",") + "a" + c.a.ToString("F2"));
-            }
-        }
-        sb.Append(" ]");
-        // 最大跳变行
-        float maxJump = -1f; int maxRow = -1;
-        float prev = depth ? tex.GetPixel(x, 0).r : tex.GetPixel(x, 0).a;
-        for (int y = 1; y < H; y++)
-        {
-            float cur = depth ? tex.GetPixel(x, y).r : tex.GetPixel(x, y).a;
-            float j = Mathf.Abs(cur - prev);
-            if (j > maxJump) { maxJump = j; maxRow = y; }
-            prev = cur;
-        }
-        if (maxRow >= 0)
-            sb.Append(" | maxJump y=" + maxRow + " (" + ((float)maxRow / H).ToString("P0") + " from bottom) d=" + maxJump.ToString("F2"));
-        if (depth)
-        {
-            if (maxRow >= 0)
-                sb.Append(" val@jump=" + tex.GetPixel(x, maxRow).r.ToString("F0") + "<-" + tex.GetPixel(x, Mathf.Max(0, maxRow - 1)).r.ToString("F0"));
-        }
-        else
-        {
-            // 颜色类:云带范围(alpha<0.9 的首尾行) + 最密行(alpha 最小)
-            int first = -1, last = -1; float minA = 2f; int minRow = -1;
-            for (int y = 0; y < H; y++)
-            {
-                float a = tex.GetPixel(x, y).a;
-                if (a < 0.9f) { if (first < 0) first = y; last = y; }
-                if (a < minA) { minA = a; minRow = y; }
-            }
-            if (first >= 0)
-                sb.Append(" | cloudRows y=" + first + ".." + last + " (" + ((float)first / H).ToString("P0") + ".." + ((float)last / H).ToString("P0") + " from bottom) minA=" + minA.ToString("F2") + "@y" + minRow);
-            else
-                sb.Append(" | noCloud(col alpha>=0.9)");
-        }
-        // 两侧列(25% / 75%)紧凑摘要:捕获左右两条线的屏幕行
-        foreach (int cx in new int[] { W / 4, 3 * W / 4 })
-        {
-            int cfirst = -1, clast = -1; float cminA = 2f; int cminRow = -1;
-            float cmaxJump = -1f; int cmaxRow = -1;
-            float cprev = depth ? tex.GetPixel(cx, 0).r : tex.GetPixel(cx, 0).a;
-            for (int y = 0; y < H; y++)
-            {
-                float cur = depth ? tex.GetPixel(cx, y).r : tex.GetPixel(cx, y).a;
-                float j = Mathf.Abs(cur - cprev);
-                if (j > cmaxJump) { cmaxJump = j; cmaxRow = y; }
-                cprev = cur;
-                if (!depth)
-                {
-                    if (cur < 0.9f) { if (cfirst < 0) cfirst = y; clast = y; }
-                    if (cur < cminA) { cminA = cur; cminRow = y; }
-                }
-            }
-            if (depth)
-                sb.Append(" | x" + cx + " maxJump y=" + cmaxRow + " (" + ((float)cmaxRow / H).ToString("P0") + ") d=" + cmaxJump.ToString("F2"));
-            else if (cfirst >= 0)
-                sb.Append(" | x" + cx + " cloudRows y=" + cfirst + ".." + clast + " (" + ((float)cfirst / H).ToString("P0") + ".." + ((float)clast / H).ToString("P0") + ") minA=" + cminA.ToString("F2") + "@y" + cminRow);
-            else
-                sb.Append(" | x" + cx + " noCloud");
-        }
-        UnityEngine.Object.Destroy(tex);
-        return sb.ToString();
-    }
-
-    private void ProbeDepthRT(RenderTexture rt, string label)
-    {
-        if (rt == null || !rt.IsCreated()) return;
-        Mod.LOG("Volken:DIAGDEPTH " + label + " " + rt.width + "x" + rt.height + CenterColumnProfile(rt, true));
-    }
-    private void ProbeCloudRT(RenderTexture rt, string label)
-    {
-        if (rt == null || !rt.IsCreated()) return;
-        Mod.LOG("Volken:DIAGCLOUD " + label + " " + rt.width + "x" + rt.height + CenterColumnProfile(rt, false));
-    }
-
-    // 排查:云(当前帧) vs 历史(上一帧)逐行差异 → 残影/鬼影行(运动残影的直接度量)
-    private void ProbeGhostDiff(CloudLayer l0)
-    {
-        try
-        {
-            if (l0 == null || l0.cloudTex == null || l0.historyTex == null) return;
-            if (!l0.cloudTex.IsCreated() || !l0.historyTex.IsCreated()) return;
-            int W = l0.cloudTex.width, H = l0.cloudTex.height;
-            var old = RenderTexture.active;
-            var tc = new Texture2D(W, H, TextureFormat.RGBA32, false);
-            var th = new Texture2D(W, H, TextureFormat.RGBA32, false);
-            RenderTexture.active = l0.cloudTex; tc.ReadPixels(new Rect(0, 0, W, H), 0, 0); tc.Apply();
-            RenderTexture.active = l0.historyTex; th.ReadPixels(new Rect(0, 0, W, H), 0, 0); th.Apply();
-            RenderTexture.active = old;
-            var sb = new System.Text.StringBuilder();
-            foreach (int cx in new int[] { W / 4, W / 2, 3 * W / 4 })
-            {
-                int nDiff = 0, first = -1, last = -1, maxRow = -1; float maxD = -1f;
-                for (int y = 0; y < H; y++)
-                {
-                    float dc = tc.GetPixel(cx, y).a, dh = th.GetPixel(cx, y).a;
-                    float d = Mathf.Abs(dc - dh);
-                    if (d > 0.05f)
-                    {
-                        nDiff++; if (first < 0) first = y; last = y;
-                        if (d > maxD) { maxD = d; maxRow = y; }
-                    }
-                }
-                sb.Append(" | x" + cx + " diffRows=" + (first >= 0
-                    ? first + ".." + last + " (" + ((float)first / H).ToString("P0") + ".." + ((float)last / H).ToString("P0") + ") n=" + nDiff + " max|dA|=" + maxD.ToString("F2") + "@y" + maxRow
-                    : "none"));
-            }
-            UnityEngine.Object.Destroy(tc); UnityEngine.Object.Destroy(th);
-            Mod.LOG("Volken:DIAGGHOST hist-vs-curr alpha差异(运动残影直接度量)" + sb);
-        }
-        catch (Exception e) { Mod.LOG("Volken:DIAGGHOST error " + e); }
-    }
-
-    private void RunDiagProbe(List<CloudLayer> layers)
-    {
-        LogCamDiag();
-        ProbeDepthRT(combinedDepthTex, "combinedDepth");
-        ProbeDepthRT(lowResDepthTex, "lowResDepth");
-        var l0 = layers.Count > 0 ? layers[0] : null;
-        if (l0 != null)
-        {
-            ProbeCloudRT(l0.cloudTex, "cloudTex");
-            ProbeCloudRT(l0.upscaledCloudTex, "upscaledCloudTex");
-            ProbeCloudRT(l0.historyTex, "histTex");               // 上一帧云内容(残影/鬼影对比)
-            ProbeDepthRT(l0.cloudDepthTex, "cloudDepthTex");       // RFloat → R 通道=云面距离(米)
-            ProbeDepthRT(l0.historyCloudDepthTex, "histCloudDepthTex");
-            ProbeDepthRT(l0.historyDepthTex, "histDepthTex");
-            ProbeGhostDiff(l0);
-        }
-    }
-
     [ImageEffectOpaque]
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -635,6 +400,7 @@ public class CloudRenderer : MonoBehaviour
                 layer.material.SetTexture("HistoryTex", layer.historyTex);
                 layer.material.SetTexture("HistoryDepthTex", layer.historyDepthTex);
                 layer.material.SetTexture("HistoryCloudDepthTex", layer.historyCloudDepthTex);
+                layer.material.SetTexture("PrevUpscaledTex", layer.upscaledCloudTex);
 
                 // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat)
                 var mrt = new RenderBuffer[] { layer.cloudTex.colorBuffer, layer.cloudDepthTex.colorBuffer };
@@ -657,32 +423,6 @@ public class CloudRenderer : MonoBehaviour
                 layer.material.SetInt("isNativeRes",
                     (layer.cloudTex.width == source.width && layer.cloudTex.height == source.height) ? 1 : 0);
                 Graphics.Blit(layer.cloudTex, layer.upscaledCloudTex, layer.material, upscalePass);
-            }
-
-            // === 排查:割裂线诊断探查(前 PROBE_FRAMES 帧 / F8 重新武装) ===
-            if (DIAG_PROBE && _probeFrame < PROBE_FRAMES)
-            {
-                try
-                {
-                    // 前 7 帧:把 layer0 的 Clouds pass 以 _DiagBlend=1..7 重渲进临时 RT,
-                    // 读回 depthWeight/edgeFade/cloudGate/finalBlend/depthDiff/位移/noCloud 的列剖面(不污染 cloudTex/历史)
-                    var l0 = activeLayers.Count > 0 ? activeLayers[0] : null;
-                    if (l0 != null && _probeFrame < 7)
-                    {
-                        int mode = _probeFrame + 1;
-                        l0.material.SetFloat("_DiagBlend", mode);
-                        var diagRT = RenderTexture.GetTemporary(l0.cloudTex.width, l0.cloudTex.height, 0, RenderTextureFormat.ARGB32);
-                        Graphics.SetRenderTarget(diagRT);
-                        l0.material.SetPass(cloudsPass);
-                        Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
-                        Mod.LOG("Volken:DIAGBLEND mode=" + mode + " " + CenterColumnProfile(diagRT, false));
-                        RenderTexture.ReleaseTemporary(diagRT);
-                        l0.material.SetFloat("_DiagBlend", 0);
-                    }
-                    RunDiagProbe(activeLayers);
-                }
-                catch (Exception e) { Mod.LOG("Volken:DIAG probe error: " + e); }
-                _probeFrame++;
             }
 
             // 5. Chain-composite: iterate layers, applying composite mode
@@ -708,7 +448,6 @@ public class CloudRenderer : MonoBehaviour
         }
         catch (Exception e)
         {
-            // 诊断:不再静默吞掉管线异常(之前无日志导致"无云但无从查")
             Mod.LOG("Volken:CloudRenderer.OnRenderImage ERROR: " + e);
             try { Graphics.Blit(source, destination); } catch { }
         }

@@ -178,10 +178,19 @@ layer.prevViewProjMat = P * cam.worldToCameraMatrix;
 
 ---
 
-## 8. 复测步骤(根因已修,2026-08-25)
+## 8. 复测结果(2026-08-25 已确认修复)
 
-1. 保持 TSS 关 + 运动残影开(histBlend 0.9)。
-2. 按 **F1**;静止几帧 + 转角度看割裂线(俯视+斜视各一组)。
-3. 看 **mode=6**(|reprojUV−i.uv|):修复后静止时应 **≈0**(之前 0.07~1.0)。
-4. 目视确认:**割裂线消失**;运动残影平滑是否恢复正常(不再镜像鬼影)。
-5. 若 mode6 变成"倒过来的 V"(镜像反了),把 shader 里 reprojUV 的 `_ProjectionParams.x` 翻转条件对调一行即可(两个 UV 都要对调)。
+**验证通过**:
+- **mode=6 位移从 0.07~1.0 归零**:低空会话 `[0.02,0.01,...,0.01]`(≈0,残留为真实运动视差);高空快速移动会话 `[0.00 × 16]`(远云视差 <0.005,四舍五入为 0)。Y 镜像彻底消失。
+- 低空仍有 0.01~0.02 非零位移 → **运动追踪正常**(不是把 reprojUV 拍平成 i.uv)。
+- 用户目视:**割裂线消失**,运动残影恢复。
+
+**结论:根因 = 重投影 Y 约定镜像,已通过 GPU 投影修复(L283),fresh + 时序两路径同时解决。**
+
+**收尾建议**:
+- 诊断探针(DIAGCAM/DIAGDEPTH/DIAGCLOUD/DIAGBLEND/DIAGGHOST/DIAGPROJ/DIAGPROJ2、_DiagBlend、F1 重臂、CenterColumnProfile/ProbeGhostDiff 等)与 `DIAG_PROBE=true` 为排查用,确认无回归后可整体删除。
+- 遗留(独立于本次修复):云空间重投影未覆盖 N/S 风;TSS 开时 !isFresh 路径硬回退闪烁(与本次 Y 镜像同源,大概率已一并缓解,待用户开 TSS 目测确认)。
+
+### 8.1 清理完成(2026-08-25)
+
+诊断代码已全部移除:CloudRenderer.cs 722→460 行(删 Update/F1、LogCamDiag、CenterColumnProfile、ProbeDepthRT/ProbeCloudRT、ProbeGhostDiff、RunDiagProbe、OnRenderImage 诊断探查块、catch 诊断注释);Clouds.shader 966→936 行(删 _DiagBlend 声明 + 诊断输出块)。修复本身(GPU 投影 L282)与功能代码保留,括号平衡、零残留。`using System.Linq` 仍被 .ToList() 使用故保留。预留的 RFloat cloudDepthTex/histCloudDepthTex 为功能格式,保留。

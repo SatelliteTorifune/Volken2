@@ -244,6 +244,9 @@ Shader "Hidden/Clouds"
             Texture2D<float> HistoryCloudDepthTex;
             SamplerState samplerHistoryCloudDepthTex;
 
+            Texture2D<float4> PrevUpscaledTex;   // 上一帧全分辨率结果(时序 !isFresh 失败兜底)
+            SamplerState samplerPrevUpscaledTex;
+
             Texture2D<float> CloudDepthTex;
             SamplerState samplerCloudDepthTex;
 
@@ -291,7 +294,6 @@ Shader "Hidden/Clouds"
             float atmoBlendFactor;
             float maxDepth;
             float historyBlend;
-            float _DiagBlend;   // 诊断:>0 时把历史混合各项因子编码到输出(排查割裂线用,正常=0)
             matrix reprojMat;
             float currentRotation;
             // === 方案 C: 时序超采样 ===
@@ -326,8 +328,6 @@ Shader "Hidden/Clouds"
                 float hgBlend = HenyeyGreenstein(a, phaseParams.x) * (1 - blend) + HenyeyGreenstein(a, -phaseParams.y) * blend;
                 return phaseParams.z + hgBlend * phaseParams.w;
             }
-
-            
 
             // basic transmittance function
             float Beer(float d, float amb) {
@@ -598,8 +598,6 @@ Shader "Hidden/Clouds"
                     return o;
                 }
                 
-                
-
                 float2 surfIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius);
                 float depth = viewLength * DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
 
@@ -610,8 +608,6 @@ Shader "Hidden/Clouds"
                 // cut short by scene depth
                 maxRayDist = min(maxRayDist, depth);
 
-                
-
                 if (maxRayDist <= startRayDist) {
                     o.col = float4(0.0, 0.0, 0.0, 1.0);
                     o.cloudDepth = 0.0;
@@ -621,34 +617,50 @@ Shader "Hidden/Clouds"
                 // === 方案 C 阶段二: 非新鲜格 → 重投影采样历史 ===
                 if (!isFresh)
                 {
+                    // 用上一帧该像素的云面距离重建云点,经云空间重投影到上一帧屏幕位置。
+                    // reprojMat 已用 GPU 投影(CloudRenderer 割裂线修复),reprojUV 与 i.uv 同约定,
+                    // Y 翻转与新鲜路径(L733)一致。
+                    // 旧实现的硬回退 HistoryTex.Sample(i.uv) 在运动/旋转时会采到"本像素、上一帧
+                    // 位置"的错位历史 → 鬼影闪烁;现改为:校验通过才用重投影历史,否则用上一帧
+                    // 全分辨率兜底(PrevUpscaledTex),再不行输出透明(合成层忽略,本格下个周期补齐)。
                     float prevCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, i.uv, 0);
-                    if (prevCloudDepth <= 0.0)
+                    float4 history = float4(0.0, 0.0, 0.0, 0.0);
+                    float histCloudDepth = 0.0;
+                    bool historyOk = false;
+                    if (prevCloudDepth > 0.0)
                     {
-                        o.col = HistoryTex.SampleLevel(samplerHistoryTex, i.uv, 0);
-                        o.cloudDepth = 0.0;
+                        float3 cloudPos = camPos + prevCloudDepth * viewDir;
+                        float4 reproj = mul(reprojMat, float4(cloudPos, 1.0));
+                        float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
+                        reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
+                        bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
+                        if (inBounds)
+                        {
+                            float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
+                            float historySceneDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV, 0);
+                            float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
+                            histCloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV, 0);
+                            historyOk = (depthDiff < historyDepthThreshold) && (histCloudDepth > 0.0);
+                            if (historyOk)
+                                history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV, 0);
+                        }
+                    }
+                    if (historyOk)
+                    {
+                        o.col = history;
+                        o.cloudDepth = histCloudDepth;
                         return o;
                     }
-                    float3 cloudPos = camPos + prevCloudDepth * viewDir;
-                    float4 reproj = mul(reprojMat, float4(cloudPos, 1.0));
-                    float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
-                    // reprojUV 来自 GL 风格 clip(uv.y=0 在底部),必须翻转为与 HistoryTex
-                    // 相同的约定(uv.y=0 在顶部,D3D),否则时序重投影采错行 → 云随镜头漂移/掉地底。
-                    reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
-                    float4 history = HistoryTex.SampleLevel(samplerHistoryTex, reprojUV, 0);
-                    float currentDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
-                    float historySceneDepth = HistoryDepthTex.SampleLevel(samplerHistoryDepthTex, reprojUV, 0);
-                    float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
-                    bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0) || (depthDiff >= historyDepthThreshold);
-                    if (badSample)
+                    // 兜底:上一帧全分辨率已收敛结果(位置相邻,不引入错位鬼影);无内容则透明。
+                    float4 fallback = PrevUpscaledTex.SampleLevel(samplerPrevUpscaledTex, i.uv, 0);
+                    if (fallback.a > 0.01)
                     {
-                        history = HistoryTex.SampleLevel(samplerHistoryTex, i.uv, 0);
+                        o.col = fallback;
                         o.cloudDepth = prevCloudDepth;
+                        return o;
                     }
-                    else
-                    {
-                        o.cloudDepth = HistoryCloudDepthTex.SampleLevel(samplerHistoryCloudDepthTex, reprojUV, 0);
-                    }
-                    o.col = history;
+                    o.col = float4(0.0, 0.0, 0.0, 0.0);
+                    o.cloudDepth = 0.0;
                     return o;
                 }
 
@@ -680,10 +692,6 @@ Shader "Hidden/Clouds"
                 float3 ambientScatter = scatterCoeff * ambientLight * ambientScatterStrength * density * (1.0 - transmittance) * localStepSize;
                 lightEnergy += scatteredLight + ambientScatter;
                 
-                
-                
-
-
                 [loop]
                 while(rayDist < maxRayDist && iter < 350) {
                     rayPos = camPos + rayDist * viewDir;
@@ -739,7 +747,6 @@ Shader "Hidden/Clouds"
                 float atmoBlend = exp(-atmoBlendFactor * (cloudSurfaceDist - startRayDist));
                 float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor.rgb, min(1.0, transmittance + 1.0 - atmoBlend));
 
-
                 float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
                 float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
                 reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
@@ -766,23 +773,6 @@ Shader "Hidden/Clouds"
                 bool badSample = (min(reprojUV.x,reprojUV.y) < 0.0) || (max(reprojUV.x,reprojUV.y) > 1.0);
                 float finalHistoryBlend = badSample ? 0.0 : historyBlend * depthWeight * edgeFade * cloudGate;
 
-                // === 诊断:把历史混合各项因子编码到输出(排查割裂线用,正常时 _DiagBlend=0) ===
-                // 1=depthWeight 2=edgeFade 3=cloudGate 4=finalBlend/historyBlend
-                // 5=depthDiff/threshold(>1=超阈值) 6=|reprojUV-i.uv|(历史采样位移量) 7=noCloud(1=当前无云)
-                if (_DiagBlend > 0.5)
-                {
-                    float dv = _DiagBlend < 1.5 ? depthWeight
-                            : _DiagBlend < 2.5 ? edgeFade
-                            : _DiagBlend < 3.5 ? cloudGate
-                            : _DiagBlend < 4.5 ? (finalHistoryBlend / max(historyBlend, 1e-3))
-                            : _DiagBlend < 5.5 ? saturate(depthDiff / max(historyDepthThreshold, 1e-4))
-                            : _DiagBlend < 6.5 ? length(reprojUV - i.uv)
-                            : (cloudSurfaceDist >= maxRayDist ? 1.0 : 0.0);
-                    o.col = float4(dv, dv, dv, dv);
-                    o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
-                    return o;
-                }
-                
                 o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history;
                 o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
                 return o;
@@ -791,7 +781,6 @@ Shader "Hidden/Clouds"
             ENDCG
         }
         
-
         Pass
         {
             Name "Upscale"

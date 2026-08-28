@@ -74,6 +74,7 @@
     <s id="Volken.UI.StepSize">Размер Шага</s>
     <s id="Volken.UI.StepSizeFalloff">Размер Спада Шага</s>
     <s id="Volken.UI.NumberOfLightSamples">Число Источников Света</s>
+    <s id="Volken.UI.LightMarchDistance">Дистанция Марша Света</s>
     <s id="Volken.UI.Threshold">Порог</s>
     <s id="Volken.UI.RayOffsetStrength">Сила Разброса Лучей</s>
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>

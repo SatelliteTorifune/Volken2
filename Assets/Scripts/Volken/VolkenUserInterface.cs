@@ -709,6 +709,8 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.stepSizeFalloff = s; Volken.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
             s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Instance.ValueChanged(); }, 1, 25, 0, true);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
+            s => { cfg.lightMarchDistance = s; Volken.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
             s => { cfg.blueNoiseStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
@@ -867,6 +869,8 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.stepSizeFalloff = s; Volken.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
             s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Instance.ValueChanged(); }, 1, 25, 0, true);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
+            s => { cfg.lightMarchDistance = s; Volken.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
             s => { cfg.blueNoiseStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,

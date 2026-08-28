@@ -74,6 +74,7 @@
     <s id="Volken.UI.StepSize">Step Size</s>
     <s id="Volken.UI.StepSizeFalloff">Step Size Falloff</s>
     <s id="Volken.UI.NumberOfLightSamples">Number of Light Samples</s>
+    <s id="Volken.UI.LightMarchDistance">Light March Distance</s>
     <s id="Volken.UI.Threshold">Threshold</s>
     <s id="Volken.UI.RayOffsetStrength">Ray Offset Strength</s>
     <s id="Volken.UI.HistoryBlend">History Blend</s>

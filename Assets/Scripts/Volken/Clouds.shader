@@ -284,6 +284,7 @@ Shader "Hidden/Clouds"
             float stepSize;
             float stepSizeFalloff;
             int numLightSamplePoints;
+            float lightStepSize;    // 光照步进独立步长(= lightMarchDistance / numLightSamplePoints)
 
             //Misc
             float3 lightDir;
@@ -553,7 +554,7 @@ Shader "Hidden/Clouds"
                 }
 
                 float2 intersect = RaySphereIntersect(rayPos, rayDir, surfaceRadius + maxCloudHeight);
-                float step = stepSize;
+                float step = lightStepSize;
                 int lightSamples = min(numLightSamplePoints, ceil((intersect.y - max(0.0, intersect.x)) / step));
 
                 float d = 0.0;

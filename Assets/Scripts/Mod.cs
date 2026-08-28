@@ -53,6 +53,7 @@ namespace Assets.Scripts
             GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
             forceSettingScriptLoadGameObject.SetActive(false);
             Volken.Initialize();
+            VolkenProfiler.ProfilerController.Create();
             RegisterCommands();
 
             Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;

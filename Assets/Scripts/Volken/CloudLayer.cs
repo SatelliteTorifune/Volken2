@@ -103,6 +103,8 @@ public class CloudLayer
         material.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
         material.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
         material.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
+        float lightSamples = Mathf.Max(1f, (float)Mathf.Clamp(config.numLightSamplePoints, 1, 50));
+        material.SetFloat("lightStepSize", Mathf.Max(0.01f, config.lightMarchDistance / lightSamples));
         material.SetFloat("scatterStrength", config.scatterStrength * 1e-3f);
         material.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
         material.SetColor("cloudColor", config.cloudColor);

@@ -75,6 +75,7 @@
     <s id="Volken.UI.StepSize">步长</s>
     <s id="Volken.UI.StepSizeFalloff">步长衰减</s>
     <s id="Volken.UI.NumberOfLightSamples">光源采样数</s>
+    <s id="Volken.UI.LightMarchDistance">光照步进距离</s>
     <s id="Volken.UI.Threshold">阈值</s>
     <s id="Volken.UI.RayOffsetStrength">光线偏移强度</s>
     <s id="Volken.UI.HistoryBlend">运动残影</s>

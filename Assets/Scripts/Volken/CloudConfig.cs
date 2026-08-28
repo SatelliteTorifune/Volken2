@@ -101,6 +101,7 @@ public class CloudConfig
     public float stepSize;
     public float stepSizeFalloff;
     public int numLightSamplePoints;
+    public float lightMarchDistance = 12000f;   // 光照步进总距离(米);lightStepSize = lightMarchDistance / numLightSamplePoints
     public float blueNoiseStrength;
     public float depthThreshold;
     public float historyBlend;
@@ -270,7 +271,8 @@ public class CloudConfig
             resolutionScale = 0.5001385f,
             stepSize = 193.29982f,
             stepSizeFalloff = 0.67f,
-            numLightSamplePoints = 50,
+            numLightSamplePoints = 6,
+            lightMarchDistance = 12000f,
             blueNoiseStrength = 0.0f,
             depthThreshold = 1f,
             historyBlend = 0.0f,
@@ -320,6 +322,7 @@ public class CloudConfig
             stepSize = 1865.18164f,
             stepSizeFalloff = 1.52126586f,
             numLightSamplePoints = 5,
+            lightMarchDistance = 20000f,
             blueNoiseStrength = 0.0f,
             depthThreshold = 0.12f,
             historyBlend = 0.0f,
@@ -363,6 +366,7 @@ public class CloudConfig
             stepSize = this.stepSize,
             stepSizeFalloff = this.stepSizeFalloff,
             numLightSamplePoints = this.numLightSamplePoints,
+            lightMarchDistance = this.lightMarchDistance,
             blueNoiseStrength = this.blueNoiseStrength,
             depthThreshold = this.depthThreshold,
             historyBlend = this.historyBlend,
@@ -421,6 +425,7 @@ public class CloudConfig
         this.stepSize = source.stepSize;
         this.stepSizeFalloff = source.stepSizeFalloff;
         this.numLightSamplePoints = source.numLightSamplePoints;
+        this.lightMarchDistance = source.lightMarchDistance;
         this.blueNoiseStrength = source.blueNoiseStrength;
         this.depthThreshold = source.depthThreshold;
         this.historyBlend = source.historyBlend;

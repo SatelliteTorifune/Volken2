@@ -255,6 +255,8 @@ public class CloudRenderer : MonoBehaviour
         layer.prevCloudAngle = cloudPhi;
         // 阶段二:观察射线用相机 transform 轴直接构造(NDC 来自 clip 坐标,无投影矩阵约定歧义)。
         // 注意:不要用 cameraToWorldMatrix 的第2列当 fwd——Unity 视图约定里那是 -forward,会反向。
+        mat.SetVector("_CamPos", cam.transform.position);
+        mat.SetFloat("_ReflectionMode", 0f);
         mat.SetVector("_CamFwd", cam.transform.forward);
         mat.SetVector("_CamRight", cam.transform.right);
         mat.SetVector("_CamUp", cam.transform.up);

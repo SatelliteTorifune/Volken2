@@ -45,6 +45,8 @@ namespace Assets.Scripts
         public BoolSetting AlterTransparency{get; private set;}
         public BoolSetting ShowProfiler{get; private set;}
         
+        public BoolSetting WaterReflection{get; private set;}
+        
 
         /// <summary>
         /// Initializes the settings in the category.
@@ -60,6 +62,7 @@ namespace Assets.Scripts
                 .SetDefault(10);
             this.ShowDevLog=this.CreateBool("Show Dev Log", "ShowDevLog").SetDefault(true).SetDescription("Show Log for devs or not");
             this.AlterTransparency=this.CreateBool("Alter Transparency", "AlterTransparency").SetDefault(true).SetDescription("the original transparency settings has been altered into this one");
+            this.WaterReflection=this.CreateBool("Water Reflection", "WaterReflection").SetDefault(false);
             this.ShowProfiler=this.CreateBool("Profiler Overlay", "ShowProfiler").SetDefault(false).SetDescription("Show the in-game performance profiler overlay (Volken.Profiler). Toggle with console command 'VolkenProfiler'.");
         }
     }

@@ -23,7 +23,7 @@ public class CloudNoise
         _seed = seed;
         _noiseCompute = noiseCumpute;
         if (_noiseCompute == null) {
-            _noiseCompute = Mod.Instance.ResourceLoader.LoadAsset<ComputeShader>("Assets/Scripts/Volken/CloudNoiseCompute.compute");
+            _noiseCompute = Mod.Instance.ResourceLoader.LoadAsset<ComputeShader>("Assets/Scripts/Volken/Clouds/CloudNoiseCompute.compute");
         }
     }
 

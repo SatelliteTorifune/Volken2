@@ -181,8 +181,10 @@ Shader "Hidden/Clouds"
             float3 _CamFwd;
             float3 _CamRight;
             float3 _CamUp;
+            float3 _CamPos;         // 显式相机位置(反射路径不在相机渲染上下文内,不能用 _WorldSpaceCameraPos)
             float _TanHalfFovV;
             float _Aspect;
+            float _ReflectionMode; // 1 = 反射路径(跳过 DepthTex 遮挡)
 
             vert2Frag vert(appdata v)
             {
@@ -578,7 +580,7 @@ Shader "Hidden/Clouds"
             CloudOut frag(vert2Frag i)
             {
                 CloudOut o;
-                float3 camPos = _WorldSpaceCameraPos;
+                float3 camPos = _CamPos;
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
 
@@ -598,12 +600,23 @@ Shader "Hidden/Clouds"
                 }
                 
                 float2 surfIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius);
-                float depth = viewLength * DepthTex.SampleLevel(samplerDepthTex, i.uv, 0);
+                // 反射路径没有对应深纹理:直接取 maxDepth(不遮挡);主路径照旧采样深度。
+                float depth = (_ReflectionMode > 0.5) ? maxDepth : (viewLength * DepthTex.SampleLevel(samplerDepthTex, i.uv, 0));
 
                 // determine the starting point of the sample ray
-                float startRayDist = surfIntersect.x * surfIntersect.y < 0.0 ? surfIntersect.y : max(0.0, intersect.x);
                 // end point of sample ray
-                float maxRayDist = surfIntersect.y > 0.0 ? surfIntersect.x : intersect.y;
+                float startRayDist;
+                float maxRayDist;
+                if (_ReflectionMode > 0.5) {
+                    // 反射相机位于水面(≈地表)之下的镜像位置,球面求交得到"从地心向外看"的病态解
+                    // (near<0<far),再按主路径逻辑 maxRayDist=near<0 → 恒黑。反射路径直接忽略地表球面,
+                    // 当作从球面向天穹看:起点取云球近交点,终点取云球远交点。
+                    startRayDist = max(0.0, intersect.x);
+                    maxRayDist = intersect.y;
+                } else {
+                    startRayDist = surfIntersect.x * surfIntersect.y < 0.0 ? surfIntersect.y : max(0.0, intersect.x);
+                    maxRayDist = surfIntersect.y > 0.0 ? surfIntersect.x : intersect.y;
+                }
                 // cut short by scene depth
                 maxRayDist = min(maxRayDist, depth);
 
@@ -689,7 +702,8 @@ Shader "Hidden/Clouds"
                 
                 float shadowTransmittance = 1.0;
                 // calculate shadows for solid surfaces
-                if (surfIntersect.y > 0.0 || depth < maxDepth) {
+                // 反射路径没有地表/场景遮蔽,跳过地表阴影(否则反射云会被整体压暗 50%)。
+                if ((surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
                     // offset sample point to avoid precision artifacts
                     shadowTransmittance = 0.5 + 0.5 * Beer(SampleLightRay(camPos + (maxRayDist - 50.0) * viewDir).x, ambientLight);
                 }
@@ -988,6 +1002,54 @@ Shader "Hidden/Clouds"
                 }
             }
 
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "ReflectionComposite"
+
+            // 反射云合成:把低清 raymarch 结果 additively 叠加到反射 RT 上。
+            // 与 Clouds pass 相同的 clip-space 三角形 + UV 翻转约定,保证采样区域对齐;
+            // Blend One One = dst.rgb += src.rgb(只加颜色,不读回同一 RT)。
+            Cull Off ZWrite Off ZTest Always
+            Blend One One
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                o.vertex = v.vertex;
+                float2 uv = float2(v.vertex.x * 0.5 + 0.5, v.vertex.y * 0.5 + 0.5);
+                uv.y = _ProjectionParams.x < 0.0 ? 1.0 - uv.y : uv.y;
+                o.uv = uv;
+                return o;
+            }
+
+            Texture2D<float4> UpscaledCloudTex;
+            SamplerState samplerUpscaledCloudTex;
+
+            float4 frag(v2f i) : SV_Target
+            {
+                return float4(UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv).rgb, 0.0);
+            }
             ENDCG
         }
     }

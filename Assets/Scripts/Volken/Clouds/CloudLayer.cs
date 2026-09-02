@@ -85,50 +85,51 @@ public class CloudLayer
     /// <summary>
     /// 设置该层 shader 的静态属性（不会每帧变化的参数）。
     /// </summary>
-    public void SetStaticShaderProperties()
+    public void SetStaticShaderProperties(Material target = null)
     {
-        if (config == null || material == null) return;
+        Material mat = target != null ? target : material;
+        if (config == null || mat == null) return;
 
-        material.SetFloat("cloudDensity", config.density);
-        material.SetFloat("cloudAbsorption", config.absorption);
-        material.SetFloat("ambientLight", config.ambientLight);
-        material.SetFloat("cloudCoverage", config.coverage);
-        material.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
-        material.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));
-        material.SetFloat("detailStrength", config.detailStrength);
-        material.SetVector("cloudLayerHeights", config.layerHeights);
-        material.SetVector("cloudLayerSpreads", config.layerSpreads);
-        material.SetVector("cloudLayerStrengths", config.layerStrengths);
-        material.SetFloat("maxCloudHeight", Mathf.Max(0.001f, config.maxCloudHeight));
-        material.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
-        material.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
-        material.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
+        mat.SetFloat("cloudDensity", config.density);
+        mat.SetFloat("cloudAbsorption", config.absorption);
+        mat.SetFloat("ambientLight", config.ambientLight);
+        mat.SetFloat("cloudCoverage", config.coverage);
+        mat.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
+        mat.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));
+        mat.SetFloat("detailStrength", config.detailStrength);
+        mat.SetVector("cloudLayerHeights", config.layerHeights);
+        mat.SetVector("cloudLayerSpreads", config.layerSpreads);
+        mat.SetVector("cloudLayerStrengths", config.layerStrengths);
+        mat.SetFloat("maxCloudHeight", Mathf.Max(0.001f, config.maxCloudHeight));
+        mat.SetFloat("stepSize", Mathf.Max(0.01f, config.stepSize));
+        mat.SetFloat("stepSizeFalloff", config.stepSizeFalloff);
+        mat.SetFloat("numLightSamplePoints", Mathf.Clamp(config.numLightSamplePoints, 1, 50));
         float lightSamples = Mathf.Max(1f, (float)Mathf.Clamp(config.numLightSamplePoints, 1, 50));
-        material.SetFloat("lightStepSize", Mathf.Max(0.01f, config.lightMarchDistance / lightSamples));
-        material.SetFloat("scatterStrength", config.scatterStrength * 1e-3f);
-        material.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
-        material.SetColor("cloudColor", config.cloudColor);
-        material.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
-        material.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
-        material.SetFloat("historyBlend", config.historyBlend);
-        material.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
-        material.SetVector("phaseParams", config.phaseParameters);
-        material.SetFloat("scatterPower", config.scatterPower);
-        material.SetFloat("multiScatterBlend", config.multiScatterBlend);
-        material.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
-        material.SetVector("customWavelengths", config.customWavelengths);
-        material.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
-        material.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
+        mat.SetFloat("lightStepSize", Mathf.Max(0.01f, config.lightMarchDistance / lightSamples));
+        mat.SetFloat("scatterStrength", config.scatterStrength * 1e-3f);
+        mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
+        mat.SetColor("cloudColor", config.cloudColor);
+        mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
+        mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
+        mat.SetFloat("historyBlend", config.historyBlend);
+        mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);
+        mat.SetVector("phaseParams", config.phaseParameters);
+        mat.SetFloat("scatterPower", config.scatterPower);
+        mat.SetFloat("multiScatterBlend", config.multiScatterBlend);
+        mat.SetFloat("ambientScatterStrength", config.ambientScatterStrength);
+        mat.SetVector("customWavelengths", config.customWavelengths);
+        mat.SetFloat("silverLiningIntensity", config.silverLiningIntensity);
+        mat.SetFloat("forwardScatteringBias", config.forwardScatteringBias);
 
         // 方案 B: 游戏自带云作为全球分布形状(无 cubemap 时强制关闭 → 完全回退程序化分布)
         bool hasStock = StockCloudMap.Current != null;
-        material.SetFloat("useStockCloudMap", (config.useStockCloudMap && hasStock) ? 1f : 0f);
-        material.SetFloat("stockMapStrength", Mathf.Clamp01(config.stockMapStrength));
-        material.SetFloat("stockMaskInfluence", Mathf.Clamp01(config.stockMaskInfluence));
-        material.SetFloat("stockMapLayer", Mathf.Clamp(config.stockMapLayer, 0, 3));
-        material.SetVector("stockLayerValid", StockCloudMap.LayerValid);
-        material.SetFloat("stockAlignSign", Mathf.Sign(config.stockAlignSign));
-        material.SetFloat("stockAlignAngleOffset", config.stockAlignAngleOffset);
+        mat.SetFloat("useStockCloudMap", (config.useStockCloudMap && hasStock) ? 1f : 0f);
+        mat.SetFloat("stockMapStrength", Mathf.Clamp01(config.stockMapStrength));
+        mat.SetFloat("stockMaskInfluence", Mathf.Clamp01(config.stockMaskInfluence));
+        mat.SetFloat("stockMapLayer", Mathf.Clamp(config.stockMapLayer, 0, 3));
+        mat.SetVector("stockLayerValid", StockCloudMap.LayerValid);
+        mat.SetFloat("stockAlignSign", Mathf.Sign(config.stockAlignSign));
+        mat.SetFloat("stockAlignAngleOffset", config.stockAlignAngleOffset);
     }
 
     /// <summary>

@@ -54,7 +54,7 @@ public class Volken
     {
         try
         {
-            _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds.shader");
+            _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds/Clouds.shader");
         }
         catch (Exception ex) { Mod.LOG("Volken: Cloud shader load error: " + ex); }
 

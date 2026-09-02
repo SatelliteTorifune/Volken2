@@ -40,6 +40,17 @@ public class CloudRenderer : MonoBehaviour
         cam = GetComponent<Camera>();
         CloudRenderManualRefresh();
         Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
+        // 游戏重置坐标原点(浮动原点)时,上一帧存的 prevViewProjMat 是旧原点矩阵,
+        // 本帧世界位置是新原点 → 时序重投影失效 → 云偏移。订阅 ModApi IGameView 的
+        // ReferenceFrameRecentered 事件,在回调里清空时序历史(冷启动),见 OnReferenceFrameRecentered。
+        try
+        {
+            Game.Instance.FlightScene.ViewManager.GameView.ReferenceFrameRecentered += OnReferenceFrameRecentered;
+        }
+        catch (Exception ex)
+        {
+            Mod.LOG("Volken:CloudRenderer cannot subscribe ReferenceFrameRecentered: " + ex.Message);
+        }
     }
 
     private void OnPlayerChangedSoi(ICraftNode playerCraftNode, IPlanetNode newParent)
@@ -70,6 +81,45 @@ public class CloudRenderer : MonoBehaviour
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 游戏重置坐标原点(浮动原点 GameViewScript.RecenterReferenceFrame,触发:离帧中心 >5000m /
+    /// 帧速度 >1000m/s / 时间加速每帧 / 表面锁定状态切换)时,Unity 世界坐标在两帧间整体平移
+    /// positionDelta:上一帧存的 prevViewProjMat 是旧原点矩阵,本帧世界位置(含 sphereCenter)是
+    /// 新原点 → 时序重投影 UV 错位 → 云偏移。
+    /// 处理:清空全部时序历史 + frameNumber=0 强制冷启动 → Upscale 的 validHist 全 0 → 全走本帧
+    /// 新鲜 raymarch(云不偏移)。不动 prevCloudAngle(云自转/风相位与原点重置无关)。
+    /// </summary>
+    private void OnReferenceFrameRecentered(ModApi.Flight.GameView.IReferenceFrame referenceFrame, Vector3d positionDelta, Vector3d velocityDelta)
+    {
+        try
+        {
+            foreach (var layer in Volken.Instance.layers)
+            {
+                if (layer == null) continue;
+                layer.frameNumber = 0;
+                ClearTemporalHistory(layer);
+            }
+            Mod.LOG("Volken:CloudRenderer frame recentered Δ=" + positionDelta.magnitude.ToString("F1") + "m — TSS history cleared");
+        }
+        catch (Exception ex)
+        {
+            Mod.LOG("Volken:CloudRenderer OnReferenceFrameRecentered ERROR: " + ex.Message);
+        }
+    }
+
+    /// <summary>清空某层时序历史(颜色/场景深度/云面距离),使 Upscale 的 validHist 全 0 → 全走本帧。</summary>
+    private void ClearTemporalHistory(CloudLayer layer)
+    {
+        var prevActive = RenderTexture.active;
+        var rt = layer.historyTex;
+        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
+        rt = layer.historyDepthTex;
+        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
+        rt = layer.historyCloudDepthTex;
+        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
+        RenderTexture.active = prevActive;
     }
 
     public void CloudRenderManualRefresh()
@@ -478,6 +528,11 @@ public class CloudRenderer : MonoBehaviour
 
     private void OnDestroy()
     {
+        try
+        {
+            Game.Instance.FlightScene.ViewManager.GameView.ReferenceFrameRecentered -= OnReferenceFrameRecentered;
+        }
+        catch { }
         ReleaseAllRenderTextures();
     }
 

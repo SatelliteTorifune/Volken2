@@ -386,4 +386,13 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 `inspectorPanel == null` 时抛 NRE → 中断 SceneLoaded 事件链 → Volken.OnSceneLoaded 被跳过
 (未建 CloudRenderer + 未加载 StockCloudMap)。修复:JNO 侧 `MultiPlayerUI.OnSceneLoaded` 加 null 保护(手动应用);
 Volken 侧曾加"自愈"(`EnsureCloudInitIfNeeded` + `Update` 驱动)兜底,**已按需撤除**,Volken 回到纯事件驱动。
+**坐标原点重置修复(2026-08-27)**:SR2 浮动原点在飞行中会重置世界坐标原点(
+GameViewScript.IsRecenterRequired:离帧中心>5000m / 帧速度>1000m/s / 时间加速每帧 / 表面锁定切换 → 
+RecenterReferenceFrame → ReferenceFrame.Center 跳变 + Unity 世界坐标整体平移)。此时上一帧存的 
+`prevViewProjMat`(旧原点矩阵)与本帧世界位置(新原点)不匹配 → 时序重投影 UV 错位 → 云偏移。
+修复:`CloudRenderer` 订阅 ModApi `IGameView.ReferenceFrameRecentered`,回调里对每层 
+`frameNumber=0` + `ClearTemporalHistory`(清空 historyTex/historyDepthTex/historyCloudDepthTex → 
+Upscale 的 validHist 全 0 → 全走本帧 raymarch,云不偏移)。已确认 ModApi.dll 暴露该事件且委托签名 
+`(IReferenceFrame, Vector3d, Vector3d)`。
+
 

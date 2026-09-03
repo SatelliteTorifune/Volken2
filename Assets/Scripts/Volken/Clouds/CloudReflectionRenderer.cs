@@ -216,8 +216,10 @@ public static class CloudReflectionRenderer
                 // 2) additive 合成进反射 RT(复用主路径 Composite pass,走 Graphics.Blit)。
                 //    source = rt,写回 tmp 再拷回 rt(不能同 RT 读写)。
                 mat.SetTexture("UpscaledCloudTex", _cloudTex);
+                mat.SetTexture("OrbitCloudTex", _cloudTex);   // 轨道云不进反射路径:绑上避免空采样
                 mat.SetTexture("SceneDepthTex", _cloudTex);   // additive 分支不使用,绑上避免空采样
                 mat.SetFloat("_CompositeMode", 0f);           // additive
+                mat.SetFloat("_OrbitFade", 0f);               // 反射相机在水面(低空)→ 恒纯体积云
 
                 var tmp = RenderTexture.GetTemporary(rt.width, rt.height, 0, rt.format);
                 Graphics.Blit(rt, tmp, mat, compositePass);

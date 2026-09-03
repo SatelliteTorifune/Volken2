@@ -81,6 +81,18 @@
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
     <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
+
+    <!-- 轨道云(2D 壳着色 + 过渡带交叉淡入) -->
+    <s id="Volken.UI.OrbitClouds">轨道云(2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">使用轨道云(高空 2D)</s>
+    <s id="Volken.UI.OrbitTransitionStart">过渡带起点(米)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">过渡带终点(米)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">2D 采样高度(0=自动)</s>
+    <s id="Volken.UI.OrbitDensityBoost">2D 密度放大</s>
+    <s id="Volken.UI.OrbitBrightness">2D 亮度</s>
+    <s id="Volken.UI.OrbitReliefStrength">2D 浮雕(法线)强度</s>
+    <s id="Volken.UI.OrbitDetailStrength">2D 细节纹理强度</s>
+    <s id="Volken.UI.OrbitResolutionScale">2D 分辨率缩放</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">配置 '{0}' 已保存!</s>

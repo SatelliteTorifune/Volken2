@@ -717,6 +717,11 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
     }
 
@@ -877,7 +882,44 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
+    }
+
+    /// <summary>
+    /// 轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。
+    /// 默认关闭 → 零回归;开启后按海拔在体积云/2D 轨道云间分派并交叉淡入。
+    /// </summary>
+    private static void CreateOrbitCloudsGroup(GroupModel group, CloudConfig cfg)
+    {
+        var orbitToggle = new ToggleModel(Locale.GetString("Volken.UI.UseOrbitClouds"),
+            () => cfg.useOrbitClouds, s =>
+            {
+                cfg.useOrbitClouds = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(orbitToggle);
+
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionStart"), () => cfg.orbitTransitionStartAltitude,
+            s => { cfg.orbitTransitionStartAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 200000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionEnd"), () => cfg.orbitTransitionEndAltitude,
+            s => { cfg.orbitTransitionEndAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 500000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitSampleAltitude"), () => cfg.orbitSampleAltitude,
+            s => { cfg.orbitSampleAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 50000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDensityBoost"), () => cfg.orbitDensityBoost,
+            s => { cfg.orbitDensityBoost = s; Volken.Instance.ValueChanged(); }, 1f, 100f, 1);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitBrightness"), () => cfg.orbitBrightness,
+            s => { cfg.orbitBrightness = s; Volken.Instance.ValueChanged(); }, 0f, 2f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitReliefStrength"), () => cfg.orbitReliefStrength,
+            s => { cfg.orbitReliefStrength = s; Volken.Instance.ValueChanged(); }, 0f, 4f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDetailStrength"), () => cfg.orbitDetailStrength,
+            s => { cfg.orbitDetailStrength = s; Volken.Instance.ValueChanged(); }, 0f, 1f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
+            s => { cfg.orbitResolutionScale = s; Volken.Instance.ValueChanged(); }, 0.1f, 1f, 2);
     }
 
     private static SliderModel CreateSlider(GroupModel group, string label,

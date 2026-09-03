@@ -127,7 +127,23 @@ public class CloudConfig
     public float stockAlignSign = 1f;       // ±1 对齐旋转方向(镜像/方向反了翻号)
     public float stockAlignAngleOffset = 0f;// 度,一次性对齐微调角
     public int stockMapLayer = 3;           // 用游戏哪一层云作为分布:0=低云(R), 1=中云(G), 2=高云(B), 3=按层对应(默认)
-    
+
+    // === 轨道云(2D 壳着色)+ 过渡带交叉淡入(2026-08-27) ===
+    // 高空(轨道)视角用廉价 2D 壳着色替代体积 raymarch;过渡带内与体积云按海拔交叉淡入。
+    // 默认关闭(useOrbitClouds=false)→ orbitFade=0 → 行为与之前完全一致,零回归。
+    // 旧 XML 无这些节点时保留默认值 → 行为与之前一致。
+    public bool useOrbitClouds = false;              // 总开关:开启后按海拔在体积云/2D 轨道云间分派
+    public float orbitTransitionStartAltitude = 25000f;  // 过渡带起点(米):低于此 → 纯体积云
+    public float orbitTransitionEndAltitude = 100000f;   // 过渡带终点(米):高于此 → 纯 2D 轨道云(跳过体积 raymarch)
+    public float orbitSampleAltitude = 0f;           // 2D 采样高度(0=自动:按层强度加权层高)
+    public float orbitDensityBoost = 25f;            // 密度→不透明度放大(2D 单样本 vs 体积多步进累积)
+    public float orbitBrightness = 0.7f;             // 2D 亮度缩放(与体积云 Additive 合成强度对齐)
+    // KSA 2D 云参考改进(2026-08-27):它的 2D 云 = 烘焙颜色贴图 + 法线贴图 Lambertian + 半清。
+    // 我们无预烘焙贴图,改用【程序化同源等效】:
+    public float orbitReliefStrength = 1.5f;         // 密度梯度法线浮雕强度(KSA normal-map 等效;0=关)
+    public float orbitDetailStrength = 0.4f;         // detail 噪声作为云内"纹理"明暗变化强度(0=关)
+    public float orbitResolutionScale = 0.5f;        // 2D 轨道云渲染分辨率(相对屏幕;0.5=半清+双线性软化)
+
     [XmlIgnore]
     public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
     [XmlElement("customWavelengths")]
@@ -284,6 +300,15 @@ public class CloudConfig
             silverLiningIntensity = 3.0f,
             forwardScatteringBias = 0.65f,
             nearThreshold = 100000f,
+            useOrbitClouds = false,
+            orbitTransitionStartAltitude = 25000f,
+            orbitTransitionEndAltitude = 100000f,
+            orbitSampleAltitude = 0f,
+            orbitDensityBoost = 25f,
+            orbitBrightness = 0.7f,
+            orbitReliefStrength = 1.5f,
+            orbitDetailStrength = 0.4f,
+            orbitResolutionScale = 0.5f,
             /*
             lowAltitudeThreshold = 10000f,
             midAltitudeThreshold = 50000f,
@@ -387,6 +412,15 @@ public class CloudConfig
             stockAlignSign = this.stockAlignSign,
             stockAlignAngleOffset = this.stockAlignAngleOffset,
             stockMapLayer = this.stockMapLayer,
+            useOrbitClouds = this.useOrbitClouds,
+            orbitTransitionStartAltitude = this.orbitTransitionStartAltitude,
+            orbitTransitionEndAltitude = this.orbitTransitionEndAltitude,
+            orbitSampleAltitude = this.orbitSampleAltitude,
+            orbitDensityBoost = this.orbitDensityBoost,
+            orbitBrightness = this.orbitBrightness,
+            orbitReliefStrength = this.orbitReliefStrength,
+            orbitDetailStrength = this.orbitDetailStrength,
+            orbitResolutionScale = this.orbitResolutionScale,
             /*
             lowAltitudeThreshold = this.lowAltitudeThreshold,
             midAltitudeThreshold = this.midAltitudeThreshold,
@@ -446,6 +480,15 @@ public class CloudConfig
         this.stockAlignSign = source.stockAlignSign;
         this.stockAlignAngleOffset = source.stockAlignAngleOffset;
         this.stockMapLayer = source.stockMapLayer;
+        this.useOrbitClouds = source.useOrbitClouds;
+        this.orbitTransitionStartAltitude = source.orbitTransitionStartAltitude;
+        this.orbitTransitionEndAltitude = source.orbitTransitionEndAltitude;
+        this.orbitSampleAltitude = source.orbitSampleAltitude;
+        this.orbitDensityBoost = source.orbitDensityBoost;
+        this.orbitBrightness = source.orbitBrightness;
+        this.orbitReliefStrength = source.orbitReliefStrength;
+        this.orbitDetailStrength = source.orbitDetailStrength;
+        this.orbitResolutionScale = source.orbitResolutionScale;
         /*
         this.lowAltitudeThreshold= source.lowAltitudeThreshold;
         this.midAltitudeThreshold= source.midAltitudeThreshold;

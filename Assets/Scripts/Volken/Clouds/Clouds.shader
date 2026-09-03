@@ -21,6 +21,7 @@ Shader "Hidden/Clouds"
         CloudDepthTex("CloudDepthTex", 2D) = "" {}
         HistoryCloudDepthTex("HistoryCloudDepthTex", 2D) = "" {}
         UpscaledCloudTex("UpscaledCloudTex", 2D) = "" {}
+        OrbitCloudTex("OrbitCloudTex", 2D) = "" {}
         SceneDepthTex("SceneDepthTex", 2D) = "" {}
         StockCloudCube("Stock Cloud Cube", Cube) = "" {}
     }
@@ -925,6 +926,318 @@ Shader "Hidden/Clouds"
 
         Pass
         {
+            Name "OrbitClouds"
+
+            // === 轨道云(2D 壳着色,2026-08-27) ===
+            // 高空(轨道)视角用廉价"云壳球面着色"替代体积 raymarch:
+            // 每像素 1 次外壳求交 → 在代表性云层高度处做 1 次【同源】密度采样(SampleDensityCheap,
+            // 与 Clouds pass 完全相同的一套 shape/distribution/falloff)→ 简单光照(Lambertian + phase)。
+            // 无 raymarch、无光步进、无时序 → 近免费;覆盖/形状与体积云同源 → 过渡带云形一致。
+            // 注意:不能在外壳顶(r=surface+maxCloudHeight)采样——那里高度 falloff≈0 恒黑;
+            // 必须在云带内取点(orbitSampleAltitude=0 时取"层强度加权层高",见 OrbitSampleAltitude)。
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+                float3 viewDir : TEXCOORD1;
+            };
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                // 观察射线重建(Blit 路径,与 Composite 一致;orbit pass 只跑主相机路径)
+                o.viewDir = mul(unity_CameraInvProjection, float4(v.uv * 2 - 1, 0, -1));
+                o.viewDir = mul(unity_CameraToWorld, float4(o.viewDir, 0));
+                return o;
+            }
+
+            // === 与 Clouds pass 同源的 uniforms(orbit 需要的那组;均由现有 C# 每帧/静态设置) ===
+            float3 sphereCenter;
+            float surfaceRadius;
+            float maxCloudHeight;
+            float3 _CamPos;
+            float currentRotation;
+            float3 cloudOffset;
+            float cloudScale;
+            float detailScale;
+            float detailStrength;
+            float4 cloudLayerHeights;
+            float4 cloudLayerSpreads;
+            float4 cloudLayerStrengths;
+            float cloudCoverage;
+            float cloudDensity;
+            float ambientLight;
+            float4 cloudColor;
+            float3 lightDir;
+            float4 phaseParams;
+            float multiScatterBlend;
+            float forwardScatteringBias;
+            float silverLiningIntensity;
+            // 轨道云参数(静态)
+            float orbitSampleAltitude;   // 2D 采样高度(0 = 自动:强度加权层高)
+            float orbitDensityBoost;     // 密度→不透明度放大(单样本 vs 体积多步进)
+            float orbitBrightness;       // 亮度缩放(与体积云 Additive 强度对齐)
+            float orbitReliefStrength;   // 密度梯度法线浮雕强度(KSA normal-map 等效,0=关)
+            float orbitDetailStrength;   // detail 噪声作为云内"纹理"明暗变化强度(0=关)
+
+            Texture2D<float> CloudShapeTex;
+            SamplerState samplerCloudShapeTex;
+            Texture2D<float> CloudDetailTex;
+            SamplerState samplerCloudDetailTex;
+            Texture2D<float2> PlanetMapTex;
+            SamplerState samplerPlanetMapTex;
+            TextureCube<float4> StockCloudCube;
+            SamplerState samplerStockCloudCube;
+            float useStockCloudMap;
+            float stockMapStrength;
+            float stockMaskInfluence;
+            float stockMapLayer;
+            float4 stockLayerValid;
+            float stockAlignSign;
+            float stockAlignAngleOffset;
+            float4x4 planetToBody;
+
+            float2 RaySphereIntersect(float3 pos, float3 dir, float radius)
+            {
+                float3 offset = pos - sphereCenter;
+                float a = dot(dir, dir);
+                float b = 2 * dot(offset, dir);
+                float c = dot(offset, offset) - radius * radius;
+                float d = b * b - 4 * a * c;
+                if (d < 0.0) return -1.0;
+                float sqrtD = sqrt(d);
+                return float2((-b - sqrtD) / (2 * a), (-b + sqrtD) / (2 * a));
+            }
+
+            float HenyeyGreenstein(float a, float g)
+            {
+                float g2 = g * g;
+                return (1.0 - g2) / (4.0 * 3.1415926 * pow(abs(1.0 + g2 - 2.0 * g * a), 1.5));
+            }
+            float HenyeyGreensteinMultiple(float cosAngle, float g1, float g2, float blend)
+            {
+                float hg1 = HenyeyGreenstein(cosAngle, g1);
+                float hg2 = HenyeyGreenstein(cosAngle, g2);
+                float hg3 = HenyeyGreenstein(cosAngle, 0.0);
+                float firstBlend = lerp(hg1, hg2, blend);
+                return lerp(firstBlend, hg3, multiScatterBlend * 0.5);
+            }
+            float CloudPhase(float a, float blend)
+            {
+                float hgBlend = HenyeyGreensteinMultiple(a, forwardScatteringBias, -phaseParams.y, blend);
+                return phaseParams.z + hgBlend * phaseParams.w * silverLiningIntensity;
+            }
+
+            float4 SampleStockDistribution(float3 dir, float windAngle)
+            {
+                float yAngle = windAngle + stockAlignSign * (stockAlignAngleOffset * 0.0174532925);
+                float ca = cos(yAngle);
+                float sa = sin(yAngle);
+                float3 sd = float3(dir.x * ca - dir.z * sa, dir.y, dir.x * sa + dir.z * ca);
+                sd = mul(planetToBody, float4(sd, 0.0)).xyz;
+                return StockCloudCube.SampleLevel(samplerStockCloudCube, sd, 0);
+            }
+
+            // 与 Clouds pass 的 SampleDensityCheap 完全同源(同一套密度/分布/falloff 函数)。
+            float SampleDensityCheap(float3 worldPos)
+            {
+                float3 offset = worldPos - sphereCenter;
+                float r = length(offset);
+
+                float cosAngle = cos(currentRotation);
+                float sinAngle = sin(currentRotation);
+                float3 rotatedOffset = float3(
+                    offset.x * cosAngle - offset.z * sinAngle,
+                    offset.y,
+                    offset.x * sinAngle + offset.z * cosAngle
+                );
+
+                // Domain warping: small sinusoidal perturbation to break up visible tiling
+                float3 warpOffset = float3(
+                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+                ) * 0.15;
+                float3 warpedUv = rotatedOffset + warpOffset;
+
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
+                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
+
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
+
+                spherical.x += cloudOffset.x;
+                float latFactor = sin(spherical.y * 3.14159265);
+                spherical.y += cloudOffset.z * 0.25 * latFactor;
+
+                float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+
+                float4 stock = 0.0;
+                if (useStockCloudMap > 0.5)
+                {
+                    stock = SampleStockDistribution(dir, cloudOffset.x * 6.28318530718);
+                }
+                float stockEff = useStockCloudMap * stockMapStrength;
+                float selValid = lerp(lerp(stockLayerValid.x, stockLayerValid.y, step(0.5, stockMapLayer)), stockLayerValid.z, step(1.5, stockMapLayer));
+                float4 valid = lerp(selValid.xxxx, float4(stockLayerValid.x, stockLayerValid.y, stockLayerValid.z, stockLayerValid.x), step(2.5, stockMapLayer));
+                float stockMaskValid = stockLayerValid.w;
+                float stockMask = lerp(1.0, stock.a, stockMaskInfluence * stockEff * stockMaskValid);
+                float selChannel = lerp(lerp(stock.r, stock.g, step(0.5, stockMapLayer)), stock.b, step(1.5, stockMapLayer));
+                float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
+                float4 stockBand = stockBandRaw * stockMask;
+
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                float4 layers;
+                layers.x = cloudLayerStrengths.x * mapVal.x;
+                layers.y = cloudLayerStrengths.y * mapVal.y;
+                layers.z = cloudLayerStrengths.z * mapVal.z;
+                layers.w = cloudLayerStrengths.w * mapVal.w;
+
+                float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
+                float4 falloff = exp(-falloffExponent * falloffExponent);
+
+                float4 active = step(0.0001, cloudLayerStrengths);
+                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff);
+                float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
+                                   + layers.x * falloff.x + layers.y * falloff.y
+                                   + layers.z * falloff.z + layers.w * falloff.w;
+
+                return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
+            }
+
+            // 代表性采样高度:0 = 自动(层强度加权层高),否则用户指定(≤ maxCloudHeight)。
+            float OrbitSampleAltitude()
+            {
+                if (orbitSampleAltitude > 0.01)
+                    return min(orbitSampleAltitude, maxCloudHeight);
+                float h0 = cloudLayerHeights.x; float s0 = max(cloudLayerSpreads.x, 1.0); float w0 = max(cloudLayerStrengths.x, 0.0) / s0;
+                float h1 = cloudLayerHeights.y; float s1 = max(cloudLayerSpreads.y, 1.0); float w1 = max(cloudLayerStrengths.y, 0.0) / s1;
+                float h2 = cloudLayerHeights.z; float s2 = max(cloudLayerSpreads.z, 1.0); float w2 = max(cloudLayerStrengths.z, 0.0) / s2;
+                float h3 = cloudLayerHeights.w; float s3 = max(cloudLayerSpreads.w, 1.0); float w3 = max(cloudLayerStrengths.w, 0.0) / s3;
+                float num = w0 * h0 + w1 * h1 + w2 * h2 + w3 * h3;
+                float den = w0 + w1 + w2 + w3;
+                float alt = den > 0.0 ? num / den : 0.5 * maxCloudHeight;
+                return clamp(alt, 0.0, maxCloudHeight);
+            }
+
+            // 云带半宽 = 活跃层 spread 最大值(夹到 maxCloudHeight),供覆盖采样上下偏移。
+            float OrbitSampleSpread()
+            {
+                float s0 = (cloudLayerStrengths.x > 0.0001) ? max(cloudLayerSpreads.x, 1.0) : 0.0;
+                float s1 = (cloudLayerStrengths.y > 0.0001) ? max(cloudLayerSpreads.y, 1.0) : 0.0;
+                float s2 = (cloudLayerStrengths.z > 0.0001) ? max(cloudLayerSpreads.z, 1.0) : 0.0;
+                float s3 = (cloudLayerStrengths.w > 0.0001) ? max(cloudLayerSpreads.w, 1.0) : 0.0;
+                float spread = max(max(s0, s1), max(s2, s3));
+                if (spread <= 0.0) spread = 0.4 * maxCloudHeight;
+                return clamp(spread, 100.0, maxCloudHeight);
+            }
+
+            // 与 SampleDensityCheap 相同的旋转+扭曲帧,但只采 detail 噪声作为逐像素"纹理"
+            // (KSA 颜色贴图等效:云内有明暗颗粒,而不是一整块平白)。
+            float SampleDetailAlbedo(float3 worldPos)
+            {
+                float3 offset = worldPos - sphereCenter;
+                float cosAngle = cos(currentRotation);
+                float sinAngle = sin(currentRotation);
+                float3 rotatedOffset = float3(
+                    offset.x * cosAngle - offset.z * sinAngle,
+                    offset.y,
+                    offset.x * sinAngle + offset.z * cosAngle
+                );
+                float3 warpOffset = float3(
+                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+                ) * 0.15;
+                float3 warpedUv = rotatedOffset + warpOffset;
+                // 比密度采样更细的尺度(×5)→ 云内细颗粒
+                return CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * (detailScale * 5.0), 0);
+            }
+
+            float4 frag(v2f i) : SV_Target
+            {
+                float3 camPos = _CamPos;
+                float3 viewDir = normalize(i.viewDir);
+
+                float2 shellIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
+                // 射线没碰到云壳 → 无云
+                if (shellIntersect.y < 0.0)
+                    return float4(0.0, 0.0, 0.0, 0.0);
+
+                // 相机在轨道上(壳外)→ 近交点即云壳入口;max(,0) 兜底壳内情形
+                float startT = max(shellIntersect.x, 0.0);
+                float3 up = normalize(camPos + startT * viewDir - sphereCenter);   // 球面法线(壳采样方向)
+
+                // --- 覆盖:云带内 3 个高度的 max(与体积云"列"的垂直外观一致,避免单层切片露空) ---
+                float sampleAlt = OrbitSampleAltitude();
+                float spread = OrbitSampleSpread();
+                float rMid = surfaceRadius + sampleAlt;
+                float rLo = max(surfaceRadius + 1.0, rMid - spread);
+                float rHi = min(surfaceRadius + maxCloudHeight, rMid + spread);
+                float3 pLo = sphereCenter + up * rLo;
+                float3 pMid = sphereCenter + up * rMid;
+                float3 pHi = sphereCenter + up * rHi;
+
+                float dLo = max(0.0, SampleDensityCheap(pLo));
+                float dMid = max(0.0, SampleDensityCheap(pMid));
+                float dHi = max(0.0, SampleDensityCheap(pHi));
+                float coverage = max(dLo, max(dMid, dHi));
+                if (coverage <= 0.0)
+                    return float4(0.0, 0.0, 0.0, 0.0);
+
+                // --- KSA 式法线浮雕:水平密度梯度扰动球面法线(程序化 normal-map,同源) ---
+                float3 tangent, bitangent;
+                {
+                    float3 refUp = abs(up.y) > 0.99 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
+                    tangent = normalize(cross(up, refUp));
+                    bitangent = cross(up, tangent);
+                }
+                // 梯度步长 ≈ 6% shapeScale,夹到 [150, 2500] 米(密度横向特征尺度)
+                float arc = clamp(0.06 / max(cloudScale, 1e-6), 150.0, 2500.0);
+                float3 pEast = pMid + tangent * arc;
+                float3 pNorth = pMid + bitangent * arc;
+                float dEast = max(0.0, SampleDensityCheap(pEast));
+                float dNorth = max(0.0, SampleDensityCheap(pNorth));
+                float2 grad = float2(dEast - dMid, dNorth - dMid) * orbitReliefStrength;
+                float3 N = normalize(up - tangent * grad.x - bitangent * grad.y);
+
+                // --- 细节噪声作为云内"纹理"(逐像素明暗变化) ---
+                float albedo = 1.0 + orbitDetailStrength * (SampleDetailAlbedo(pMid) - 0.5);
+
+                // --- 光照:Lambertian(浮雕法线)+ phase 银边 ---
+                float ndl = saturate(dot(N, -lightDir));
+                float light = lerp(ambientLight, 1.0, ndl);
+                float opacity = 1.0 - exp(-orbitDensityBoost * coverage);
+
+                float3 col = cloudColor.rgb * light * albedo * opacity * orbitBrightness;
+
+                // 银边(terminator 附近弱相位增强,与体积云 phase 参数同源)
+                float phaseValue = CloudPhase(dot(viewDir, -lightDir), multiScatterBlend);
+                col += cloudColor.rgb * phaseValue * silverLiningIntensity * opacity * (1.0 - ndl) * 0.5 * orbitBrightness;
+
+                return float4(col, opacity);
+            }
+            ENDCG
+        }
+
+        Pass
+        {
             Name "Composite"
             CGPROGRAM
             #pragma vertex vert
@@ -958,6 +1271,8 @@ Shader "Hidden/Clouds"
         
             Texture2D<float4> UpscaledCloudTex;
             SamplerState samplerUpscaledCloudTex;
+            Texture2D<float4> OrbitCloudTex;   // 轨道云(2D 壳着色)输出,按 _OrbitFade 与体积云交叉淡入
+            SamplerState samplerOrbitCloudTex;
             Texture2D<float> SceneDepthTex;
             SamplerState samplerSceneDepthTex;
             sampler2D _MainTex;
@@ -966,10 +1281,13 @@ Shader "Hidden/Clouds"
             float surfaceRadius;
             float _NearThreshold;
             float _CompositeMode;  // 0.0 = Additive (零干扰), 1.0 = Standard (物理遮挡)
+            float _OrbitFade;      // 海拔淡入因子:0 = 纯体积云, 1 = 纯 2D 轨道云
             
             float4 frag(v2f i) : SV_Target
             {
-                float4 clouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
+                float4 volClouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
+                float4 orbitClouds = OrbitCloudTex.Sample(samplerOrbitCloudTex, i.uv);
+                float4 clouds = lerp(volClouds, orbitClouds, _OrbitFade);
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
 

@@ -80,6 +80,18 @@
     <s id="Volken.UI.HistoryBlend">History Blend</s>
     <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale (1/N stepping)</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
+
+    <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
+    <s id="Volken.UI.OrbitClouds">Orbit Clouds (2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">Use Orbit Clouds (2D at high altitude)</s>
+    <s id="Volken.UI.OrbitTransitionStart">Transition Band Start (m)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">Transition Band End (m)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">2D Sample Altitude (0 = auto)</s>
+    <s id="Volken.UI.OrbitDensityBoost">2D Density Boost</s>
+    <s id="Volken.UI.OrbitBrightness">2D Brightness</s>
+    <s id="Volken.UI.OrbitReliefStrength">2D Relief (normal-map) Strength</s>
+    <s id="Volken.UI.OrbitDetailStrength">2D Detail Texture Strength</s>
+    <s id="Volken.UI.OrbitResolutionScale">2D Resolution Scale</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>

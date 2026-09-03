@@ -376,6 +376,40 @@ public class CloudRenderer : MonoBehaviour
         return Mathf.Lerp(2.0f, 1.0f, t);
     }
 
+    /// <summary>
+    /// 相机海拔 = |camPos − 行星中心| − 行星半径(米)。任何异常都回退 0(低空 → 纯体积云)。
+    /// </summary>
+    private float ComputeCameraAltitude()
+    {
+        try
+        {
+            var craftNode = Game.Instance.FlightScene.CraftNode;
+            if (craftNode == null || craftNode.ReferenceFrame == null || craftNode.Parent == null)
+                return 0f;
+            Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+            float surfaceRadius = (float)craftNode.Parent.PlanetData.Radius;
+            return (cam.transform.position - planetCenter).magnitude - surfaceRadius;
+        }
+        catch
+        {
+            return 0f;
+        }
+    }
+
+    /// <summary>
+    /// 海拔淡入因子:0 = 纯体积云,1 = 纯 2D 轨道云。
+    /// useOrbitClouds 关闭 → 恒 0(完全保持现状,零回归)。
+    /// smoothstep 保证过渡带两端导数 0,淡入不突兀。
+    /// </summary>
+    private static float ComputeOrbitFade(CloudConfig cfg, float camAlt)
+    {
+        if (cfg == null || !cfg.useOrbitClouds) return 0f;
+        float start = Mathf.Max(0f, cfg.orbitTransitionStartAltitude);
+        float end = Mathf.Max(start + 1f, cfg.orbitTransitionEndAltitude);
+        float t = Mathf.Clamp01(Mathf.InverseLerp(start, end, camAlt));
+        return t * t * (3f - 2f * t); // smoothstep
+    }
+
     [ImageEffectOpaque]
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -402,8 +436,10 @@ public class CloudRenderer : MonoBehaviour
                 bool tss = layer.config.useTemporalUpscale;
                 int upX = Mathf.Max(1, layer.config.upscaleX);
                 int upY = Mathf.Max(1, layer.config.upscaleY);
+                float orbitRes = Mathf.Clamp(layer.config.orbitResolutionScale, 0.1f, 1f);
                 bool needsCreate = layer.cloudTex == null || !layer.cloudTex.IsCreated() ||
                     Mathf.Abs(layer.currentResolutionScale - layer.config.resolutionScale) > 0.001f ||
+                    Mathf.Abs(layer.currentOrbitRes - orbitRes) > 0.001f ||
                     layer.currentTemporal != (tss ? 1 : 0) ||
                     layer.currentUpX != upX || layer.currentUpY != upY;
                 if (needsCreate)
@@ -433,6 +469,20 @@ public class CloudRenderer : MonoBehaviour
             Graphics.Blit(FarCameraScript.farDepthTex, combinedDepthTex, matRef, nearDepthPass);
             Graphics.Blit(combinedDepthTex, lowResDepthTex, matRef, downsamplePass);
 
+            // 2.5 轨道云:相机海拔 → 每层淡入因子(0=纯体积云,1=纯 2D)。
+            //     海拔分派与 KSA 一致:camAlt < start → 仅体积;start~end → 两者+交叉淡入;> end → 仅 2D。
+            int orbitPass = matRef.FindPass("OrbitClouds");
+            float camAlt = ComputeCameraAltitude();
+            foreach (var layer in activeLayers)
+            {
+                layer.orbitFade = ComputeOrbitFade(layer.config, camAlt);
+                bool orbitOnly = layer.orbitFade >= 0.999f;
+                // 进入纯 2D 的瞬间清时序历史,防止切回体积云时旧历史残影(冷启动路径已在 Upscale 内)
+                if (orbitOnly && !layer.orbitOnlyLastFrame)
+                    ClearTemporalHistory(layer);
+                layer.orbitOnlyLastFrame = orbitOnly;
+            }
+
             // 3. Render each layer (independent raymarch, MRT: color + cloud depth)
             int cloudsPass = matRef.FindPass("Clouds");
             // 阶段二: 全屏三角形(一次构建,复用)
@@ -455,7 +505,11 @@ public class CloudRenderer : MonoBehaviour
 
             foreach (var layer in activeLayers)
             {
+                // 所有层都推进风/自转/重投影矩阵(2D 轨道 pass 也依赖 currentRotation/cloudOffset;
+                // prevViewProjMat 保持新鲜,切回体积云时重投影不失效)
                 SetLayerDynamicProperties(layer);
+                // 高空纯 2D:跳过体积 raymarch(本特性的性能大头;Upscale/历史也一并跳过)
+                if (layer.orbitFade >= 0.999f) continue;
 
                 layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
                 // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat) + cloudMVTex(RG 本帧运动矢量)
@@ -479,11 +533,24 @@ public class CloudRenderer : MonoBehaviour
                 }
             }
 
+            // 3.5 轨道云(2D 壳着色):每层渲染到 orbitCloudTex(仅当淡入因子>0;pass 缺失时优雅降级为纯体积云)
+            if (orbitPass >= 0)
+            {
+                foreach (var layer in activeLayers)
+                {
+                    if (layer.orbitFade <= 0.001f) continue;
+                    // Blit 的 source 不被 OrbitClouds pass 采样(纯壳着色),仅作为合法非空输入
+                    Graphics.Blit(lowResDepthTex, layer.orbitCloudTex, layer.material, orbitPass);
+                }
+            }
+
             // 4. Upscale each layer (KSA 时序核心,走 Graphics.Blit 单目标输出,_MainTex 自动绑 cloudTex。
             //    不用 MRT+DrawMeshNow:此前双 MRT(0 深度)在该路径上不渲染 → upscaled 恒黑 → 看不到云)
             int upscalePass = matRef.FindPass("Upscale");
             foreach (var layer in activeLayers)
             {
+                if (layer.orbitFade >= 0.999f) continue;   // 高空纯 2D:体积时序链路整条跳过
+
                 var mat = layer.material;
                 mat.SetTexture("CloudDepthTex", layer.cloudDepthTex);
                 mat.SetTexture("CloudMVDilatedTex", layer.cloudMVDilatedTex);   // 本帧膨胀 MV
@@ -508,9 +575,12 @@ public class CloudRenderer : MonoBehaviour
             foreach (var layer in activeLayers)
             {
                 matRef.SetTexture("UpscaledCloudTex", layer.upscaledCloudTex);
+                matRef.SetTexture("OrbitCloudTex", layer.orbitCloudTex);
                 matRef.SetTexture("SceneDepthTex", combinedDepthTex);
                 matRef.SetFloat("_CompositeMode",
                     layer.config.compositeMode == CompositeMode.Standard ? 1.0f : 0.0f);
+                // 交叉淡入因子:orbit pass 不可用 → 强制 0(纯体积云,等同未开启本特性)
+                matRef.SetFloat("_OrbitFade", orbitPass >= 0 ? layer.orbitFade : 0f);
 
                 var temp = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
                 Graphics.Blit(result, temp, matRef, compositePass);

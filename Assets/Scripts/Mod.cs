@@ -53,6 +53,7 @@ namespace Assets.Scripts
             GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
             forceSettingScriptLoadGameObject.SetActive(false);
             Volken.Initialize();
+            VolkenProfiler.ProfilerController.Create();
             RegisterCommands();
 
             Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
@@ -86,26 +87,14 @@ namespace Assets.Scripts
             }
         }
         #region LOG
-        public static void LOG(object message)
-        {
-            if (ModSettings.Instance.ShowDevLog)
-            {
-                Debug.unityLogger.Log(message);
-            }
-        }
         public static void LOG(string format, params object[] args)
         {
-            if (ModSettings.Instance.ShowDevLog)
+            try
             {
+                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
                 Debug.unityLogger.LogFormat(LogType.Log, format, args);
             }
-        }
-        public static void LOG(UnityEngine.Object context, string format, params object[] args)
-        {
-            if (ModSettings.Instance.ShowDevLog)
-            {
-                Debug.unityLogger.LogFormat(LogType.Log, context, format, args);
-            }
+            catch { }
         }
         #endregion
     }

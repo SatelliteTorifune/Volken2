@@ -58,7 +58,10 @@ public class VolkenUserInterface : MonoBehaviour
         {
             try
             {
-                Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+                if (Game.Instance?.FlightScene != null)
+                {
+                    Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
+                }
             }
             catch (Exception exception)
             {
@@ -552,6 +555,48 @@ public class VolkenUserInterface : MonoBehaviour
             new System.Collections.Generic.List<string> { "Additive", "Standard" });
         group.Add(compositeDropdown);
 
+        // === 方案 B: 游戏自带云作为全球分布形状(对比用) ===
+        var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
+            () => cfg.useStockCloudMap, s =>
+            {
+                if (s && StockCloudMap.Current == null)
+                {
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.StockCloudUnavailable"));
+                    cfg.useStockCloudMap = false;
+                    return;
+                }
+                cfg.useStockCloudMap = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(stockToggleModel);
+
+        // 选择用游戏哪一层云作为分布(0=低,1=中,2=高,3=按层对应)
+        var stockLayerOptions = new System.Collections.Generic.List<string>
+        {
+            Locale.GetString("Volken.UI.StockLayerLow"),
+            Locale.GetString("Volken.UI.StockLayerMid"),
+            Locale.GetString("Volken.UI.StockLayerHigh"),
+            Locale.GetString("Volken.UI.StockLayerPerBand")
+        };
+        var stockLayerDropdown = new DropdownModel(Locale.GetString("Volken.UI.StockMapLayer"),
+            () => stockLayerOptions[Mathf.Clamp(cfg.stockMapLayer, 0, 3)],
+            (val) =>
+            {
+                int idx = stockLayerOptions.IndexOf(val);
+                if (idx >= 0) cfg.stockMapLayer = idx;
+                Volken.Instance.ValueChanged();
+            },
+            stockLayerOptions);
+        group.Add(stockLayerDropdown);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
+            s => { cfg.stockMapStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
+            s => { cfg.stockMaskInfluence = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
+            s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignAngleOffset"), () => cfg.stockAlignAngleOffset,
+            s => { cfg.stockAlignAngleOffset = s; Volken.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
+
         // === Cloud Shape ===
         CreateSlider(group, Locale.GetString("Volken.UI.Density"), () => cfg.density,
             s => { cfg.density = s; Volken.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);
@@ -646,6 +691,16 @@ public class VolkenUserInterface : MonoBehaviour
 
         // === Quality ===
         GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
+        // === 方案 C: 时序超采样(A/B 对比用) ===
+        var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
+            () => cfg.useTemporalUpscale, s =>
+            {
+                cfg.useTemporalUpscale = s;
+                Volken.Instance.ValueChanged();
+            });
+        qualityGroup.Add(temporalToggleModel);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
+            s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Instance.ValueChanged(); }, 1, 6, 0, true);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
             s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,
@@ -654,6 +709,8 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.stepSizeFalloff = s; Volken.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
             s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Instance.ValueChanged(); }, 1, 25, 0, true);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
+            s => { cfg.lightMarchDistance = s; Volken.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
             s => { cfg.blueNoiseStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
@@ -794,6 +851,16 @@ public class VolkenUserInterface : MonoBehaviour
         // === Quality ===
         GroupModel qualityGroup = new GroupModel(
             Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
+        // === 方案 C: 时序超采样(A/B 对比用) ===
+        var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
+            () => cfg.useTemporalUpscale, s =>
+            {
+                cfg.useTemporalUpscale = s;
+                Volken.Instance.ValueChanged();
+            });
+        qualityGroup.Add(temporalToggleModel);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
+            s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Instance.ValueChanged(); }, 1, 6, 0, true);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
             s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,
@@ -802,6 +869,8 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.stepSizeFalloff = s; Volken.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
             s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Instance.ValueChanged(); }, 1, 25, 0, true);
+        CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
+            s => { cfg.lightMarchDistance = s; Volken.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
             s => { cfg.blueNoiseStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
         CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,

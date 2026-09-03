@@ -17,6 +17,17 @@
     <s id="Volken.UI.ResetCurrentToDefault">重置为默认配置</s>
     <s id="Volken.UI.TryAnotherConfig">试试另一个配置</s>
     <s id="Volken.UI.CompositeMode">云层合成模式</s>
+    <s id="Volken.UI.UseStockCloudMap">使用游戏自带云分布</s>
+    <s id="Volken.UI.StockCloudUnavailable">该星球没有自带云数据。</s>
+    <s id="Volken.UI.StockMapStrength">自带云混合强度</s>
+    <s id="Volken.UI.StockMaskInfluence">自带云遮罩影响</s>
+    <s id="Volken.UI.StockAlignSign">自带云对齐方向</s>
+    <s id="Volken.UI.StockAlignAngleOffset">自带云对齐角(度)</s>
+    <s id="Volken.UI.StockMapLayer">自带云分布层</s>
+    <s id="Volken.UI.StockLayerLow">低云层</s>
+    <s id="Volken.UI.StockLayerMid">中云层</s>
+    <s id="Volken.UI.StockLayerHigh">高云层</s>
+    <s id="Volken.UI.StockLayerPerBand">按层对应</s>
     
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">启用</s>
@@ -64,9 +75,12 @@
     <s id="Volken.UI.StepSize">步长</s>
     <s id="Volken.UI.StepSizeFalloff">步长衰减</s>
     <s id="Volken.UI.NumberOfLightSamples">光源采样数</s>
+    <s id="Volken.UI.LightMarchDistance">光照步进距离</s>
     <s id="Volken.UI.Threshold">阈值</s>
     <s id="Volken.UI.RayOffsetStrength">光线偏移强度</s>
     <s id="Volken.UI.HistoryBlend">运动残影</s>
+    <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
+    <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">配置 '{0}' 已保存!</s>

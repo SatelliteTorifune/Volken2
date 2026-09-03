@@ -17,6 +17,17 @@
     <s id="Volken.UI.ResetCurrentToDefault">Reset Current to Default</s>
     <s id="Volken.UI.TryAnotherConfig">Try Another Config</s>
     <s id="Volken.UI.CompositeMode">Composite Mode</s>
+    <s id="Volken.UI.UseStockCloudMap">Use Stock Cloud Distribution</s>
+    <s id="Volken.UI.StockCloudUnavailable">No stock cloud data for this planet.</s>
+    <s id="Volken.UI.StockMapStrength">Stock Map Strength</s>
+    <s id="Volken.UI.StockMaskInfluence">Stock Mask Influence</s>
+    <s id="Volken.UI.StockAlignSign">Stock Align Sign</s>
+    <s id="Volken.UI.StockAlignAngleOffset">Stock Align Angle (deg)</s>
+    <s id="Volken.UI.StockMapLayer">Stock Distribution Layer</s>
+    <s id="Volken.UI.StockLayerLow">Low Clouds</s>
+    <s id="Volken.UI.StockLayerMid">Mid Clouds</s>
+    <s id="Volken.UI.StockLayerHigh">High Clouds</s>
+    <s id="Volken.UI.StockLayerPerBand">Per-Band Mapping</s>
     <!-- Cloud Settings -->
     <s id="Volken.UI.MainToggle">Main Toggle</s>
     <s id="Volken.UI.Density">Density</s>
@@ -63,9 +74,12 @@
     <s id="Volken.UI.StepSize">Step Size</s>
     <s id="Volken.UI.StepSizeFalloff">Step Size Falloff</s>
     <s id="Volken.UI.NumberOfLightSamples">Number of Light Samples</s>
+    <s id="Volken.UI.LightMarchDistance">Light March Distance</s>
     <s id="Volken.UI.Threshold">Threshold</s>
     <s id="Volken.UI.RayOffsetStrength">Ray Offset Strength</s>
     <s id="Volken.UI.HistoryBlend">History Blend</s>
+    <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale (1/N stepping)</s>
+    <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>

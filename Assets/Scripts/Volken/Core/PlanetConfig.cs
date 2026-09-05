@@ -78,11 +78,11 @@ public class PlanetConfigList
             {
                 serializer.Serialize(stream, this);
             }
-            Mod.LOG($"Planet config '{configName}' saved to: {filePath}");
+            Mod.Log($"Planet config '{configName}' saved to: {filePath}");
         }
         catch (System.Exception e)
         {
-            Mod.LOG("Saving failed+"+e);
+            Mod.Log("Saving failed+"+e);
         }
     }
     public static PlanetConfigList LoadFromFile(string configName)

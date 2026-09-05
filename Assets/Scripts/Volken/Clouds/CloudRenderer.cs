@@ -49,7 +49,7 @@ public class CloudRenderer : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken:CloudRenderer cannot subscribe ReferenceFrameRecentered: " + ex.Message);
+            Mod.Log("Volken:CloudRenderer cannot subscribe ReferenceFrameRecentered: " + ex.Message);
         }
     }
 
@@ -101,11 +101,11 @@ public class CloudRenderer : MonoBehaviour
                 layer.frameNumber = 0;
                 ClearTemporalHistory(layer);
             }
-            Mod.LOG("Volken:CloudRenderer frame recentered Δ=" + positionDelta.magnitude.ToString("F1") + "m — TSS history cleared");
+            Mod.Log("Volken:CloudRenderer frame recentered Δ=" + positionDelta.magnitude.ToString("F1") + "m — TSS history cleared");
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken:CloudRenderer OnReferenceFrameRecentered ERROR: " + ex.Message);
+            Mod.Log("Volken:CloudRenderer OnReferenceFrameRecentered ERROR: " + ex.Message);
         }
     }
 
@@ -198,7 +198,7 @@ public class CloudRenderer : MonoBehaviour
         }
         catch (Exception)
         {
-            Mod.LOG("Volken:CloudRenderer.SetAllLayersShaderProperties" + Environment.StackTrace);
+            Mod.Log("Volken:CloudRenderer.SetAllLayersShaderProperties" + Environment.StackTrace);
         }
     }
 
@@ -410,6 +410,214 @@ public class CloudRenderer : MonoBehaviour
         return t * t * (3f - 2f * t); // smoothstep
     }
 
+    private float _lastOrbitDiagLogTime = -999f;
+    private Vector3 _lastDiagCamPos;
+    private float _lastDiagCamTime = -999f;
+
+    /// <summary>
+    /// 轨道云诊断日志(2s 节流):打印运行态参数(相机海拔/速度/每层淡入/体积云是否运行/RT 尺寸/漂移状态/真实配置),
+    /// 用于定位 2D 与体积云"范围差一圈"或"速度不同"的根因。
+    /// </summary>
+    private void LogOrbitDiagnostics(List<CloudLayer> activeLayers, float camAlt, int orbitPass)
+    {
+        bool anyOrbit = false;
+        foreach (var layer in activeLayers)
+            if (layer.config != null && layer.config.useOrbitClouds) { anyOrbit = true; break; }
+        if (!anyOrbit) return;
+
+        if (Time.realtimeSinceStartup - _lastOrbitDiagLogTime < 2f) return;
+        _lastOrbitDiagLogTime = Time.realtimeSinceStartup;
+
+        // 相机速度(2s 窗口平均,米/秒)—— 排查"速度"差异
+        float camSpeed = 0f;
+        if (_lastDiagCamTime > 0f)
+        {
+            float dt = Mathf.Max(1e-3f, Time.realtimeSinceStartup - _lastDiagCamTime);
+            camSpeed = Vector3.Distance(cam.transform.position, _lastDiagCamPos) / dt;
+        }
+        _lastDiagCamPos = cam.transform.position;
+        _lastDiagCamTime = Time.realtimeSinceStartup;
+
+        // 角速度对比(游戏本体 2D 云随行星自转:WorldToCloud = WorldToPlanet × YPR(angularSpeed)):
+        // 行星自转角速度(rad/s,IPlanetData.AngularVelocity)vs 云场旋转率(globalRotationAngular×5e-4)。
+        // 若两者不一致 → 云相对地表漂移(角速度症状);两者都应在体积云/2D 间同步(共用 currentRotation)。
+        double planetSpin = 0.0;
+        try
+        {
+            planetSpin = Game.Instance.FlightScene.CraftNode.Parent.PlanetData.AngularVelocity;
+        }
+        catch { }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Volken:OrbitDiag camAlt=").Append(camAlt.ToString("F0")).Append("m speed=").Append(camSpeed.ToString("F1")).Append("m/s orbitPass=").Append(orbitPass >= 0 ? "yes" : "missing");
+        sb.Append(" planetSpin=").Append(planetSpin.ToString("G4")).Append("rad/s");
+        if (lowResDepthTex != null)
+            sb.Append(" lowDepth=").Append(lowResDepthTex.width).Append('x').Append(lowResDepthTex.height);
+        LogProjectionCheck(sb);
+        foreach (var layer in activeLayers)
+        {
+            var c = layer.config;
+            sb.Append(" | L").Append(layer.layerIndex)
+              .Append(" fade=").Append(layer.orbitFade.ToString("F3"))
+              .Append(" volRun=").Append(layer.orbitFade < 0.999f ? 1 : 0)
+              .Append(" orbitRT=").Append(layer.orbitCloudTex != null ? layer.orbitCloudTex.width + "x" + layer.orbitCloudTex.height : "null");
+            if (c == null) continue;
+            // 漂移/自转状态(2D 与体积云共用同一材质 uniform,验证"速度"是否一致)
+            sb.Append(" rot=").Append(layer.accumulatedRotation.ToString("F3"))
+              .Append(" off=").Append(layer.runningOffset.ToString("F2"))
+              .Append(" wind=").Append(c.windSpeed.ToString("F2")).Append('@').Append(c.windDirection.ToString("F0"))
+              .Append(" globRot=").Append(c.globalRotationAngular.ToString("F2"))
+              .Append(" rotRate=").Append((c.globalRotationAngular * 5e-4f).ToString("G4")).Append("rad/s")
+              .Append(" tss=").Append(c.useTemporalUpscale ? 1 : 0)
+              .Append(" histBlend=").Append(c.historyBlend.ToString("F2"))
+              .Append(" resScale=").Append(c.resolutionScale.ToString("F2"))
+              .Append(" h=").Append(c.layerHeights)
+              .Append(" sp=").Append(c.layerSpreads)
+              .Append(" w=").Append(c.layerStrengths)
+              .Append(" dens=").Append(c.density.ToString("F4"))
+              .Append(" abs=").Append(c.absorption.ToString("F4"))
+              .Append(" cov=").Append(c.coverage.ToString("F3"))
+              .Append(" maxH=").Append(c.maxCloudHeight.ToString("F0"))
+              .Append(" step=").Append(c.stepSize.ToString("F0"))
+              .Append(" comp=").Append(c.compositeMode)
+              .Append(" stock=").Append(c.useStockCloudMap ? 1 : 0)
+              .Append(" fadeBand=").Append(c.orbitTransitionStartAltitude.ToString("F0")).Append('-').Append(c.orbitTransitionEndAltitude.ToString("F0"))
+              .Append(" boost=").Append(c.orbitDensityBoost.ToString("F2"))
+              .Append(" bright=").Append(c.orbitBrightness.ToString("F2"));
+        }
+        Mod.Log(sb.ToString());
+    }
+
+    private bool _projChecked;
+
+    /// <summary>
+    /// 投影一致性校验(每会话一次):CPU 端分别用"显式相机轴"和"相机投影矩阵"重建 viewDir,
+    /// 在 9×9 NDC 网格上量最大角差 —— 直接判断两条渲染路径是否会产生随相机旋转而变的错位。
+    /// </summary>
+    private void LogProjectionCheck(System.Text.StringBuilder sb)
+    {
+        if (cam == null) return;
+        sb.Append(" fov=").Append(cam.fieldOfView.ToString("F2"))
+          .Append(" aspect=").Append(cam.aspect.ToString("F4"))
+          .Append(" ortho=").Append(cam.orthographic ? 1 : 0);
+        if (_projChecked) return;
+        _projChecked = true;
+        try
+        {
+            float tanFovV = Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float aspect = cam.aspect;
+            Matrix4x4 invProj = cam.projectionMatrix.inverse;
+            Matrix4x4 camToWorld = cam.cameraToWorldMatrix;
+            Vector3 fwd = cam.transform.forward, right = cam.transform.right, up = cam.transform.up;
+            float maxDeg = 0f;
+            for (int gy = 0; gy <= 8; gy++)
+            for (int gx = 0; gx <= 8; gx++)
+            {
+                float ndcX = gx / 4f - 1f, ndcY = gy / 4f - 1f;
+                Vector3 vExplicit = (fwd + right * (ndcX * tanFovV * aspect) - up * (ndcY * tanFovV)).normalized;
+                // 与 2D 旧 shader 的重建一致:clip=(ndc,0,-1) → invProj → CameraToWorld
+                Vector4 unproj = invProj * new Vector4(ndcX, ndcY, 0f, -1f);
+                Vector3 vMatrix = camToWorld.MultiplyVector(new Vector3(unproj.x, unproj.y, unproj.z)).normalized;
+                float deg = Mathf.Rad2Deg * Mathf.Acos(Mathf.Clamp(Vector3.Dot(vExplicit, vMatrix), -1f, 1f));
+                if (deg > maxDeg) maxDeg = deg;
+            }
+            Mod.Log("Volken:ProjCheck maxViewDirDelta=" + maxDeg.ToString("F4") + "deg (显式轴 vs 逆投影矩阵;≈0 = 两路径一致)");
+        }
+        catch (Exception e) { Mod.Log("Volken:ProjCheck ERROR " + e.Message); }
+    }
+
+    private float _lastCoverageLogTime = -999f;
+
+    /// <summary>
+    /// 覆盖探针(2s 节流,任一层的 orbitDebugMode>0 时启用):
+    /// GPU 回读体积云 cloudTex 与 2D orbitCloudTex,量化两者的屏幕覆盖比例 + 相对行星边缘的"圈宽"像素 ——
+    /// 直接给出"范围差"数字,替代目测。
+    /// 几何:行星剪影是圆,屏幕半径 = focal·tan(asin(R/d)),圆心 = 行星中心屏幕投影(与相机朝向无关);
+    /// R03/R15 = 亮度阈值 0.03/0.15 的云最远像素半径;ring = maxR − limb(>0 表示云伸出行星边缘的像素)。
+    /// </summary>
+    private void LogCloudCoverage(List<CloudLayer> activeLayers, float camAlt, Vector3 planetCenter, float surfaceRadius)
+    {
+        bool anyDebug = false;
+        foreach (var layer in activeLayers)
+            if (layer.config != null && layer.config.orbitDebugMode > 0.5f) { anyDebug = true; break; }
+        if (!anyDebug) return;
+        if (cam == null) return;
+
+        if (Time.realtimeSinceStartup - _lastCoverageLogTime < 2f) return;
+        _lastCoverageLogTime = Time.realtimeSinceStartup;
+
+        float halfFov = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
+        float focalPx = (cam.pixelHeight * 0.5f) / Mathf.Tan(Mathf.Max(halfFov, 1e-4f));
+        float dist = Mathf.Max(camAlt + surfaceRadius, surfaceRadius * 1.001f);
+        float limbPx = focalPx * Mathf.Tan(Mathf.Asin(Mathf.Clamp(surfaceRadius / dist, 0f, 0.999f)));
+        Vector2 planetScreen = cam.WorldToScreenPoint(planetCenter);   // 左下原点,像素
+
+        foreach (var layer in activeLayers)
+        {
+            if (layer.config == null || !layer.config.useOrbitClouds) continue;
+            if (layer.orbitCloudTex == null) continue;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("Volken:Coverage L").Append(layer.layerIndex)
+              .Append(" alt=").Append(camAlt.ToString("F0"))
+              .Append(" fade=").Append(layer.orbitFade.ToString("F3"))
+              .Append(" pCtr=").Append(planetScreen.x.ToString("F0")).Append(',').Append(planetScreen.y.ToString("F0"))
+              .Append(" limb=").Append(limbPx.ToString("F0")).Append("px");
+            // 2D 轨道云(仅本帧确实渲染过:淡入>0)
+            if (layer.orbitFade > 0.001f)
+                MeasureCloudRT(layer.orbitCloudTex, planetScreen, limbPx, "2d", sb);
+            else
+                sb.Append(" 2d=skip");
+            // 体积云(仅本帧确实渲染过:淡入<0.999;否则 cloudTex 是陈旧帧)
+            if (layer.cloudTex != null && layer.orbitFade < 0.999f)
+                MeasureCloudRT(layer.cloudTex, planetScreen, limbPx, "vol", sb);
+            else
+                sb.Append(" vol=skip");
+            Mod.Log(sb.ToString());
+        }
+    }
+
+    private static void MeasureCloudRT(RenderTexture rt, Vector2 planetScreenPx, float limbPx, string tag, System.Text.StringBuilder sb)
+    {
+        var prev = RenderTexture.active;
+        var tmp = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+        RenderTexture.active = rt;
+        tmp.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        tmp.Apply();
+        RenderTexture.active = prev;
+
+        var px = tmp.GetPixels32();
+        int total = px.Length;
+        float cx = planetScreenPx.x * rt.width / (float)Screen.width;
+        float cy = planetScreenPx.y * rt.height / (float)Screen.height;
+        float limbRt = limbPx * rt.width / (float)Screen.width;
+        int count03 = 0, count15 = 0;
+        float maxR03 = 0f, maxR15 = 0f;
+        for (int i = 0; i < total; i++)
+        {
+            var c = px[i];
+            float lum = (c.r + c.g + c.b) / 765f;
+            if (lum <= 0.03f) continue;
+            int x = i % rt.width, y = i / rt.width;
+            float dx = x - cx, dy = y - cy;
+            float rad = Mathf.Sqrt(dx * dx + dy * dy);
+            count03++;
+            if (rad > maxR03) maxR03 = rad;
+            if (lum > 0.15f)
+            {
+                count15++;
+                if (rad > maxR15) maxR15 = rad;
+            }
+        }
+        if (Application.isPlaying) UnityEngine.Object.DestroyImmediate(tmp);
+        else UnityEngine.Object.Destroy(tmp);
+
+        sb.Append(' ').Append(tag).Append("=").Append((count03 * 100f / total).ToString("F1")).Append('%')
+          .Append(" R03=").Append(maxR03.ToString("F0")).Append("px")
+          .Append(" R15=").Append(maxR15.ToString("F0")).Append("px")
+          .Append(" ring03=").Append((maxR03 - limbRt).ToString("F1")).Append("px")
+          .Append(" ring15=").Append((maxR15 - limbRt).ToString("F1")).Append("px");
+    }
+
     [ImageEffectOpaque]
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -482,6 +690,7 @@ public class CloudRenderer : MonoBehaviour
                     ClearTemporalHistory(layer);
                 layer.orbitOnlyLastFrame = orbitOnly;
             }
+            LogOrbitDiagnostics(activeLayers, camAlt, orbitPass);
 
             // 3. Render each layer (independent raymarch, MRT: color + cloud depth)
             int cloudsPass = matRef.FindPass("Clouds");
@@ -588,12 +797,25 @@ public class CloudRenderer : MonoBehaviour
                 result = temp;
             }
 
+            // 5.5 覆盖探针(仅 orbitDebugMode>0 时):量 2D/体积云的屏幕范围差
+            try
+            {
+                var probeCraft = Game.Instance.FlightScene.CraftNode;
+                if (probeCraft != null && probeCraft.ReferenceFrame != null && probeCraft.Parent != null)
+                {
+                    Vector3 probeCenter = probeCraft.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+                    float probeRadius = (float)probeCraft.Parent.PlanetData.Radius;
+                    LogCloudCoverage(activeLayers, camAlt, probeCenter, probeRadius);
+                }
+            }
+            catch { }
+
             Graphics.Blit(result, destination);
             RenderTexture.ReleaseTemporary(result);
         }
         catch (Exception e)
         {
-            Mod.LOG("Volken:CloudRenderer.OnRenderImage ERROR: " + e);
+            Mod.Log("Volken:CloudRenderer.OnRenderImage ERROR: " + e);
             try { Graphics.Blit(source, destination); } catch { }
         }
     }

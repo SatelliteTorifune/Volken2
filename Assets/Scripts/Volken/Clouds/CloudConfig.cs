@@ -136,13 +136,14 @@ public class CloudConfig
     public float orbitTransitionStartAltitude = 25000f;  // 过渡带起点(米):低于此 → 纯体积云
     public float orbitTransitionEndAltitude = 100000f;   // 过渡带终点(米):高于此 → 纯 2D 轨道云(跳过体积 raymarch)
     public float orbitSampleAltitude = 0f;           // 2D 采样高度(0=自动:按层强度加权层高)
-    public float orbitDensityBoost = 25f;            // 密度→不透明度放大(2D 单样本 vs 体积多步进累积)
+    public float orbitDensityBoost = 1f;             // 光学厚度乘数(2D 已按体积云同源 Beer 积分;1=与体积云一致)
     public float orbitBrightness = 0.7f;             // 2D 亮度缩放(与体积云 Additive 合成强度对齐)
     // KSA 2D 云参考改进(2026-08-27):它的 2D 云 = 烘焙颜色贴图 + 法线贴图 Lambertian + 半清。
     // 我们无预烘焙贴图,改用【程序化同源等效】:
     public float orbitReliefStrength = 1.5f;         // 密度梯度法线浮雕强度(KSA normal-map 等效;0=关)
     public float orbitDetailStrength = 0.4f;         // detail 噪声作为云内"纹理"明暗变化强度(0=关)
     public float orbitResolutionScale = 0.5f;        // 2D 轨道云渲染分辨率(相对屏幕;0.5=半清+双线性软化)
+    public float orbitDebugMode = 0f;                // 调试:0=关;1=左右分屏对比 2D/体积云覆盖(红=不透明度,绿=光学厚度足迹)
 
     [XmlIgnore]
     public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
@@ -210,11 +211,11 @@ public class CloudConfig
             {
                 serializer.Serialize(stream, this);
             }
-            Mod.LOG($"Cloud config '{configName}' saved to: {filePath}");
+            Mod.Log($"Cloud config '{configName}' saved to: {filePath}");
         }
         catch (System.Exception e)
         {
-            Mod.LOG($"Failed to save cloud config '{configName}': {e.Message}");
+            Mod.Log($"Failed to save cloud config '{configName}': {e.Message}");
         }
     }
 
@@ -225,7 +226,7 @@ public class CloudConfig
         
         if (!File.Exists(filePath))
         {
-            Mod.LOG($"Config file '{configName}' not found at {filePath}. Creating default config.");
+            Mod.Log($"Config file '{configName}' not found at {filePath}. Creating default config.");
             CloudConfig defaultConfig = CreateDefault();
             defaultConfig.SaveToFile(planetName,configName);
             return defaultConfig;
@@ -243,19 +244,19 @@ public class CloudConfig
                 // Set Layer3/4 strength to 0 so they contribute no density.
                 if (config.layerStrengths.z == 0f && config.layerStrengths.w == 0f)
                 {
-                    Mod.LOG("Volken: Detected legacy config, disabling Layer3/4");
+                    Mod.Log("Volken: Detected legacy config, disabling Layer3/4");
                     // Ensure spreads are safe (avoid division by zero in shader)
                     if (config.layerSpreads.z == 0f) config.layerSpreads.z = 1f;
                     if (config.layerSpreads.w == 0f) config.layerSpreads.w = 1f;
                 }
                 
-                Mod.LOG($"Cloud config '{configName}' loaded from: {filePath}");
+                Mod.Log($"Cloud config '{configName}' loaded from: {filePath}");
                 return config;
             }
         }
         catch (System.Exception e)
         {
-            Mod.LOG($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
+            Mod.Log($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
             return CreateDefault();
         }
     }
@@ -304,11 +305,12 @@ public class CloudConfig
             orbitTransitionStartAltitude = 25000f,
             orbitTransitionEndAltitude = 100000f,
             orbitSampleAltitude = 0f,
-            orbitDensityBoost = 25f,
+            orbitDensityBoost = 1f,
             orbitBrightness = 0.7f,
             orbitReliefStrength = 1.5f,
             orbitDetailStrength = 0.4f,
             orbitResolutionScale = 0.5f,
+            orbitDebugMode = 0f,
             /*
             lowAltitudeThreshold = 10000f,
             midAltitudeThreshold = 50000f,
@@ -421,6 +423,7 @@ public class CloudConfig
             orbitReliefStrength = this.orbitReliefStrength,
             orbitDetailStrength = this.orbitDetailStrength,
             orbitResolutionScale = this.orbitResolutionScale,
+            orbitDebugMode = this.orbitDebugMode,
             /*
             lowAltitudeThreshold = this.lowAltitudeThreshold,
             midAltitudeThreshold = this.midAltitudeThreshold,
@@ -489,6 +492,7 @@ public class CloudConfig
         this.orbitReliefStrength = source.orbitReliefStrength;
         this.orbitDetailStrength = source.orbitDetailStrength;
         this.orbitResolutionScale = source.orbitResolutionScale;
+        this.orbitDebugMode = source.orbitDebugMode;
         /*
         this.lowAltitudeThreshold= source.lowAltitudeThreshold;
         this.midAltitudeThreshold= source.midAltitudeThreshold;

@@ -86,12 +86,13 @@
     <s id="Volken.UI.UseOrbitClouds">Использовать орбитальные облака (2D на высоте)</s>
     <s id="Volken.UI.OrbitTransitionStart">Начало переходной зоны (м)</s>
     <s id="Volken.UI.OrbitTransitionEnd">Конец переходной зоны (м)</s>
-    <s id="Volken.UI.OrbitSampleAltitude">Высота выборки 2D (0 = авто)</s>
-    <s id="Volken.UI.OrbitDensityBoost">Усиление плотности 2D</s>
+    <s id="Volken.UI.OrbitSampleAltitude">Высота якоря 2D (0 = авто)</s>
+    <s id="Volken.UI.OrbitDensityBoost">Множитель оптической толщины 2D</s>
     <s id="Volken.UI.OrbitBrightness">Яркость 2D</s>
     <s id="Volken.UI.OrbitReliefStrength">Сила рельефа 2D (нормали)</s>
     <s id="Volken.UI.OrbitDetailStrength">Сила текстуры деталей 2D</s>
     <s id="Volken.UI.OrbitResolutionScale">Масштаб разрешения 2D</s>
+    <s id="Volken.UI.OrbitDebugMode">2D отладка: сплит (объём/2D, только в переходной зоне)</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Конфиг '{0}' сохранён!</s>

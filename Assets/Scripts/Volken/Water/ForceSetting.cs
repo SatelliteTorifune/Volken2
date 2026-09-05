@@ -35,7 +35,7 @@ public class ForceSetting : MonoBehaviourBase
             actualWaterTransparency.Value = targetTransparency;
             Game.Instance.Settings.Quality.Water.CommitChanges();
             Game.Instance.Settings.Quality.ApplySettings();
-            Mod.LOG($"Volken.ForceSetting:Water Transparency set to {targetTransparency} at altitude {flightData.AltitudeAboveSeaLevel:F1}m");
+            Mod.Log($"Volken.ForceSetting:Water Transparency set to {targetTransparency} at altitude {flightData.AltitudeAboveSeaLevel:F1}m");
         }
     }
 }

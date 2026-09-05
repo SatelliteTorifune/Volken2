@@ -176,8 +176,48 @@ KSA 的 2D 云 = **烘焙颜色贴图 + 法线贴图 + Lambertian(默认 0.65)+ 
 - **半清渲染**(`orbitResolutionScale` 默认 0.5)+ Composite 双线性软化 → 软化程序化噪声颗粒、降本。
 新配置:`orbitReliefStrength`(默认 1.5)/ `orbitDetailStrength`(默认 0.4)/ `orbitResolutionScale`(默认 0.5)。密度放大默认 30→25。
 
+**Stock 分布下边缘对齐修复(2026-08-27,第三轮):**
+开启游戏自带云(`useStockCloudMap`)后 3D/2D 边缘对不上,根因:**OrbitClouds 在"层强度加权平均高度"这一个固定高度切片采样,默认配置只落在 Layer2 带内(falloff≈0.9),Layer1 的 falloff≈0.01 → 2D 永远采不到 Layer1 的分布**。stock 的 R/G/B = 低/中/高云是截然不同的真实云层(程序化 planetMap 是平滑噪声,差异不明显),所以只有开 stock 时露馅。
+修复:**覆盖采样改为沿【观察射线】对每个活跃层在其"层中心高度球面"近交点采样**(每层都落在自己 falloff=1 的带中心 → 捕获所有层的分布;采样点沿射线 → 与体积云 raymarch 同域,覆盖 limb 方向扫掠)。另把 orbit 副本的 `dist` 门对齐到全量 `SampleDensity`(`* valid`,轨道视角下体积云实际用的就是全量版)。`orbitSampleAltitude` 保留为手动单点覆盖(>0 时走旧行为)。
+
+**2D 云渲染顺序修复(craft 遮挡,2026-08-27,第四轮):**
+体积云 raymarch 靠 DepthTex 在场景深度处提前终止(`maxRayDist=min(maxRayDist,depth)`),所以 craft 正确挡住体积云;而 OrbitClouds pass 从不采样深度 → 2D 云整片加在 craft 前面(用户观察到的"2D 云在 craft 之前")。
+修复:OrbitClouds frag 采样已绑定的 `DepthTex`(lowResDepthTex),`sceneDepth = LinearEyeDepth / cos(θ)`(θ=射线与 `_CamFwd` 夹角,等价于 Clouds pass 的 `viewLength*DepthTex`),当 `sceneDepth <= tStart`(场景在云壳入口之前)→ 返回透明。Blit uv 约定与 Composite 采样 SceneDepthTex 一致;`_CamFwd`/`DepthTex` 均已每帧设在层 material 上,无需改 C#。
+
+**2D 云范围修复(光学厚度积分,2026-08-27,第五轮):**
+体积云覆盖边界由**沿射线积分的光学厚度**决定(`transmittance *= Beer(density*step, amb)` → 阈值极低 → 范围大);2D 旧法"单点 max×boost"阈值高一个量级 → 云小一圈。
+修复:OrbitClouds 覆盖改为**沿观察射线在云带内均匀 20 步积分同一密度场**(`opticalDepth += max(0,density)·stepLen`),`opacity = 1-exp(-cloudAbsorption·opticalDepth·orbitDensityBoost)` —— 与体积云 Beer 积累同源,范围/透明度一致;`tEnd=min(tEnd,sceneDepth)` 与体积云 `maxRayDist=min(...,depth)` 一致。`orbitDensityBoost` 语义改为"光学厚度乘数"(默认 25→1,UI 范围 0.1–5),`orbitSampleAltitude` 改为"着色锚点高度"(默认 0=光学厚度最大处,仅影响浮雕/细节采样点,不再影响覆盖)。
+
+**范围仍差一圈 → 诊断日志 + 分屏调试(2026-08-27,第六轮):**
+体积云仍大一圈,密度函数逐字符比对无差异 → 加诊断工具定位:
+- **运行日志**(节流 2s):`Volken:OrbitDiag` 打印相机海拔/每层淡入/体积云是否运行/RT 尺寸/真实配置(layerHeights/Spreads/Strengths/density/absorption/coverage/maxCloudHeight/stepSize/compositeMode/useStockCloudMap/过渡带/boost/bright);`CloudLayer[{i}]` 启动时打印 stockValid(R/G/B/A 层检测)与轨道静态参数。
+- **调试分屏**(`orbitDebugMode` 开关,UI「2D 调试分屏」):Composite 无视淡入左右分屏 —— 左=体积云,右=2D;2D 侧红=着色后不透明度(实际显示),绿=原始光学厚度足迹。在过渡带内观察即可分辨:绿比体积云小 → 覆盖计算问题;绿与体积云一致但红小 → 显示增益问题。
+
+**范围差一圈根因定位 + 边缘增益对齐(2026-08-27,第七轮,Player.log 实测):**
+日志揭示:①相机全程 1.1M–2.2M 米 `fade=1.000 volRun=0`(纯 2D 区,体积云未运行——对比来自过渡带印象);②真实 `coverage=0.369`(非默认 -0.25)→ 云带 62m–9.4km;③`comp=Additive`;④Upscale(TSS)仅时序混合不扩张边缘(排除)。
+根因:**显示增益**。体积云 Additive 可见边界由 `lightEnergy = Σ density·step·transmittance·lightTransmittance·phaseValue` 决定(薄云处 ≈ τ×phaseValue,phaseValue≈0.5–3.5,阈值极低);2D 旧法用 `opacity=1-exp(-0.584τ)` 驱动颜色,等效边缘增益低 5–15× → 同光学厚度下 2D 不可见 → 范围小一圈。
+修复:OrbitClouds 步进时**同时累积 transmittance 阻尼能量**(`energy += d·stepLen·transmittance`,与体积云 lightEnergy 同构,`transmittance *= exp(-d·stepLen·cloudAbsorption·boost)`,`<0.02 break` 与体积云一致);`opacity = 1-transmittance`(阻尼透射,与体积云同构);颜色 `colorFactor = saturate(energy·max(phaseValue,0.5)·2)`(×2 补偿 2D 的 light·albedo·brightness 边缘衰减)。真实数字下 2D 与体积云在 τ≈0.02–0.03/phaseValue 处同时可见(误差 ~1.3×,随日照角在 ±1.7× 内浮动,可用 brightness/boost 微调)。
+
+**第八轮:机械排查全部排除 + 覆盖探针量化(2026-08-28):**
+Player.log 二次实测 + 截图像素分析(本地 vision_colors:画面 ~90% 近白,行星被过亮白云盖满,差异只在边缘一圈)+ 逐项机械比对:
+- 旋转/风漂移:两 pass 共用同一材质 uniform(`currentRotation`/`cloudOffset`,每层先 SetLayerDynamicProperties 再跑两 pass)→ 同帧同值,速度一致;
+- `_CamPos`/`_CamFwd` 每帧同值;2D 与体积云射线域一致(`tEnd=min(壳远交点,地面,场景深度)` vs `maxRayDist=min(地面,壳远交点,depth)`);
+- 深度换算严格等价:体积云 `viewLength=|viewDir|=1/cosθ`(共享 vert 由 `_CamFwd+屏幕偏移` 构造,长度恰为 1/cosθ),2D `DepthTex/cosTheta` —— 地平线遮挡边界一致;
+- TSS 默认关(`useTemporalUpscale=false,historyBlend=0`)→ 体积云纯逐帧无拖影;
+- 结论:**范围/速度是同一问题的两面**——云特征在不同半径处转动,屏速 = ω×r 不同 → 范围差必然表现为"边缘速度差"。
+新增诊断:
+- `Volken:OrbitDiag` 增加 `speed=`(相机 2s 平均速度 m/s)与漂移状态(`rot`=自转累积角、`off`=风偏移、`wind`、`globRot`);
+- **`Volken:Coverage` 覆盖探针**(`orbitDebugMode>0` 时启用,2s 节流):GPU 回读 2D `orbitCloudTex` 与体积 `cloudTex`,量覆盖比例% + 最远云像素半径 R03/R15(亮度阈值 0.03/0.15)+ 相对行星边缘的圈宽 `ring03/ring15 px`(limb=focal·tan(asin(R/d)),圆心=行星中心屏幕投影,与相机朝向无关)。直接给出"范围差"数字,替代目测。守卫:2D 仅 `fade>0.001` 测、体积仅 `fade<0.999` 测(防陈旧帧)。
+
+**第九轮:角速度方向(用户强怀疑,2026-08-28):**
+用户强烈怀疑与**角速度**有关。逐项复核:①云场旋转/风漂移两 pass 逐字符同源(`SampleDensityCheap` 的 `currentRotation` 旋转矩阵/域扭曲/形状/细节/球坐标/stock 完全一致)→ 云场角速度不可能不同;②只剩**投影路径**差异——体积云 viewDir 用**显式相机轴** `_CamFwd+_CamRight·(ndc.x·tanFovV·aspect)−_CamUp·(ndc.y·tanFovV)`,2D 旧版用 `unity_CameraInvProjection×CameraToWorld`;若游戏相机投影非标准(自定义矩阵/宽高比偏差),两者差一个**随相机旋转而变的角量** → 2D 与体积云相对转动/错位。
+修复:
+- **2D 改用与体积云完全相同的显式相机轴 viewDir**(uv→ndc 按 `_ProjectionParams` 翻转,公式逐项同构);`_CamRight/_CamUp/_TanHalfFovV/_Aspect` 已由 C# 每帧设置,补声明即可。
+- 日志补 `tss=`(`useTemporalUpscale`)、`histBlend=`、`resScale=`(此前缺失——若用户开 TSS,体积云时序重投影 `reprojMat`/`BuildCloudSpaceRepro(dPhi)` 的角速度编码才参与混合,可能拖影)。
+- **`Volken:ProjCheck`**(每会话一次):CPU 端 9×9 NDC 网格比较"显式轴"vs"逆投影矩阵"两条 viewDir 重建的**最大角差**(≈0 = 两路径一致;>0.1° = 投影非标准,体积云自身也可能有错位)。
+
 **关键实现细节(与 §3/§4 的偏差,均为必要修正):**
-- §3-B 的"壳交点处采样"在外壳顶(r=surface+maxCloudHeight)高度 falloff≈0 会**恒黑**;实际在**代表性云层高度**采样(`orbitSampleAltitude=0` → 层强度加权层高,默认配置 ≈ 3108 m,落在 Layer2 带内)。
+- **第十轮修正**:旧"壳交点处采样"在外壳顶高度 falloff≈0 恒黑 → 改用 **`SampleCoverageCheap`(覆盖掩膜,无高度 falloff)** 在壳面单点采样,自动采样高度 = **云壳顶 `maxCloudHeight`**(体积云最外层环所在),`orbitDensityBoost` = 唯一范围增益。§3-B 的"代表性云层高度(层强度加权层高≈3108m)"语义被覆盖掩膜版本取代(掩膜无 falloff,壳顶即可见,且恰好复现体积云最外层环)。
 - §4.2 采用候选 **(b) 直接进 Composite**:`lerp(vol, orbit, _OrbitFade)`,不新增 RT/中间 blend;2D 不进时序,天然无历史依赖。
 - 海拔分派 CPU 侧完成(全 GPU 无同步):`camAlt < start` 只跑体积;`start~end` 双渲染+淡入;`> end` 只跑 2D(体积整条跳过,性能大头)。
 - 反射路径(`CloudReflectionRenderer`)恒 `_OrbitFade=0`(水面相机在低空)→ 零影响。

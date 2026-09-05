@@ -47,7 +47,7 @@ public static class WaterReflectionCloudPatch
             if (_lastError != ex.Message)
             {
                 _lastError = ex.Message;
-                Mod.LOG("Volken:WaterReflectionCloudPatch ERROR: " + ex);
+                Mod.Log("Volken:WaterReflectionCloudPatch ERROR: " + ex);
             }
         }
     }
@@ -73,7 +73,7 @@ public static class CloudReflectionRenderer
             _diagnosed = true;
             int layerCount = -1;
             try { layerCount = Volken.Instance != null ? Volken.Instance.ActiveLayers.Count() : -1; } catch { }
-            Mod.LOG("Volken:CloudReflectionRenderer diag: InFlight=" + Game.InFlightScene +
+            Mod.Log("Volken:CloudReflectionRenderer diag: InFlight=" + Game.InFlightScene +
                 " targetTexture=" + (cam != null && cam.targetTexture != null ? cam.targetTexture.width + "x" + cam.targetTexture.height : "null") +
                 " layers=" + layerCount);
         }
@@ -154,7 +154,7 @@ public static class CloudReflectionRenderer
             if (compositePass < 0) compositePass = mat.FindPass("Composite");
             if (cloudsPass < 0 || compositePass < 0)
             {
-                Mod.LOG("Volken:CloudReflectionRenderer pass not found (Clouds=" + cloudsPass + ", Composite=" + compositePass + ")");
+                Mod.Log("Volken:CloudReflectionRenderer pass not found (Clouds=" + cloudsPass + ", Composite=" + compositePass + ")");
                 return;
             }
 
@@ -234,7 +234,7 @@ public static class CloudReflectionRenderer
             if (!_loggedFirst)
             {
                 _loggedFirst = true;
-                Mod.LOG("Volken:CloudReflectionRenderer ok: rt=" + rt.width + "x" + rt.height +
+                Mod.Log("Volken:CloudReflectionRenderer ok: rt=" + rt.width + "x" + rt.height +
                     " layers=" + activeLayers.Count + " fov=" + cam.fieldOfView + " aspect=" + aspect +
                     " maxDepth=" + maxDepth + " Clouds=" + cloudsPass + " Composite=" + compositePass);
             }

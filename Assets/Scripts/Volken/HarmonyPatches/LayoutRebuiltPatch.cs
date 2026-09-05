@@ -24,7 +24,7 @@ namespace Assets.Scripts
             }
             catch (Exception e)
             {
-                Mod.LOG("Volken:Error while adding click event to{0}", e);
+                Mod.Log("Volken:Error while adding click event to{0}", e);
             }
 
             return true;

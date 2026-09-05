@@ -69,27 +69,27 @@ public static class StockCloudMap
                     if (!anyCloud)
                     {
                         Object.Destroy(cube);
-                        Mod.LOG($"Volken:StockCloudMap {data.Name} cubemap has no real cloud data — full fallback to procedural.");
+                        Mod.Log($"Volken:StockCloudMap {data.Name} cubemap has no real cloud data — full fallback to procedural.");
                         return null;
                     }
 
                     Current = cube;
                     LayerValid = valid;
-                    Mod.LOG($"Volken:StockCloudMap loaded {data.Name} clouds cubemap @ {size}, layer validity R/G/B/A = {valid.x}/{valid.y}/{valid.z}/{valid.w}");
+                    Mod.Log($"Volken:StockCloudMap loaded {data.Name} clouds cubemap @ {size}, layer validity R/G/B/A = {valid.x}/{valid.y}/{valid.z}/{valid.w}");
                     break;
                 }
             }
 
             if (cube == null)
             {
-                Mod.LOG($"Volken:StockCloudMap no clouds cubemap for '{data.Name}' — falling back to procedural.");
+                Mod.Log($"Volken:StockCloudMap no clouds cubemap for '{data.Name}' — falling back to procedural.");
             }
 
             return Current;
         }
         catch (System.Exception e)
         {
-            Mod.LOG($"Volken:StockCloudMap failed for '{planet?.PlanetData?.Name}': {e.Message}");
+            Mod.Log($"Volken:StockCloudMap failed for '{planet?.PlanetData?.Name}': {e.Message}");
         }
 
         return null;
@@ -131,12 +131,12 @@ public static class StockCloudMap
                 maxB > eps ? 1f : 0f,
                 maxA > eps ? 1f : 0f);
 
-            Mod.LOG($"Volken:StockCloudMap validity max R/G/B/A = {maxR:F3}/{maxG:F3}/{maxB:F3}/{maxA:F3} → {valid.x}/{valid.y}/{valid.z}/{valid.w}");
+            Mod.Log($"Volken:StockCloudMap validity max R/G/B/A = {maxR:F3}/{maxG:F3}/{maxB:F3}/{maxA:F3} → {valid.x}/{valid.y}/{valid.z}/{valid.w}");
         }
         catch (System.Exception e)
         {
             // 检测失败不致命:保守地全部视为有效(按原行为处理)
-            Mod.LOG($"Volken:StockCloudMap validity check failed: {e.Message}");
+            Mod.Log($"Volken:StockCloudMap validity check failed: {e.Message}");
         }
         return valid;
     }

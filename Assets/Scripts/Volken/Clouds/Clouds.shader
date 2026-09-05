@@ -942,6 +942,65 @@ Shader "Hidden/Clouds"
 
             #include "UnityCG.cginc"
 
+            // === 与 Clouds pass 同源的 uniforms(orbit 需要的那组;均由现有 C# 每帧/静态设置) ===
+            // 注意:必须声明在 vert 之前(Unity 编译器要求先声明后使用,否则 vert 引用处报未声明标识符)。
+            float3 sphereCenter;
+            float surfaceRadius;
+            float maxCloudHeight;
+            float3 _CamPos;
+            float3 _CamFwd;              // 相机前向(世界),深度换算用(已每帧设在 material 上)
+            float3 _CamRight;            // 相机右向(世界),viewDir 重建用(C# 每帧设置)
+            float3 _CamUp;               // 相机上向(世界),viewDir 重建用(C# 每帧设置)
+            float _TanHalfFovV;          // tan(垂直半 FOV),viewDir 重建用(C# 每帧设置)
+            float _Aspect;               // 相机宽高比,viewDir 重建用(C# 每帧设置)
+            float currentRotation;
+            float3 cloudOffset;
+            float cloudScale;
+            float detailScale;
+            float detailStrength;
+            float4 cloudLayerHeights;
+            float4 cloudLayerSpreads;
+            float4 cloudLayerStrengths;
+            float cloudCoverage;
+            float cloudDensity;
+            float cloudAbsorption;       // Beer 吸收系数(与体积云 transmittance 积累同源)
+            float ambientLight;
+            float4 cloudColor;
+            float3 lightDir;
+            float4 phaseParams;
+            float multiScatterBlend;
+            float forwardScatteringBias;
+            float silverLiningIntensity;
+            // 轨道云参数(静态)
+            float orbitSampleAltitude;   // 2D 着色锚点高度(0 = 自动:光学厚度最大处)
+            float orbitDensityBoost;     // 光学厚度乘数(与体积云 Beer 积累对齐;1=中性)
+            float orbitBrightness;       // 亮度缩放(与体积云 Additive 强度对齐)
+            float orbitReliefStrength;   // 密度梯度法线浮雕强度(KSA normal-map 等效,0=关)
+            float orbitDetailStrength;   // detail 噪声作为云内"纹理"明暗变化强度(0=关)
+            float _OrbitDebugMode;       // 调试:>0.5 输出 红=着色后不透明度,绿=原始光学厚度足迹
+
+            Texture2D<float> CloudShapeTex;
+            SamplerState samplerCloudShapeTex;
+            Texture2D<float> CloudDetailTex;
+            SamplerState samplerCloudDetailTex;
+            Texture2D<float2> PlanetMapTex;
+            SamplerState samplerPlanetMapTex;
+            TextureCube<float4> StockCloudCube;
+            SamplerState samplerStockCloudCube;
+            float useStockCloudMap;
+            float stockMapStrength;
+            float stockMaskInfluence;
+            float stockMapLayer;
+            float4 stockLayerValid;
+            float stockAlignSign;
+            float stockAlignAngleOffset;
+            float4x4 planetToBody;
+
+            // 场景深度(低清线性眼深;Blit uv 约定,与 Composite 采样 SceneDepthTex 一致,
+            // 由 CloudRenderer 在每层 material 上设 DepthTex=lowResDepthTex)
+            Texture2D<float> DepthTex;
+            SamplerState samplerDepthTex;
+
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -960,57 +1019,15 @@ Shader "Hidden/Clouds"
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
-                // 观察射线重建(Blit 路径,与 Composite 一致;orbit pass 只跑主相机路径)
-                o.viewDir = mul(unity_CameraInvProjection, float4(v.uv * 2 - 1, 0, -1));
-                o.viewDir = mul(unity_CameraToWorld, float4(o.viewDir, 0));
+                // 与 Clouds pass 完全一致的 viewDir 重建(显式相机轴 + C# 传的 fov/aspect)。
+                // 不用 unity_CameraInvProjection:若游戏相机投影非标准(自定义矩阵/宽高比偏差),
+                // 两条路径会差一个随相机旋转(角速度)而变的角量 → 2D 与体积云相对转动/错位。
+                // uv → ndc:Blit 的 uv 与 _ProjectionParams 约定 —— D3D 时 uv.y=0 在顶部,先翻到 y=0 底部。
+                float2 uvFlip = float2(v.uv.x, _ProjectionParams.x < 0.0 ? 1.0 - v.uv.y : v.uv.y);
+                float2 ndc = uvFlip * 2.0 - 1.0;
+                o.viewDir = _CamFwd + _CamRight * (ndc.x * _TanHalfFovV * _Aspect) - _CamUp * (ndc.y * _TanHalfFovV);
                 return o;
             }
-
-            // === 与 Clouds pass 同源的 uniforms(orbit 需要的那组;均由现有 C# 每帧/静态设置) ===
-            float3 sphereCenter;
-            float surfaceRadius;
-            float maxCloudHeight;
-            float3 _CamPos;
-            float currentRotation;
-            float3 cloudOffset;
-            float cloudScale;
-            float detailScale;
-            float detailStrength;
-            float4 cloudLayerHeights;
-            float4 cloudLayerSpreads;
-            float4 cloudLayerStrengths;
-            float cloudCoverage;
-            float cloudDensity;
-            float ambientLight;
-            float4 cloudColor;
-            float3 lightDir;
-            float4 phaseParams;
-            float multiScatterBlend;
-            float forwardScatteringBias;
-            float silverLiningIntensity;
-            // 轨道云参数(静态)
-            float orbitSampleAltitude;   // 2D 采样高度(0 = 自动:强度加权层高)
-            float orbitDensityBoost;     // 密度→不透明度放大(单样本 vs 体积多步进)
-            float orbitBrightness;       // 亮度缩放(与体积云 Additive 强度对齐)
-            float orbitReliefStrength;   // 密度梯度法线浮雕强度(KSA normal-map 等效,0=关)
-            float orbitDetailStrength;   // detail 噪声作为云内"纹理"明暗变化强度(0=关)
-
-            Texture2D<float> CloudShapeTex;
-            SamplerState samplerCloudShapeTex;
-            Texture2D<float> CloudDetailTex;
-            SamplerState samplerCloudDetailTex;
-            Texture2D<float2> PlanetMapTex;
-            SamplerState samplerPlanetMapTex;
-            TextureCube<float4> StockCloudCube;
-            SamplerState samplerStockCloudCube;
-            float useStockCloudMap;
-            float stockMapStrength;
-            float stockMaskInfluence;
-            float stockMapLayer;
-            float4 stockLayerValid;
-            float stockAlignSign;
-            float stockAlignAngleOffset;
-            float4x4 planetToBody;
 
             float2 RaySphereIntersect(float3 pos, float3 dir, float radius)
             {
@@ -1113,7 +1130,9 @@ Shader "Hidden/Clouds"
                 float4 falloff = exp(-falloffExponent * falloffExponent);
 
                 float4 active = step(0.0001, cloudLayerStrengths);
-                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff);
+                // 与 Clouds pass 的 SampleDensity(全量,轨道视角下体积云实际用的版本)一致:
+                // dist 门乘 valid —— 该层在游戏自带云中不存在(valid=0)时 shape 门不压死,回退 planetMap。
+                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff * valid);
                 float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
                                    + layers.x * falloff.x + layers.y * falloff.y
                                    + layers.z * falloff.z + layers.w * falloff.w;
@@ -1121,31 +1140,71 @@ Shader "Hidden/Clouds"
                 return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
             }
 
-            // 代表性采样高度:0 = 自动(层强度加权层高),否则用户指定(≤ maxCloudHeight)。
-            float OrbitSampleAltitude()
+            // 覆盖掩膜(游戏本体 2D 云模型,参考 KSA 2DCloudsPipeline):
+            // 2D 云 = 烘焙分布在【壳面的一次采样】—— 不做光学厚度积分、不含高度衰减 falloff,
+            // 范围只由分布本身决定并延伸到云壳轮廓,与体积云最外层环(层分布延伸到带顶)同源。
+            // 旋转/扭曲/stock 门与 SampleDensityCheap 逐项一致 → 角速度/形状与体积云天然同步。
+            float SampleCoverageCheap(float3 worldPos)
             {
-                if (orbitSampleAltitude > 0.01)
-                    return min(orbitSampleAltitude, maxCloudHeight);
-                float h0 = cloudLayerHeights.x; float s0 = max(cloudLayerSpreads.x, 1.0); float w0 = max(cloudLayerStrengths.x, 0.0) / s0;
-                float h1 = cloudLayerHeights.y; float s1 = max(cloudLayerSpreads.y, 1.0); float w1 = max(cloudLayerStrengths.y, 0.0) / s1;
-                float h2 = cloudLayerHeights.z; float s2 = max(cloudLayerSpreads.z, 1.0); float w2 = max(cloudLayerStrengths.z, 0.0) / s2;
-                float h3 = cloudLayerHeights.w; float s3 = max(cloudLayerSpreads.w, 1.0); float w3 = max(cloudLayerStrengths.w, 0.0) / s3;
-                float num = w0 * h0 + w1 * h1 + w2 * h2 + w3 * h3;
-                float den = w0 + w1 + w2 + w3;
-                float alt = den > 0.0 ? num / den : 0.5 * maxCloudHeight;
-                return clamp(alt, 0.0, maxCloudHeight);
-            }
+                float3 offset = worldPos - sphereCenter;
 
-            // 云带半宽 = 活跃层 spread 最大值(夹到 maxCloudHeight),供覆盖采样上下偏移。
-            float OrbitSampleSpread()
-            {
-                float s0 = (cloudLayerStrengths.x > 0.0001) ? max(cloudLayerSpreads.x, 1.0) : 0.0;
-                float s1 = (cloudLayerStrengths.y > 0.0001) ? max(cloudLayerSpreads.y, 1.0) : 0.0;
-                float s2 = (cloudLayerStrengths.z > 0.0001) ? max(cloudLayerSpreads.z, 1.0) : 0.0;
-                float s3 = (cloudLayerStrengths.w > 0.0001) ? max(cloudLayerSpreads.w, 1.0) : 0.0;
-                float spread = max(max(s0, s1), max(s2, s3));
-                if (spread <= 0.0) spread = 0.4 * maxCloudHeight;
-                return clamp(spread, 100.0, maxCloudHeight);
+                float cosAngle = cos(currentRotation);
+                float sinAngle = sin(currentRotation);
+                float3 rotatedOffset = float3(
+                    offset.x * cosAngle - offset.z * sinAngle,
+                    offset.y,
+                    offset.x * sinAngle + offset.z * cosAngle
+                );
+
+                float3 warpOffset = float3(
+                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+                ) * 0.15;
+                float3 warpedUv = rotatedOffset + warpOffset;
+
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
+                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
+
+                float3 dir = normalize(rotatedOffset);
+                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
+
+                spherical.x += cloudOffset.x;
+                float latFactor = sin(spherical.y * 3.14159265);
+                spherical.y += cloudOffset.z * 0.25 * latFactor;
+
+                float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
+
+                float4 stock = 0.0;
+                if (useStockCloudMap > 0.5)
+                {
+                    stock = SampleStockDistribution(dir, cloudOffset.x * 6.28318530718);
+                }
+                float stockEff = useStockCloudMap * stockMapStrength;
+                float selValid = lerp(lerp(stockLayerValid.x, stockLayerValid.y, step(0.5, stockMapLayer)), stockLayerValid.z, step(1.5, stockMapLayer));
+                float4 valid = lerp(selValid.xxxx, float4(stockLayerValid.x, stockLayerValid.y, stockLayerValid.z, stockLayerValid.x), step(2.5, stockMapLayer));
+                float stockMaskValid = stockLayerValid.w;
+                float stockMask = lerp(1.0, stock.a, stockMaskInfluence * stockEff * stockMaskValid);
+                float selChannel = lerp(lerp(stock.r, stock.g, step(0.5, stockMapLayer)), stock.b, step(1.5, stockMapLayer));
+                float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
+                float4 stockBand = stockBandRaw * stockMask;
+
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                float4 layers;
+                layers.x = cloudLayerStrengths.x * mapVal.x;
+                layers.y = cloudLayerStrengths.y * mapVal.y;
+                layers.z = cloudLayerStrengths.z * mapVal.z;
+                layers.w = cloudLayerStrengths.w * mapVal.w;
+
+                float4 active = step(0.0001, cloudLayerStrengths);
+                // dist 门乘 valid:该层在游戏自带云中不存在(valid=0)时 shape 门不压死,回退 planetMap。
+                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff * valid);
+                // 覆盖掩膜 = 形状×分布门 + 层强度 + 全局覆盖偏置(无高度 falloff)
+                float mask = shape * (dist.x + dist.y + active.z * dist.z + active.w * dist.w)
+                           + layers.x + layers.y + layers.z + layers.w
+                           + cloudCoverage - 1.0;
+                return max(0.0, mask);
             }
 
             // 与 SampleDensityCheap 相同的旋转+扭曲帧,但只采 detail 噪声作为逐像素"纹理"
@@ -1175,63 +1234,79 @@ Shader "Hidden/Clouds"
                 float3 camPos = _CamPos;
                 float3 viewDir = normalize(i.viewDir);
 
-                float2 shellIntersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
-                // 射线没碰到云壳 → 无云
-                if (shellIntersect.y < 0.0)
+                // 场景深度(观察射线米)= LinearEyeDepth / cos(θ),θ = 射线与相机前向夹角。
+                // 与 Clouds pass 的 `viewLength * DepthTex` 同义(其 viewLength=1/cos(θ));
+                // Blit uv 约定与 Composite 采样 SceneDepthTex 一致。
+                float cosTheta = max(dot(viewDir, _CamFwd), 1e-3);
+                float sceneDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0) / cosTheta;
+
+                // --- 2D 云 = 壳面单点采样共享覆盖分布(游戏本体 2D 云模型) ---
+                // 参照 KSA 2DCloudsPipeline:EVE/游戏本体的 2D 云都是"烘焙分布在壳面的一次采样",
+                // 不做光学厚度积分、不做高度衰减 —— 范围由分布决定并延伸到云壳轮廓,
+                // 与体积云最外层环(层 1 分布延伸到带顶的微弱环)同源 → 大圈问题在此消除。
+                // 旧实现用 20 步光学厚度积分+能量增益去"凑"体积云足迹 —— 方向错误,已废弃。
+                float sampleAlt = clamp(orbitSampleAltitude, 0.0, maxCloudHeight);
+                if (sampleAlt < 1.0) sampleAlt = maxCloudHeight;   // 自动 = 云壳顶(体积云外边界)
+                float2 shellHit = RaySphereIntersect(camPos, viewDir, surfaceRadius + sampleAlt);
+                // 射线没碰到采样球面 → 无云
+                if (shellHit.y < 0.0)
+                    return float4(0.0, 0.0, 0.0, 0.0);
+                float tS = max(shellHit.x, 0.0);
+
+                // 渲染顺序修正:craft/地形在壳点之前 → 2D 云被场景遮挡。
+                // 与体积云 raymarch 的 depth 截断(`maxRayDist=min(maxRayDist,depth)`,
+                // `maxRayDist<=startRayDist → 透明`)行为一致;否则 2D 云画在 craft 前。
+                if (sceneDepth <= tS)
                     return float4(0.0, 0.0, 0.0, 0.0);
 
-                // 相机在轨道上(壳外)→ 近交点即云壳入口;max(,0) 兜底壳内情形
-                float startT = max(shellIntersect.x, 0.0);
-                float3 up = normalize(camPos + startT * viewDir - sphereCenter);   // 球面法线(壳采样方向)
-
-                // --- 覆盖:云带内 3 个高度的 max(与体积云"列"的垂直外观一致,避免单层切片露空) ---
-                float sampleAlt = OrbitSampleAltitude();
-                float spread = OrbitSampleSpread();
-                float rMid = surfaceRadius + sampleAlt;
-                float rLo = max(surfaceRadius + 1.0, rMid - spread);
-                float rHi = min(surfaceRadius + maxCloudHeight, rMid + spread);
-                float3 pLo = sphereCenter + up * rLo;
-                float3 pMid = sphereCenter + up * rMid;
-                float3 pHi = sphereCenter + up * rHi;
-
-                float dLo = max(0.0, SampleDensityCheap(pLo));
-                float dMid = max(0.0, SampleDensityCheap(pMid));
-                float dHi = max(0.0, SampleDensityCheap(pHi));
-                float coverage = max(dLo, max(dMid, dHi));
-                if (coverage <= 0.0)
+                // 壳点可见性:远交点 / 地面遮挡 / 场景深度 —— 采样点必须落在可见段内
+                float2 groundI = RaySphereIntersect(camPos, viewDir, surfaceRadius);
+                float tEnd = shellHit.y;
+                if (groundI.y > 0.0 && groundI.x > 0.0 && groundI.x < tEnd)
+                    tEnd = groundI.x;
+                tEnd = min(tEnd, sceneDepth);
+                if (tS > tEnd)
                     return float4(0.0, 0.0, 0.0, 0.0);
 
-                // --- KSA 式法线浮雕:水平密度梯度扰动球面法线(程序化 normal-map,同源) ---
+                float3 pShell = camPos + viewDir * tS;
+                float3 up = normalize(pShell - sphereCenter);
+
+                // --- 覆盖:壳面覆盖掩膜单点采样(与体积云同一分布场;orbitDensityBoost=唯一范围增益) ---
+                float cov = SampleCoverageCheap(pShell);
+                float coverage = saturate(cov * orbitDensityBoost);
+
+                // --- KSA 式法线浮雕:壳点处水平覆盖梯度(程序化 normal-map,同源) ---
                 float3 tangent, bitangent;
                 {
                     float3 refUp = abs(up.y) > 0.99 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
                     tangent = normalize(cross(up, refUp));
                     bitangent = cross(up, tangent);
                 }
-                // 梯度步长 ≈ 6% shapeScale,夹到 [150, 2500] 米(密度横向特征尺度)
+                // 梯度步长 ≈ 6% shapeScale,夹到 [150, 2500] 米(分布横向特征尺度)
                 float arc = clamp(0.06 / max(cloudScale, 1e-6), 150.0, 2500.0);
-                float3 pEast = pMid + tangent * arc;
-                float3 pNorth = pMid + bitangent * arc;
-                float dEast = max(0.0, SampleDensityCheap(pEast));
-                float dNorth = max(0.0, SampleDensityCheap(pNorth));
-                float2 grad = float2(dEast - dMid, dNorth - dMid) * orbitReliefStrength;
+                float3 pEast = pShell + tangent * arc;
+                float3 pNorth = pShell + bitangent * arc;
+                float cEast = SampleCoverageCheap(pEast);
+                float cNorth = SampleCoverageCheap(pNorth);
+                float2 grad = float2(cEast - cov, cNorth - cov) * orbitReliefStrength;
                 float3 N = normalize(up - tangent * grad.x - bitangent * grad.y);
 
                 // --- 细节噪声作为云内"纹理"(逐像素明暗变化) ---
-                float albedo = 1.0 + orbitDetailStrength * (SampleDetailAlbedo(pMid) - 0.5);
+                float albedo = 1.0 + orbitDetailStrength * (SampleDetailAlbedo(pShell) - 0.5);
 
                 // --- 光照:Lambertian(浮雕法线)+ phase 银边 ---
                 float ndl = saturate(dot(N, -lightDir));
                 float light = lerp(ambientLight, 1.0, ndl);
-                float opacity = 1.0 - exp(-orbitDensityBoost * coverage);
-
-                float3 col = cloudColor.rgb * light * albedo * opacity * orbitBrightness;
-
-                // 银边(terminator 附近弱相位增强,与体积云 phase 参数同源)
                 float phaseValue = CloudPhase(dot(viewDir, -lightDir), multiScatterBlend);
-                col += cloudColor.rgb * phaseValue * silverLiningIntensity * opacity * (1.0 - ndl) * 0.5 * orbitBrightness;
 
-                return float4(col, opacity);
+                // 调试模式:红 = 覆盖(实际显示),绿 = 壳面覆盖掩膜足迹(范围诊断)
+                if (_OrbitDebugMode > 0.5)
+                    return float4(coverage, saturate(cov * 5.0), 0.0, 1.0);
+
+                float3 col = cloudColor.rgb * light * albedo * coverage * orbitBrightness;
+                col += cloudColor.rgb * phaseValue * silverLiningIntensity * coverage * (1.0 - ndl) * 0.5 * orbitBrightness;
+
+                return float4(col, coverage);
             }
             ENDCG
         }
@@ -1282,12 +1357,16 @@ Shader "Hidden/Clouds"
             float _NearThreshold;
             float _CompositeMode;  // 0.0 = Additive (零干扰), 1.0 = Standard (物理遮挡)
             float _OrbitFade;      // 海拔淡入因子:0 = 纯体积云, 1 = 纯 2D 轨道云
+            float _OrbitDebugMode; // 调试:>0.5 → 左右分屏(左=体积云,右=2D 轨道云/覆盖足迹)
             
             float4 frag(v2f i) : SV_Target
             {
                 float4 volClouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
                 float4 orbitClouds = OrbitCloudTex.Sample(samplerOrbitCloudTex, i.uv);
                 float4 clouds = lerp(volClouds, orbitClouds, _OrbitFade);
+                // 调试:无视淡入,左右分屏直接对比范围(须在过渡带内,体积云同帧渲染)
+                if (_OrbitDebugMode > 0.5)
+                    clouds = (i.uv.x < 0.5) ? volClouds : orbitClouds;
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
 

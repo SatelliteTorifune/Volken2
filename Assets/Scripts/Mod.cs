@@ -76,25 +76,28 @@ namespace Assets.Scripts
             {
                 Volken.Initialize();
                 Volken.Instance?.OnFlightSceneLoaded();
-                LOG("force refresh called");
+                Log("force refresh called");
             }
 
             if (Volken.Instance!=null)
             { 
                 Volken.Initialize();
                 Volken.Instance?.OnFlightSceneLoaded();
-                LOG("Volken is still alive");
+                Log("Volken is still alive");
             }
         }
         #region LOG
-        public static void LOG(string format, params object[] args)
+        public static void Log(string format, params object[] args)
         {
             try
             {
                 if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
-                Debug.unityLogger.LogFormat(LogType.Log, format, args);
+                Debug.unityLogger.LogFormat(LogType.Log, "[Volken]"+format, args);
             }
-            catch { }
+            catch
+            {
+                Debug.Log("什么叫做他妈的Log报错了??????");
+            }
         }
         #endregion
     }

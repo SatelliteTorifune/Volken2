@@ -48,6 +48,7 @@ public class CloudLayer
     // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
     public float orbitFade;            // 本帧海拔淡入因子 0..1(CloudRenderer 每帧写入)
     public bool orbitOnlyLastFrame;    // 上一帧是否纯 2D(进入纯 2D 时清时序历史,防切回残影)
+    private bool _staticPropsLogged;   // 静态参数诊断日志只打一次
 
     // === 时序超采样(方案 C,KSA 完整结构) ===
     public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动
@@ -64,7 +65,7 @@ public class CloudLayer
     {
         if (noise == null)
         {
-            Mod.LOG($"CloudLayer[{layerIndex}]: noise generator is null, skipping noise generation.");
+            Mod.Log($"CloudLayer[{layerIndex}]: noise generator is null, skipping noise generation.");
             return;
         }
 
@@ -143,6 +144,25 @@ public class CloudLayer
         mat.SetFloat("orbitBrightness", Mathf.Max(0f, config.orbitBrightness));
         mat.SetFloat("orbitReliefStrength", Mathf.Max(0f, config.orbitReliefStrength));
         mat.SetFloat("orbitDetailStrength", Mathf.Max(0f, config.orbitDetailStrength));
+        mat.SetFloat("_OrbitDebugMode", config.orbitDebugMode > 0.5f ? 1f : 0f);
+
+        // 诊断日志:游戏自带云层检测 + 轨道云静态参数(定位 2D/体积范围差异)
+        if (!_staticPropsLogged)
+        {
+            _staticPropsLogged = true;
+            bool hasStockNow = StockCloudMap.Current != null;
+            Mod.Log($"CloudLayer[{layerIndex}] stockValid=" + StockCloudMap.LayerValid +
+                " useStock=" + ((config.useStockCloudMap && hasStockNow) ? 1 : 0) +
+                " stockLayer=" + Mathf.Clamp(config.stockMapLayer, 0, 3) +
+                " stockStrength=" + Mathf.Clamp01(config.stockMapStrength) +
+                " stockMaskInf=" + Mathf.Clamp01(config.stockMaskInfluence) +
+                " orbit(alt=" + config.orbitSampleAltitude +
+                " boost=" + config.orbitDensityBoost +
+                " bright=" + config.orbitBrightness +
+                " relief=" + config.orbitReliefStrength +
+                " detail=" + config.orbitDetailStrength +
+                " res=" + config.orbitResolutionScale + ")");
+        }
     }
 
     /// <summary>

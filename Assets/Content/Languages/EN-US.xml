@@ -20,6 +20,7 @@
     <s id="Volken.UI.UseStockCloudMap">Use Stock Cloud Distribution</s>
     <s id="Volken.UI.StockCloudUnavailable">No stock cloud data for this planet.</s>
     <s id="Volken.UI.StockMapStrength">Stock Map Strength</s>
+    <s id="Volken.UI.StockDensityScale">Stock Region Density</s>
     <s id="Volken.UI.StockMaskInfluence">Stock Mask Influence</s>
     <s id="Volken.UI.StockAlignSign">Stock Align Sign</s>
     <s id="Volken.UI.StockAlignAngleOffset">Stock Align Angle (deg)</s>

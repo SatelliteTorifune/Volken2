@@ -481,6 +481,7 @@ public class CloudRenderer : MonoBehaviour
               .Append(" step=").Append(c.stepSize.ToString("F0"))
               .Append(" comp=").Append(c.compositeMode)
               .Append(" stock=").Append(c.useStockCloudMap ? 1 : 0)
+              .Append(" stockDensityScale=").Append(c.stockDensityScale.ToString("F2"))
               .Append(" fadeBand=").Append(c.orbitTransitionStartAltitude.ToString("F0")).Append('-').Append(c.orbitTransitionEndAltitude.ToString("F0"))
               .Append(" boost=").Append(c.orbitDensityBoost.ToString("F2"))
               .Append(" bright=").Append(c.orbitBrightness.ToString("F2"));

@@ -134,6 +134,7 @@ public class CloudLayer
         mat.SetFloat("stockMapStrength", Mathf.Clamp01(config.stockMapStrength));
         mat.SetFloat("stockMaskInfluence", Mathf.Clamp01(config.stockMaskInfluence));
         mat.SetFloat("stockMapLayer", Mathf.Clamp(config.stockMapLayer, 0, 3));
+        mat.SetFloat("stockDensityScale", Mathf.Clamp01(config.stockDensityScale));
         mat.SetVector("stockLayerValid", StockCloudMap.LayerValid);
         mat.SetFloat("stockAlignSign", Mathf.Sign(config.stockAlignSign));
         mat.SetFloat("stockAlignAngleOffset", config.stockAlignAngleOffset);
@@ -156,6 +157,7 @@ public class CloudLayer
                 " stockLayer=" + Mathf.Clamp(config.stockMapLayer, 0, 3) +
                 " stockStrength=" + Mathf.Clamp01(config.stockMapStrength) +
                 " stockMaskInf=" + Mathf.Clamp01(config.stockMaskInfluence) +
+                " stockDensityScale=" + Mathf.Clamp01(config.stockDensityScale) +
                 " orbit(alt=" + config.orbitSampleAltitude +
                 " boost=" + config.orbitDensityBoost +
                 " bright=" + config.orbitBrightness +

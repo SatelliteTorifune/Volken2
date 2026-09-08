@@ -128,6 +128,13 @@ public class CloudConfig
     public float stockAlignAngleOffset = 0f;// 度,一次性对齐微调角
     public int stockMapLayer = 3;           // 用游戏哪一层云作为分布:0=低云(R), 1=中云(G), 2=高云(B), 3=按层对应(默认)
 
+    // === 方案 A:自带云"区域内密度缩放"(2026-09-06,修正版) ===
+    // 默认 1 → 恒等 → 与现状逐字节一致(零回归)。只缩放自带云足迹内的附加密度层,
+    // 形状门(dist)仍用未缩放的 stockBand → 足迹边缘保留;scale 下调 → 附加密度地板下降,
+    // 3D 形状能把密度压到覆盖阈值以下 → 内部出现空洞,化解"一大片实心云"。
+    // 只作用于自带云足迹内,全局 coverage(planetMap 基线)不受影响。
+    public float stockDensityScale = 1f;    // 区域内密度缩放 0..1(1=恒等/现状)
+
     // === 轨道云(2D 壳着色)+ 过渡带交叉淡入(2026-08-27) ===
     // 高空(轨道)视角用廉价 2D 壳着色替代体积 raymarch;过渡带内与体积云按海拔交叉淡入。
     // 默认关闭(useOrbitClouds=false)→ orbitFade=0 → 行为与之前完全一致,零回归。
@@ -414,6 +421,7 @@ public class CloudConfig
             stockAlignSign = this.stockAlignSign,
             stockAlignAngleOffset = this.stockAlignAngleOffset,
             stockMapLayer = this.stockMapLayer,
+            stockDensityScale = this.stockDensityScale,
             useOrbitClouds = this.useOrbitClouds,
             orbitTransitionStartAltitude = this.orbitTransitionStartAltitude,
             orbitTransitionEndAltitude = this.orbitTransitionEndAltitude,
@@ -483,6 +491,7 @@ public class CloudConfig
         this.stockAlignSign = source.stockAlignSign;
         this.stockAlignAngleOffset = source.stockAlignAngleOffset;
         this.stockMapLayer = source.stockMapLayer;
+        this.stockDensityScale = source.stockDensityScale;
         this.useOrbitClouds = source.useOrbitClouds;
         this.orbitTransitionStartAltitude = source.orbitTransitionStartAltitude;
         this.orbitTransitionEndAltitude = source.orbitTransitionEndAltitude;

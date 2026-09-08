@@ -2,7 +2,7 @@
 
 > 日期:2026-08-27
 > 依据:KSA 源码(`C:/renko/shitProgram/KSAre/KSA/KSA/Atmosphere/Rendering/`)实读 + Volken 现行代码
-> 关联文档:`Volken-方案C-KSA体积云技术移植(BIRP).md`、`Volken-体积云优化点分析-VolRe与KSA借鉴.md`(#2 距离淡出/LOD、#8 层壳相交排序)
+> 关联文档:`../02-方案设计/Volken-方案C-KSA体积云技术移植(BIRP).md`、`./Volken-体积云优化点分析-VolRe与KSA借鉴.md`(#2 距离淡出/LOD、#8 层壳相交排序)
 
 ## 0. 结论速览
 
@@ -144,7 +144,7 @@ float orbitFade = smoothstep(orbitTransitionStartAltitude, orbitTransitionEndAlt
 - **M0**:接线相机海拔 uniform + `CloudConfig` 新增 start/end(默认 1 AU = 关闭 2D);纯开关,行为不变。
 - **M1**:`OrbitClouds` pass(推荐 B 同源密度采样)+ 高空强制 2D 路径(`camAlt > end` 时替代体积)。
 - **M2**:band 交叉淡入(Composite 内按 orbitFade 混合)+ 调参(start/end/曲线)。
-- **M3**:轨道视觉打磨(2D 光照与体积云对齐、与 StockCloudMap 的取舍、半清选项)。
+- **M3**:轨道视觉打磨(2D 光照与体积云对齐、与 StockCloudMap 的取舍、半清选项)。✅ **夜晚侧已修(2026-09-06)**:参照游戏本体 `CloudsFromSpace` 的 N·L 平滑晨昏线门控(`dayFactor`),轨道云整体乘日/夜因子,银边改晨昏线窄带并去掉双重 `silverLiningIntensity` —— 夜侧不再发白、与体积云夜晚行为一致。
 
 ---
 

@@ -20,6 +20,7 @@
     <s id="Volken.UI.UseStockCloudMap">Использовать карту облаков игры</s>
     <s id="Volken.UI.StockCloudUnavailable">Для этой планеты нет карты облаков.</s>
     <s id="Volken.UI.StockMapStrength">Сила карты</s>
+    <s id="Volken.UI.StockDensityScale">Плотность в области карты облаков</s>
     <s id="Volken.UI.StockMaskInfluence">Влияние маски</s>
     <s id="Volken.UI.StockAlignSign">Знак выравнивания</s>
     <s id="Volken.UI.StockAlignAngleOffset">Угол выравнивания (град)</s>

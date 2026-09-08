@@ -381,7 +381,7 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 **诊断清理(2026-08-27)**:删除全部 TSS 诊断回读——`CloudRenderer.cs` 的 `LogMVStats`/`_mvReadTex`(含 MVSTATS 日志)。
 `Mod.LOG` 仅保留错误处理(OnRenderImage ERROR / 配置读写错误等)。CloudRenderer.cs 现 484 行,大括号平衡。
 
-**JNO 冲突(2026-08-27,已定位,详见 `Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md`)**:
+**JNO 冲突(2026-08-27,已定位,详见 [../01-问题排查/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md](../01-问题排查/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md))**:
 "看不到云 + 自带云开关锁死"根因 = JNOmultiplayerTest 的 `MultiPlayerUI.OnSceneLoaded` 在
 `inspectorPanel == null` 时抛 NRE → 中断 SceneLoaded 事件链 → Volken.OnSceneLoaded 被跳过
 (未建 CloudRenderer + 未加载 StockCloudMap)。修复:JNO 侧 `MultiPlayerUI.OnSceneLoaded` 加 null 保护(手动应用);

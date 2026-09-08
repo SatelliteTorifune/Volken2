@@ -234,6 +234,7 @@ Shader "Hidden/Clouds"
             float4 stockLayerValid;        // load-time check: (R=low, G=mid, B=high, A=mask) layer presence; 0 = fall back that band to planetMap
             float stockAlignSign;          // +-1 rotation direction
             float stockAlignAngleOffset;   // degrees, one-time alignment
+            float stockDensityScale;       // 方案 A:区域内密度缩放 0..1(1=恒等/现状;保留足迹边缘)
             float4x4 planetToBody;         // reference-frame -> planet-body rotation
 
             Texture2D<float4> BlueNoiseTex;
@@ -439,10 +440,13 @@ Shader "Hidden/Clouds"
                 float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
                 float4 stockBand = stockBandRaw * stockMask;
 
+                // 方案 A:区域内密度缩放(默认 1 → 恒等 → 现状逐字节一致;0 仍 0 → 足迹边缘保留)
+                float4 stockCov = stockBand * stockDensityScale;
+
                 // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
                 // Stock replaces the data source: R=low, G=mid, B=high, A=mask.
                 // valid==0 的层保持 planetMap(老 Volken 行为)
-                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockCov, stockEff * valid);
                 float4 layers;
                 layers.x = cloudLayerStrengths.x * mapVal.x;
                 layers.y = cloudLayerStrengths.y * mapVal.y;
@@ -523,10 +527,13 @@ Shader "Hidden/Clouds"
                 float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
                 float4 stockBand = stockBandRaw * stockMask;
 
+                // 方案 A:区域内密度缩放(默认 1 → 恒等 → 现状逐字节一致;0 仍 0 → 足迹边缘保留)
+                float4 stockCov = stockBand * stockDensityScale;
+
                 // Layer1/3/4 use density (planetMap.r), Layer2 uses height (planetMap.g)
                 // Stock replaces the data source: R=low, G=mid, B=high, A=mask.
                 // valid==0 的层保持 planetMap(老 Volken 行为)
-                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockCov, stockEff * valid);
                 float4 layers;
                 layers.x = cloudLayerStrengths.x * mapVal.x;
                 layers.y = cloudLayerStrengths.y * mapVal.y;
@@ -994,6 +1001,7 @@ Shader "Hidden/Clouds"
             float4 stockLayerValid;
             float stockAlignSign;
             float stockAlignAngleOffset;
+            float stockDensityScale;       // 方案 A:区域内密度缩放 0..1(1=恒等)
             float4x4 planetToBody;
 
             // 场景深度(低清线性眼深;Blit uv 约定,与 Composite 采样 SceneDepthTex 一致,
@@ -1119,7 +1127,10 @@ Shader "Hidden/Clouds"
                 float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
                 float4 stockBand = stockBandRaw * stockMask;
 
-                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                // 方案 A:区域内密度缩放(默认 1 → 恒等 → 现状逐字节一致;0 仍 0 → 足迹边缘保留)
+                float4 stockCov = stockBand * stockDensityScale;
+
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockCov, stockEff * valid);
                 float4 layers;
                 layers.x = cloudLayerStrengths.x * mapVal.x;
                 layers.y = cloudLayerStrengths.y * mapVal.y;
@@ -1190,7 +1201,10 @@ Shader "Hidden/Clouds"
                 float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
                 float4 stockBand = stockBandRaw * stockMask;
 
-                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockBand, stockEff * valid);
+                // 方案 A:区域内密度缩放(默认 1 → 恒等 → 现状逐字节一致;0 仍 0 → 足迹边缘保留)
+                float4 stockCov = stockBand * stockDensityScale;
+
+                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockCov, stockEff * valid);
                 float4 layers;
                 layers.x = cloudLayerStrengths.x * mapVal.x;
                 layers.y = cloudLayerStrengths.y * mapVal.y;
@@ -1299,12 +1313,21 @@ Shader "Hidden/Clouds"
                 float light = lerp(ambientLight, 1.0, ndl);
                 float phaseValue = CloudPhase(dot(viewDir, -lightDir), multiScatterBlend);
 
+                // --- 日/夜门控(参照游戏本体 CloudsFromSpace:N·L 平滑晨昏线,夜侧整体变暗) ---
+                // 用壳法线 up(宏观昼夜),不用浮雕 N(细节不驱动昼夜);
+                // 晨昏线带宽 0.1 ≈ 游戏 _DuskReach = 0.1·AtmosSizeScale(无大气时为硬过渡)。
+                float dayFactor = smoothstep(-0.1, 0.0, dot(up, -lightDir));
+
                 // 调试模式:红 = 覆盖(实际显示),绿 = 壳面覆盖掩膜足迹(范围诊断)
                 if (_OrbitDebugMode > 0.5)
                     return float4(coverage, saturate(cov * 5.0), 0.0, 1.0);
 
-                float3 col = cloudColor.rgb * light * albedo * coverage * orbitBrightness;
-                col += cloudColor.rgb * phaseValue * silverLiningIntensity * coverage * (1.0 - ndl) * 0.5 * orbitBrightness;
+                float3 col = cloudColor.rgb * light * albedo * coverage * orbitBrightness * dayFactor;
+                // 银边:晨昏线掠射窄带(游戏参考:无任何夜侧加亮项)。
+                // 去掉外层重复的 silverLiningIntensity(CloudPhase 内部已乘一次);
+                // (1.0-ndl) 加权仅当 ndl→0 时亮(背光轮廓),夜侧被 dayFactor 压到 0。
+                col += cloudColor.rgb * phaseValue * coverage
+                     * pow(saturate(1.0 - ndl), 3.0) * dayFactor * 0.5 * orbitBrightness;
 
                 return float4(col, coverage);
             }

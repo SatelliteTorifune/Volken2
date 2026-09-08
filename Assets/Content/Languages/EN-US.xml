@@ -126,4 +126,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´° hey I don't think there should be clouds here</s>
     <s id="Volken.UI.NoStarClouds">Why you are trying to give star cloud???</s>
+    
+    <!-- Update Reminder -->
+    <s id="Volken.UI.UpdateAvailable">A new version of Volken is available!</s>
+    <s id="Volken.UI.UpdateNewVersion">New version: {0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">Your version: {0}</s>
+    <s id="Volken.UI.UpdateDownload">Download</s>
+    <s id="Volken.UI.UpdateLater">Later</s>
+    <s id="Volken.UI.UpdateDismiss">Don't Remind Again</s>
 </Strings>

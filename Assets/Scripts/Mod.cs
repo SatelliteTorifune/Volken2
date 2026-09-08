@@ -37,6 +37,11 @@ namespace Assets.Scripts
         public GameObject forceSettingScriptLoadGameObject;
         public bool hasHarmony { get; private set; } = false;
         
+        /// <summary>
+        /// Gets the mod version as reported by the mod manifest (ModInfo.Version), e.g. 0.6.
+        /// </summary>
+        public Version ModVersion { get; private set; }
+        
         public override void OnModLoaded()
         {
             base.OnModInitialized();
@@ -57,6 +62,12 @@ namespace Assets.Scripts
             RegisterCommands();
 
             Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
+
+            // 本地版本 = ModInfo.Version(System.Version,如 0.6)
+            this.ModVersion = this.ModInfo.Version;
+
+            // 更新检查(本地模式:LatestVersionUrl 未配置时仅打日志,不弹窗)
+            new ModUpdater().CheckForUpdate();
         }
         
         private void RegisterCommands()

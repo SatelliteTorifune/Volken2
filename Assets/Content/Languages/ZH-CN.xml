@@ -127,4 +127,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´°你觉得这里应该有云吗我请问了</s>
     <s id="Volken.UI.NoStarClouds">你为什么要给恒星加云???</s>
+    
+    <!-- 更新提醒 -->
+    <s id="Volken.UI.UpdateAvailable">发现 Volken 新版本!</s>
+    <s id="Volken.UI.UpdateNewVersion">最新版本:{0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">当前版本:{0}</s>
+    <s id="Volken.UI.UpdateDownload">立刻更新</s>
+    <s id="Volken.UI.UpdateLater">稍后再说</s>
+    <s id="Volken.UI.UpdateDismiss">不再提醒</s>
 </Strings>

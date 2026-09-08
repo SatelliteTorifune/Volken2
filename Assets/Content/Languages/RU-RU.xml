@@ -125,4 +125,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´° эй, я не думаю что здесь должны быть облака</s>
     <s id="Volken.UI.NoStarClouds">Какой смысл у облаков на звезде???</s>
+    
+    <!-- Напоминание об обновлении -->
+    <s id="Volken.UI.UpdateAvailable">Доступна новая версия Volken!</s>
+    <s id="Volken.UI.UpdateNewVersion">Новая версия: {0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">Ваша версия: {0}</s>
+    <s id="Volken.UI.UpdateDownload">Скачать обновление</s>
+    <s id="Volken.UI.UpdateLater">Позже</s>
+    <s id="Volken.UI.UpdateDismiss">Не напоминать</s>
 </Strings>

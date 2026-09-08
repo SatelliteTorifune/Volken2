@@ -1,3 +1,4 @@
+using System.IO;
 using Assets.Packages.DevConsole;
 using Assets.Scripts.Flight.UI;
 using HarmonyLib;
@@ -35,13 +36,14 @@ namespace Assets.Scripts
         public GameObject VolkenUI;
         public GameObject forceSettingScriptLoadGameObject;
         public bool hasHarmony { get; private set; } = false;
+        
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
             //PlanetRingsZWriteFix.Apply(harmony);
-            PlanetRingsShaderPatch.Apply(harmony);
+            //PlanetRingsShaderPatch.Apply(harmony);
             VolkenUI=new GameObject("VolkenUI");
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
@@ -51,7 +53,10 @@ namespace Assets.Scripts
             GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
             forceSettingScriptLoadGameObject.SetActive(false);
             Volken.Initialize();
+            VolkenProfiler.ProfilerController.Create();
             RegisterCommands();
+
+            Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
         }
         
         private void RegisterCommands()
@@ -82,26 +87,14 @@ namespace Assets.Scripts
             }
         }
         #region LOG
-        public static void LOG(object message)
-        {
-            if (ModSettings.Instance.ShowDevLog)
-            {
-                Debug.unityLogger.Log(message);
-            }
-        }
         public static void LOG(string format, params object[] args)
         {
-            if (ModSettings.Instance.ShowDevLog)
+            try
             {
+                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
                 Debug.unityLogger.LogFormat(LogType.Log, format, args);
             }
-        }
-        public static void LOG(UnityEngine.Object context, string format, params object[] args)
-        {
-            if (ModSettings.Instance.ShowDevLog)
-            {
-                Debug.unityLogger.LogFormat(LogType.Log, context, format, args);
-            }
+            catch { }
         }
         #endregion
     }

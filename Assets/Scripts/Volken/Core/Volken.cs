@@ -56,12 +56,12 @@ public class Volken
         {
             _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds/Clouds.shader");
         }
-        catch (Exception ex) { Mod.LOG("Volken: Cloud shader load error: " + ex); }
+        catch (Exception ex) { Mod.Log("Volken: Cloud shader load error: " + ex); }
 
         if (_cloudShader == null)
         {
             try { _cloudShader = Shader.Find("Hidden/Clouds"); }
-            catch (Exception ex) { Mod.LOG("Volken: Shader.Find fallback error: " + ex); }
+            catch (Exception ex) { Mod.Log("Volken: Shader.Find fallback error: " + ex); }
         }
 
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
@@ -142,12 +142,12 @@ public class Volken
     public void AddConfig(string cfg)
     {
         _availableConfigs.Add(cfg);
-        Mod.LOG($"Volken: Added config {cfg}, now has {_availableConfigs.Count} configs");
+        Mod.Log($"Volken: Added config {cfg}, now has {_availableConfigs.Count} configs");
     }
 
     public void RefreshConfigList()
     {
-        Mod.LOG("Refreshing config list");
+        Mod.Log("Refreshing config list");
         try
         {
             var planetNode = Game.Instance?.FlightScene?.CraftNode?.Parent;
@@ -163,7 +163,7 @@ public class Volken
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error refreshing config list: " + ex);
+            Mod.Log("Volken: Error refreshing config list: " + ex);
             _availableConfigs = new List<string> { "Default" };
         }
     }
@@ -213,7 +213,7 @@ public class Volken
                     extra.config.CopyFrom(loaded);
                     extra.currentConfigName = extraCfgName;
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error loading extra config: " + ex); }
             }
         }
 
@@ -263,7 +263,7 @@ public class Volken
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: OnSceneLoaded ERROR: " + ex);
+            Mod.Log("Volken: OnSceneLoaded ERROR: " + ex);
         }
     }
 
@@ -336,7 +336,7 @@ public class Volken
                             extra.config.CopyFrom(loaded);
                             extra.currentConfigName = extraCfgName;
                         }
-                        catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                        catch (Exception ex) { Mod.Log("Volken: Error loading extra config: " + ex); }
                     }
                 }
 
@@ -367,7 +367,7 @@ public class Volken
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: OnPlayerChangedSoi ERROR: " + ex);
+            Mod.Log("Volken: OnPlayerChangedSoi ERROR: " + ex);
         }
     }
 

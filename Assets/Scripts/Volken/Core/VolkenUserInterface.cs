@@ -51,7 +51,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception ex)
             {
-                Mod.LOG("Volken: Error OnSceneLoaded: " + ex);
+                Mod.Log("Volken: Error OnSceneLoaded: " + ex);
             }
         }
         else
@@ -65,7 +65,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception exception)
             {
-                Mod.LOG("Volken: Error OnSceneLoaded: " + exception);
+                Mod.Log("Volken: Error OnSceneLoaded: " + exception);
             }
         }
     }
@@ -115,7 +115,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error in OnPlayerChangedSoi: " + ex);
+            Mod.Log("Volken: Error in OnPlayerChangedSoi: " + ex);
         }
     }
 
@@ -153,7 +153,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error building flight UI: " + ex);
+            Mod.Log("Volken: Error building flight UI: " + ex);
         }
     }
 
@@ -173,7 +173,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error toggling UI: " + ex);
+            Mod.Log("Volken: Error toggling UI: " + ex);
             try
             {
                 CreateInspectorPanel();
@@ -184,7 +184,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception createEx)
             {
-                Mod.LOG("Volken: Error creating panel: " + createEx);
+                Mod.Log("Volken: Error creating panel: " + createEx);
             }
         }
     }
@@ -202,7 +202,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Mod.LOG($"error in VolkenInterface.CreateInspectorPanel {e}");
+                    Mod.Log($"error in VolkenInterface.CreateInspectorPanel {e}");
                 }
             }
 
@@ -244,7 +244,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error creating inspector panel: " + ex);
+            Mod.Log("Volken: Error creating inspector panel: " + ex);
             inspectorPanel = null;
         }
     }
@@ -272,7 +272,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error saving config: " + ex);
+                    Mod.Log("Volken: Error saving config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorSavingConfig"));
                 }
@@ -319,7 +319,7 @@ public class VolkenUserInterface : MonoBehaviour
                         }
                         catch (Exception ex)
                         {
-                            Mod.LOG("Volken: Error saving new config: " + ex);
+                            Mod.Log("Volken: Error saving new config: " + ex);
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                                 Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
                         }
@@ -331,7 +331,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error creating save dialog: " + ex);
+                    Mod.Log("Volken: Error creating save dialog: " + ex);
                 }
             }));
         configManagementGroup.Add(saveAsButton);
@@ -368,7 +368,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error loading config: " + ex);
+                    Mod.Log("Volken: Error loading config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorLoadingConfig"));
                 }
@@ -388,7 +388,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error resetting config: " + ex);
+                    Mod.Log("Volken: Error resetting config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorResettingConfig"));
                 }
@@ -407,7 +407,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error setting config: " + ex);
+                    Mod.Log("Volken: Error setting config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorGettingConfig"));
                 }
@@ -442,7 +442,7 @@ public class VolkenUserInterface : MonoBehaviour
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSaved"), title));
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error saving config: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error saving config: " + ex); }
             }));
         group.Add(saveCurrentButton);
 
@@ -474,11 +474,11 @@ public class VolkenUserInterface : MonoBehaviour
                                 RebuildInspectorPanel();
                             }
                         }
-                        catch (Exception ex) { Mod.LOG("Volken: Error saving: " + ex); }
+                        catch (Exception ex) { Mod.Log("Volken: Error saving: " + ex); }
                         finally { inputDialog?.Close(); }
                     };
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error creating dialog: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error creating dialog: " + ex); }
             }));
         group.Add(saveAsButton);
 
@@ -503,7 +503,7 @@ public class VolkenUserInterface : MonoBehaviour
                             string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigLoaded"), title, newConfig));
                     }
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error loading: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error loading: " + ex); }
             },
             Volken.Instance._availableConfigs);
         group.Add(loadDropdown);
@@ -717,6 +717,11 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
     }
 
@@ -877,7 +882,52 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
+    }
+
+    /// <summary>
+    /// 轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。
+    /// 默认关闭 → 零回归;开启后按海拔在体积云/2D 轨道云间分派并交叉淡入。
+    /// </summary>
+    private static void CreateOrbitCloudsGroup(GroupModel group, CloudConfig cfg)
+    {
+        var orbitToggle = new ToggleModel(Locale.GetString("Volken.UI.UseOrbitClouds"),
+            () => cfg.useOrbitClouds, s =>
+            {
+                cfg.useOrbitClouds = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(orbitToggle);
+
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionStart"), () => cfg.orbitTransitionStartAltitude,
+            s => { cfg.orbitTransitionStartAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 200000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionEnd"), () => cfg.orbitTransitionEndAltitude,
+            s => { cfg.orbitTransitionEndAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 500000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitSampleAltitude"), () => cfg.orbitSampleAltitude,
+            s => { cfg.orbitSampleAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 50000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDensityBoost"), () => cfg.orbitDensityBoost,
+            s => { cfg.orbitDensityBoost = s; Volken.Instance.ValueChanged(); }, 0.1f, 5f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitBrightness"), () => cfg.orbitBrightness,
+            s => { cfg.orbitBrightness = s; Volken.Instance.ValueChanged(); }, 0f, 2f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitReliefStrength"), () => cfg.orbitReliefStrength,
+            s => { cfg.orbitReliefStrength = s; Volken.Instance.ValueChanged(); }, 0f, 4f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDetailStrength"), () => cfg.orbitDetailStrength,
+            s => { cfg.orbitDetailStrength = s; Volken.Instance.ValueChanged(); }, 0f, 1f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
+            s => { cfg.orbitResolutionScale = s; Volken.Instance.ValueChanged(); }, 0.1f, 1f, 2);
+
+        var debugToggle = new ToggleModel(Locale.GetString("Volken.UI.OrbitDebugMode"),
+            () => cfg.orbitDebugMode > 0.5f, s =>
+            {
+                cfg.orbitDebugMode = s ? 1f : 0f;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(debugToggle);
     }
 
     private static SliderModel CreateSlider(GroupModel group, string label,
@@ -913,7 +963,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error rebuilding panel: " + ex);
+            Mod.Log("Volken: Error rebuilding panel: " + ex);
         }
     }
 

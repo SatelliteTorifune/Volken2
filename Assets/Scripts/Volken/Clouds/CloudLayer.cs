@@ -28,7 +28,9 @@ public class CloudLayer
     public RenderTexture historyCloudDepthTex; // previous frame cloud surface distance (for reprojection)
     public RenderTexture cloudMVTex;           // 本帧新鲜格运动矢量(reprojUV−i.uv,MRT 第三通道)
     public RenderTexture cloudMVDilatedTex;    // 3×3 膨胀后的运动矢量(供下一帧 !isFresh 重投影)
+    public RenderTexture orbitCloudTex;       // 轨道云(2D 壳着色)输出,Composite 按 _OrbitFade 混合
     public float currentResolutionScale;
+    public float currentOrbitRes = -1f;       // 轨道云当前分辨率缩放(签名,变化触发 RT 重建)
 
     // === 噪声纹理 (完全独立，不同种子) ===
     public CloudNoise noise;
@@ -42,6 +44,11 @@ public class CloudLayer
     public Vector3 runningOffset;     // 运行时累积的 offset（不污染序列化的 config.offset）
     public Matrix4x4 prevViewProjMat;
     public float prevCloudAngle = float.NaN; // 方案 C §5:云空间重投影用——上一帧的云转角相位 θ+2π·offset.x(风平移折算为经度旋转)
+
+    // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+    public float orbitFade;            // 本帧海拔淡入因子 0..1(CloudRenderer 每帧写入)
+    public bool orbitOnlyLastFrame;    // 上一帧是否纯 2D(进入纯 2D 时清时序历史,防切回残影)
+    private bool _staticPropsLogged;   // 静态参数诊断日志只打一次
 
     // === 时序超采样(方案 C,KSA 完整结构) ===
     public int frameNumber;          // 距上次重建/配置变更的帧计数;0 = 冷启动
@@ -58,7 +65,7 @@ public class CloudLayer
     {
         if (noise == null)
         {
-            Mod.LOG($"CloudLayer[{layerIndex}]: noise generator is null, skipping noise generation.");
+            Mod.Log($"CloudLayer[{layerIndex}]: noise generator is null, skipping noise generation.");
             return;
         }
 
@@ -130,6 +137,32 @@ public class CloudLayer
         mat.SetVector("stockLayerValid", StockCloudMap.LayerValid);
         mat.SetFloat("stockAlignSign", Mathf.Sign(config.stockAlignSign));
         mat.SetFloat("stockAlignAngleOffset", config.stockAlignAngleOffset);
+
+        // 轨道云(2D 壳着色)静态参数
+        mat.SetFloat("orbitSampleAltitude", Mathf.Max(0f, config.orbitSampleAltitude));
+        mat.SetFloat("orbitDensityBoost", Mathf.Max(0.01f, config.orbitDensityBoost));
+        mat.SetFloat("orbitBrightness", Mathf.Max(0f, config.orbitBrightness));
+        mat.SetFloat("orbitReliefStrength", Mathf.Max(0f, config.orbitReliefStrength));
+        mat.SetFloat("orbitDetailStrength", Mathf.Max(0f, config.orbitDetailStrength));
+        mat.SetFloat("_OrbitDebugMode", config.orbitDebugMode > 0.5f ? 1f : 0f);
+
+        // 诊断日志:游戏自带云层检测 + 轨道云静态参数(定位 2D/体积范围差异)
+        if (!_staticPropsLogged)
+        {
+            _staticPropsLogged = true;
+            bool hasStockNow = StockCloudMap.Current != null;
+            Mod.Log($"CloudLayer[{layerIndex}] stockValid=" + StockCloudMap.LayerValid +
+                " useStock=" + ((config.useStockCloudMap && hasStockNow) ? 1 : 0) +
+                " stockLayer=" + Mathf.Clamp(config.stockMapLayer, 0, 3) +
+                " stockStrength=" + Mathf.Clamp01(config.stockMapStrength) +
+                " stockMaskInf=" + Mathf.Clamp01(config.stockMaskInfluence) +
+                " orbit(alt=" + config.orbitSampleAltitude +
+                " boost=" + config.orbitDensityBoost +
+                " bright=" + config.orbitBrightness +
+                " relief=" + config.orbitReliefStrength +
+                " detail=" + config.orbitDetailStrength +
+                " res=" + config.orbitResolutionScale + ")");
+        }
     }
 
     /// <summary>
@@ -164,6 +197,15 @@ public class CloudLayer
         historyDepthTex = CreateRT(screenW, screenH, RenderTextureFormat.RFloat, "HistoryDepthTex" + layerIndex);
         historyCloudDepthTex = CreateRT(screenW, screenH, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layerIndex);
 
+        // 轨道云(2D 壳着色):按 orbitResolutionScale 降分辨率渲染 + Composite 双线性软化
+        // (KSA 2D 云同样不追求全清;半清还天然软化程序化噪声的颗粒感)
+        float orbitRes = Mathf.Clamp(config.orbitResolutionScale, 0.1f, 1f);
+        orbitCloudTex = CreateRT(
+            Mathf.Max(1, Mathf.RoundToInt(screenW * orbitRes)),
+            Mathf.Max(1, Mathf.RoundToInt(screenH * orbitRes)),
+            RenderTextureFormat.ARGB32, "OrbitCloudTex" + layerIndex);
+        currentOrbitRes = orbitRes;
+
         currentUpX = upX;
         currentUpY = upY;
         currentTemporal = tss ? 1 : 0;
@@ -182,6 +224,7 @@ public class CloudLayer
         ReleaseRT(ref historyCloudDepthTex);
         ReleaseRT(ref cloudMVTex);
         ReleaseRT(ref cloudMVDilatedTex);
+        ReleaseRT(ref orbitCloudTex);
     }
 
     private static RenderTexture CreateRT(int w, int h, RenderTextureFormat fmt, string name, int depthBits = 0)

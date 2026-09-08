@@ -37,6 +37,11 @@ namespace Assets.Scripts
         public GameObject forceSettingScriptLoadGameObject;
         public bool hasHarmony { get; private set; } = false;
         
+        /// <summary>
+        /// Gets the mod version as reported by the mod manifest (ModInfo.Version), e.g. 0.6.
+        /// </summary>
+        public Version ModVersion { get; private set; }
+        
         public override void OnModLoaded()
         {
             base.OnModInitialized();
@@ -57,6 +62,12 @@ namespace Assets.Scripts
             RegisterCommands();
 
             Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
+
+            // 本地版本 = ModInfo.Version(System.Version,如 0.6)
+            this.ModVersion = this.ModInfo.Version;
+
+            // 更新检查(本地模式:LatestVersionUrl 未配置时仅打日志,不弹窗)
+            new ModUpdater().CheckForUpdate();
         }
         
         private void RegisterCommands()
@@ -76,25 +87,28 @@ namespace Assets.Scripts
             {
                 Volken.Initialize();
                 Volken.Instance?.OnFlightSceneLoaded();
-                LOG("force refresh called");
+                Log("force refresh called");
             }
 
             if (Volken.Instance!=null)
             { 
                 Volken.Initialize();
                 Volken.Instance?.OnFlightSceneLoaded();
-                LOG("Volken is still alive");
+                Log("Volken is still alive");
             }
         }
         #region LOG
-        public static void LOG(string format, params object[] args)
+        public static void Log(string format, params object[] args)
         {
             try
             {
                 if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
-                Debug.unityLogger.LogFormat(LogType.Log, format, args);
+                Debug.unityLogger.LogFormat(LogType.Log, "[Volken]"+format, args);
             }
-            catch { }
+            catch
+            {
+                Debug.Log("什么叫做他妈的Log报错了??????");
+            }
         }
         #endregion
     }

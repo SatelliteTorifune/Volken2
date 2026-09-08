@@ -81,6 +81,19 @@
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
     <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
+
+    <!-- 轨道云(2D 壳着色 + 过渡带交叉淡入) -->
+    <s id="Volken.UI.OrbitClouds">轨道云(2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">使用轨道云(高空 2D)</s>
+    <s id="Volken.UI.OrbitTransitionStart">过渡带起点(米)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">过渡带终点(米)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">2D 着色锚点高度(0=自动)</s>
+    <s id="Volken.UI.OrbitDensityBoost">2D 光学厚度乘数</s>
+    <s id="Volken.UI.OrbitBrightness">2D 亮度</s>
+    <s id="Volken.UI.OrbitReliefStrength">2D 浮雕(法线)强度</s>
+    <s id="Volken.UI.OrbitDetailStrength">2D 细节纹理强度</s>
+    <s id="Volken.UI.OrbitResolutionScale">2D 分辨率缩放</s>
+    <s id="Volken.UI.OrbitDebugMode">2D 调试分屏(左体积/右2D,须在过渡带)</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">配置 '{0}' 已保存!</s>
@@ -114,4 +127,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´°你觉得这里应该有云吗我请问了</s>
     <s id="Volken.UI.NoStarClouds">你为什么要给恒星加云???</s>
+    
+    <!-- 更新提醒 -->
+    <s id="Volken.UI.UpdateAvailable">发现 Volken 新版本!</s>
+    <s id="Volken.UI.UpdateNewVersion">最新版本:{0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">当前版本:{0}</s>
+    <s id="Volken.UI.UpdateDownload">立刻更新</s>
+    <s id="Volken.UI.UpdateLater">稍后再说</s>
+    <s id="Volken.UI.UpdateDismiss">不再提醒</s>
 </Strings>

@@ -80,6 +80,19 @@
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
     <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг (шаг 1/N)</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
+
+    <!-- Орбитальные облака (2D-шейдинг оболочки + перекрёстное затухание) -->
+    <s id="Volken.UI.OrbitClouds">Орбитальные Облака (2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">Использовать орбитальные облака (2D на высоте)</s>
+    <s id="Volken.UI.OrbitTransitionStart">Начало переходной зоны (м)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">Конец переходной зоны (м)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">Высота якоря 2D (0 = авто)</s>
+    <s id="Volken.UI.OrbitDensityBoost">Множитель оптической толщины 2D</s>
+    <s id="Volken.UI.OrbitBrightness">Яркость 2D</s>
+    <s id="Volken.UI.OrbitReliefStrength">Сила рельефа 2D (нормали)</s>
+    <s id="Volken.UI.OrbitDetailStrength">Сила текстуры деталей 2D</s>
+    <s id="Volken.UI.OrbitResolutionScale">Масштаб разрешения 2D</s>
+    <s id="Volken.UI.OrbitDebugMode">2D отладка: сплит (объём/2D, только в переходной зоне)</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Конфиг '{0}' сохранён!</s>
@@ -112,4 +125,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´° эй, я не думаю что здесь должны быть облака</s>
     <s id="Volken.UI.NoStarClouds">Какой смысл у облаков на звезде???</s>
+    
+    <!-- Напоминание об обновлении -->
+    <s id="Volken.UI.UpdateAvailable">Доступна новая версия Volken!</s>
+    <s id="Volken.UI.UpdateNewVersion">Новая версия: {0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">Ваша версия: {0}</s>
+    <s id="Volken.UI.UpdateDownload">Скачать обновление</s>
+    <s id="Volken.UI.UpdateLater">Позже</s>
+    <s id="Volken.UI.UpdateDismiss">Не напоминать</s>
 </Strings>

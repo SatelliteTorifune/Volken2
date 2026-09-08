@@ -33,7 +33,7 @@ public static class PlanetRingsZWriteFix
             }
         }
 
-        Mod.LOG("[Volken] Planet rings ZWrite + Queue fix installed (Mod.Instance.backRenderQueue = " + Mod.Instance.backRenderQueue + ")");
+        Mod.Log("[Volken] Planet rings ZWrite + Queue fix installed (Mod.Instance.backRenderQueue = " + Mod.Instance.backRenderQueue + ")");
     }
 
     public static void Postfix(PlanetRingsScript __instance)
@@ -51,11 +51,11 @@ public static class PlanetRingsZWriteFix
             if (frontMat != null) FixMaterial(frontMat);
             if (backMat != null) FixMaterial(backMat);
 
-            Mod.LOG("[Volken] Rings fixed: Queue = " + Mod.Instance.backRenderQueue + ", ZWrite ON");
+            Mod.Log("[Volken] Rings fixed: Queue = " + Mod.Instance.backRenderQueue + ", ZWrite ON");
         }
         catch (System.Exception ex)
         {
-            Mod.LOG("[Volken Error] Rings fix failed: " + ex.Message);
+            Mod.Log("[Volken Error] Rings fix failed: " + ex.Message);
         }
     }
 

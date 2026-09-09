@@ -164,12 +164,6 @@ public class CloudConfig
     public float silverLiningIntensity = 1.0f;
     public float forwardScatteringBias = 0.85f;
 
-    public float lowAltitudeThreshold = 10000f;
-    public float midAltitudeThreshold = 50000f;
-    public float highAltitudeThreshold = 150000f;
-    public float minDistanceFactor = 0.1f;
-    public float maxStepSizeMultiplier = 3f;
-    public float minLightSamplesFactor = 0.3f;
     #endregion
     
 
@@ -270,44 +264,56 @@ public class CloudConfig
 
     public static CloudConfig CreateDefault()
     {
+        // 默认参数来源:UserData/VolkenConfig/Droo/NewDefault.xml(2026-09 调校基准)
         return new CloudConfig
         {
+            compositeMode = CompositeMode.Additive,
             enabled = true,
             density = 0.05f,
-            absorption =0.584487557f,
-            ambientLight = 0.18f,
-            coverage = -0.25f,
-            shapeScale = 10182.435f,
+            absorption = 0.361036152f,
+            ambientLight = 0.17901662f,
+            coverage = -0.28f,
+            shapeScale = 10182.4346f,
             detailScale = 25000.0f,
             detailStrength = 1f,
             phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
-            offset = new Vector3(0.89573895f,0.9473378f,0.95080435f),
-            windSpeed = 0.0f,
-            windDirection = 0.0f,
-            globalRotationAngular=0.1f,
-            scatterStrength = 0.21468132f,
+            offset = new Vector3(0.894878447f, 0.9375299f, 0.950234532f),
+            windSpeed = -0.002515155f,
+            windDirection = 174f,
+            globalRotationAngular = 0f,
+            scatterStrength = 0.3f,
             atmoBlendFactor = 0.3628809f,
             cloudColor = Color.white,
             layerHeights = new Vector4(1671.05261f, 4717.10547f, 0f, 0f),
-            layerSpreads = new Vector4(670.083f, 5000f, 1f, 1f),
-            layerStrengths = new Vector4(0.300f, 2f, 0f, 0f),
+            layerSpreads = new Vector4(670.0831f, 5000f, 1f, 1f),
+            layerStrengths = new Vector4(0.300554f, 2f, 0f, 0f),
             maxCloudHeight = 11238.2275f,
-            resolutionScale = 0.5001385f,
-            stepSize = 193.29982f,
-            stepSizeFalloff = 0.67f,
-            numLightSamplePoints = 6,
+            resolutionScale = 1f,
+            stepSize = 300f,
+            stepSizeFalloff = 0.6731564f,
+            numLightSamplePoints = 25,
             lightMarchDistance = 12000f,
-            blueNoiseStrength = 0.0f,
+            blueNoiseStrength = 0f,
             depthThreshold = 1f,
-            historyBlend = 0.0f,
+            historyBlend = 0f,
             historyDepthThreshold = 0.05f,
-            scatterPower = 1.5f,
-            multiScatterBlend = 0.3f,
-            ambientScatterStrength = 0.62f,
+            scatterPower = 1.04046762f,
+            multiScatterBlend = 1f,
+            ambientScatterStrength = 2f,
             customWavelengths = new Vector3(680f, 550f, 450f),
-            silverLiningIntensity = 3.0f,
-            forwardScatteringBias = 0.65f,
+            silverLiningIntensity = 3f,
+            forwardScatteringBias = 0.85f,
             nearThreshold = 100000f,
+            useTemporalUpscale = true,
+            upscaleX = 3,
+            upscaleY = 3,
+            useStockCloudMap = false,
+            stockMapStrength = 1f,
+            stockMaskInfluence = 1f,
+            stockAlignSign = 1f,
+            stockAlignAngleOffset = 0f,
+            stockMapLayer = 3,
+            stockDensityScale = 1f,
             useOrbitClouds = false,
             orbitTransitionStartAltitude = 25000f,
             orbitTransitionEndAltitude = 100000f,
@@ -318,20 +324,14 @@ public class CloudConfig
             orbitDetailStrength = 0.4f,
             orbitResolutionScale = 0.5f,
             orbitDebugMode = 0f,
-            /*
-            lowAltitudeThreshold = 10000f,
-            midAltitudeThreshold = 50000f,
-            highAltitudeThreshold = 150000,
-            minDistanceFactor = 0.1f,
-            maxStepSizeMultiplier = 3f,
-            minLightSamplesFactor = 0.3f
-            */
         };
     }
     public static CloudConfig CreateAnotherDefault()
     {
+        // 默认参数来源:UserData/VolkenConfig/Droo/AnotherNewDefault.xml(2026-09 调校基准)
         return new CloudConfig
         {
+            compositeMode = CompositeMode.Additive,
             enabled = true,
             density = 0.00595869171f,
             absorption = 0.279352337f,
@@ -341,33 +341,53 @@ public class CloudConfig
             detailScale = 7866.181f,
             detailStrength = 0.7400386f,
             phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
-            offset = new Vector3(0.015371074f, 0.131764963f, 0.0238080341f),
-            windSpeed = 0.001130818f,
-            windDirection = 0.0f,
-            globalRotationAngular = 0.07383323f,
-            scatterStrength = 0.0639246f,
-            atmoBlendFactor = 4.441673f,
+            offset = new Vector3(0.0718077943f, 0.565190852f, 0.00633700658f),
+            windSpeed = -0.0007840574f,
+            windDirection = 0f,
+            globalRotationAngular = 0.316963434f,
+            scatterStrength = 0.170936152f,
+            atmoBlendFactor = 2.66011786f,
             cloudColor = new Color(1f, 1f, 1f, 1f),
             layerHeights = new Vector4(17000f, 20000f, 0f, 0f),
             layerSpreads = new Vector4(5000f, 5000f, 1f, 1f),
             layerStrengths = new Vector4(2f, 2f, 0f, 0f),
             maxCloudHeight = 25000f,
-            resolutionScale = 0.75203526f,
+            resolutionScale = 0.8f,
             stepSize = 1865.18164f,
             stepSizeFalloff = 1.52126586f,
             numLightSamplePoints = 5,
-            lightMarchDistance = 20000f,
-            blueNoiseStrength = 0.0f,
+            lightMarchDistance = 12000f,
+            blueNoiseStrength = 0f,
             depthThreshold = 0.12f,
-            historyBlend = 0.0f,
+            historyBlend = 0f,
             historyDepthThreshold = 0.05f,
-            scatterPower = 1.0f,
-            multiScatterBlend = 0.0f,
-            ambientScatterStrength = 0.0f,
+            scatterPower = 2.5f,
+            multiScatterBlend = 0f,
+            ambientScatterStrength = 0f,
             customWavelengths = new Vector3(680f, 550f, 450f),
-            silverLiningIntensity = 0.0f,
-            forwardScatteringBias = 0.0f,
-            nearThreshold = 0.0f,
+            silverLiningIntensity = 0f,
+            forwardScatteringBias = 0f,
+            nearThreshold = 0f,
+            useTemporalUpscale = false,
+            upscaleX = 3,
+            upscaleY = 3,
+            useStockCloudMap = false,
+            stockMapStrength = 1f,
+            stockMaskInfluence = 1f,
+            stockAlignSign = 1f,
+            stockAlignAngleOffset = 0f,
+            stockMapLayer = 3,
+            stockDensityScale = 1f,
+            useOrbitClouds = false,
+            orbitTransitionStartAltitude = 25000f,
+            orbitTransitionEndAltitude = 100000f,
+            orbitSampleAltitude = 0f,
+            orbitDensityBoost = 1f,
+            orbitBrightness = 0.7f,
+            orbitReliefStrength = 1.5f,
+            orbitDetailStrength = 0.4f,
+            orbitResolutionScale = 0.5f,
+            orbitDebugMode = 0f,
         };
     }
 
@@ -432,14 +452,6 @@ public class CloudConfig
             orbitDetailStrength = this.orbitDetailStrength,
             orbitResolutionScale = this.orbitResolutionScale,
             orbitDebugMode = this.orbitDebugMode,
-            /*
-            lowAltitudeThreshold = this.lowAltitudeThreshold,
-            midAltitudeThreshold = this.midAltitudeThreshold,
-            highAltitudeThreshold = this.highAltitudeThreshold,
-            minDistanceFactor = this.minDistanceFactor,
-            maxStepSizeMultiplier = this.maxStepSizeMultiplier,
-            minLightSamplesFactor = this.minLightSamplesFactor,
-            */
         };
     }
     
@@ -502,13 +514,6 @@ public class CloudConfig
         this.orbitDetailStrength = source.orbitDetailStrength;
         this.orbitResolutionScale = source.orbitResolutionScale;
         this.orbitDebugMode = source.orbitDebugMode;
-        /*
-        this.lowAltitudeThreshold= source.lowAltitudeThreshold;
-        this.midAltitudeThreshold= source.midAltitudeThreshold;
-        this.highAltitudeThreshold= source.highAltitudeThreshold;
-        this.minDistanceFactor= source.minDistanceFactor;
-        this.maxStepSizeMultiplier= source.maxStepSizeMultiplier;
-        this.minLightSamplesFactor= source.minLightSamplesFactor;*/
     }
 
 }

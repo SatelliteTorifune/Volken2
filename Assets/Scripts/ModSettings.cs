@@ -51,7 +51,7 @@ namespace Assets.Scripts
         /// <value>
         /// <c>true</c> to show dev logs; otherwise, <c>false</c>.
         /// </value>
-        public BoolSetting ShowDevLog { get; set; }
+        public BoolSetting DevMode { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the water transparency setting is overridden based on altitude.
@@ -102,12 +102,12 @@ namespace Assets.Scripts
                 .SetDescription("{Volken.ModSettings.MinHeightDesc}")
                 .SetDisplayFormatter(x => x.ToString("F0"))
                 .SetDefault(10);
-            ShowDevLog = CreateBool("{Volken.ModSettings.ShowDevLog}", "ShowDevLog")
+            DevMode = CreateBool("{Volken.ModSettings.ShowDevLog}", "ShowDevLog")
                 .SetDescription("{Volken.ModSettings.ShowDevLogDesc}")
-                .SetDefault(true);
+                .SetDefault(false);
             AlterTransparency = CreateBool("{Volken.ModSettings.AlterTransparency}", "AlterTransparency")
                 .SetDescription("{Volken.ModSettings.AlterTransparencyDesc}")
-                .SetDefault(true);
+                .SetDefault(false);
             WaterReflection = CreateBool("{Volken.ModSettings.WaterReflection}", "WaterReflection")
                 .SetDescription("{Volken.ModSettings.WaterReflectionDesc}")
                 .SetDefault(false);

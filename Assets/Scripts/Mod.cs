@@ -102,7 +102,7 @@ namespace Assets.Scripts
         {
             try
             {
-                if (ModSettings.Instance == null || !ModSettings.Instance.ShowDevLog) return;
+                if (ModSettings.Instance == null || !ModSettings.Instance.DevMode) return;
                 Debug.unityLogger.LogFormat(LogType.Log, "[Volken]"+format, args);
             }
             catch

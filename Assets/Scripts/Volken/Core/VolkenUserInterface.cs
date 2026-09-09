@@ -1046,13 +1046,19 @@ public class VolkenUserInterface : MonoBehaviour
         CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
             s => { cfg.orbitResolutionScale = s; Volken.Instance.ValueChanged(); }, 0.1f, 1f, 2);
 
-        var debugToggle = new ToggleModel(Locale.GetString("Volken.UI.OrbitDebugMode"),
-            () => cfg.orbitDebugMode > 0.5f, s =>
-            {
-                cfg.orbitDebugMode = s ? 1f : 0f;
-                Volken.Instance.ValueChanged();
-            });
-        group.Add(debugToggle);
+        // 调试分屏开关:仅在 debug 模式(ModSettings.DevMode)下显示,平时对用户隐藏
+        bool orbitDebugShown = false;
+        try { orbitDebugShown = ModSettings.Instance != null && ModSettings.Instance.DevMode; } catch { }
+        if (orbitDebugShown)
+        {
+            var debugToggle = new ToggleModel(Locale.GetString("Volken.UI.OrbitDebugMode"),
+                () => cfg.orbitDebugMode > 0.5f, s =>
+                {
+                    cfg.orbitDebugMode = s ? 1f : 0f;
+                    Volken.Instance.ValueChanged();
+                });
+            group.Add(debugToggle);
+        }
     }
 
     private static SliderModel CreateSlider(GroupModel group, string label,

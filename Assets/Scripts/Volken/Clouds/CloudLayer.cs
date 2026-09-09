@@ -121,7 +121,11 @@ public class CloudLayer
         mat.SetFloat("orbitBrightness", Mathf.Max(0f, config.orbitBrightness));
         mat.SetFloat("orbitReliefStrength", Mathf.Max(0f, config.orbitReliefStrength));
         mat.SetFloat("orbitDetailStrength", Mathf.Max(0f, config.orbitDetailStrength));
-        mat.SetFloat("_OrbitDebugMode", config.orbitDebugMode > 0.5f ? 1f : 0f);
+        // 调试分屏/覆盖足迹(_OrbitDebugMode):仅在 debug 模式(ModSettings.DevMode)下启用。
+        // orbitDebugMode 配置兼容保留(旧存档可能为 1),非 debug 模式一律置 0 → 不渲染。
+        bool orbitDebug = false;
+        try { orbitDebug = ModSettings.Instance != null && ModSettings.Instance.DevMode; } catch { }
+        mat.SetFloat("_OrbitDebugMode", (orbitDebug && config.orbitDebugMode > 0.5f) ? 1f : 0f);
 
         // 诊断日志:游戏自带云层检测 + 轨道云静态参数(定位 2D/体积范围差异)
         if (!_staticPropsLogged)

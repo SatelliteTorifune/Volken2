@@ -657,6 +657,10 @@ public class CloudRenderer : MonoBehaviour
     /// </summary>
     private void LogCloudCoverage(List<CloudLayerView> activeViews, float camAlt, Vector3 planetCenter, float surfaceRadius)
     {
+        // 调试探针(GPU 回读):仅 debug 模式(ModSettings.DevMode)下启用
+        try { if (ModSettings.Instance == null || !ModSettings.Instance.DevMode) return; }
+        catch { return; }
+
         bool anyDebug = false;
         foreach (var view in activeViews)
             if (view.layer.config != null && view.layer.config.orbitDebugMode > 0.5f) { anyDebug = true; break; }
@@ -942,7 +946,7 @@ public class CloudRenderer : MonoBehaviour
                 result = temp;
             }
 
-            // 5.5 覆盖探针(仅 orbitDebugMode>0 时):量 2D/体积云的屏幕范围差
+            // 5.5 覆盖探针(仅 debug 模式 DevMode + orbitDebugMode>0 时):量 2D/体积云的屏幕范围差
             try
             {
                 var probeCraft = Game.Instance.FlightScene.CraftNode;

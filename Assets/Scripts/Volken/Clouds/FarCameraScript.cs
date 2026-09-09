@@ -9,11 +9,15 @@ using UnityEngine.Rendering;
 /// its output and draws a visible single-pixel seam line where the near camera's coverage ends
 /// (at the near camera's far clip plane, ~10 km). A command buffer leaves the camera's normal
 /// render path untouched.
+///
+/// 多相机支持:farDepthTex / maxFarDepth 都是【实例成员】(不再是 static)。每对(主视角 / PIP)
+/// 相机各自持有自己的远相机深度纹理 —— 否则多台额外相机会在同一个 static 纹理上互相 Release/
+/// 重建,导致命令缓冲写入已释放纹理(报错/云消失)。
 /// </summary>
 public class FarCameraScript : MonoBehaviour
 {
-    public static float maxFarDepth;
-    public static RenderTexture farDepthTex;
+    public float maxFarDepth;
+    public RenderTexture farDepthTex;
 
     private Camera _cam;
     // dedicated material instance: its "clipPlanes" uniform must hold the FAR camera's planes,
@@ -21,6 +25,9 @@ public class FarCameraScript : MonoBehaviour
     private Material _depthMat;
     private CommandBuffer _commandBuffer;
     private const CameraEvent CaptureEvent = CameraEvent.AfterForwardOpaque;
+
+    /// <summary>本脚本挂载的相机。</summary>
+    public Camera Camera => _cam;
 
     private void Awake()
     {

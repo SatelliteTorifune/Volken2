@@ -1,4 +1,20 @@
 <Strings>
+    <!-- Mod Settings -->
+    <s id="Volken.ModSettings.NoiseMapIndex">Noise Map</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">Selects the noise texture used for the volumetric cloud shape (1-5).</s>
+    <s id="Volken.ModSettings.MinHeight">MinHeight</s>
+    <s id="Volken.ModSettings.MinHeightDesc">Altitude (m) below which the water transparency override takes effect (when Alter Transparency is enabled).</s>
+    <s id="Volken.ModSettings.ShowDevLog">Show Dev Log</s>
+    <s id="Volken.ModSettings.ShowDevLogDesc">Show log messages for developers.</s>
+    <s id="Volken.ModSettings.AlterTransparency">Alter Transparency</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">Override the game's water transparency setting based on altitude (the original transparency setting has been altered into this one).</s>
+    <s id="Volken.ModSettings.WaterReflection">Water Reflection</s>
+    <s id="Volken.ModSettings.WaterReflectionDesc">Render volumetric clouds into the water reflection.</s>
+    <s id="Volken.ModSettings.ExtraCameraClouds">Extra Camera Clouds</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Auto-render volumetric clouds on extra world cameras (PIP windows etc.). Detect by behavior only, no mod-specific code.</s>
+    <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay (Volken.Profiler). Toggle with console command 'VolkenProfiler'.</s>
+    
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
     
     <!-- Group Names -->

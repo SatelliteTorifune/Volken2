@@ -1,4 +1,20 @@
 <Strings>
+    <!-- Mod Settings -->
+    <s id="Volken.ModSettings.NoiseMapIndex">噪点贴图</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">选择体积云形状使用的噪点贴图(1-5)。</s>
+    <s id="Volken.ModSettings.MinHeight">最小高度</s>
+    <s id="Volken.ModSettings.MinHeightDesc">启用“修改水面透明度”时,低于此高度(米)将启用水面透明。</s>
+    <s id="Volken.ModSettings.ShowDevLog">显示开发日志</s>
+    <s id="Volken.ModSettings.ShowDevLogDesc">是否显示开发日志。</s>
+    <s id="Volken.ModSettings.AlterTransparency">修改水面透明度</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">根据高度覆盖游戏的水面透明度设置(原版透明度设置已被此设置替代)。</s>
+    <s id="Volken.ModSettings.WaterReflection">水面反射</s>
+    <s id="Volken.ModSettings.WaterReflectionDesc">将体积云渲染到水面反射中。</s>
+    <s id="Volken.ModSettings.ExtraCameraClouds">附加相机云层</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">在附加世界相机(画中画窗口等)上自动渲染体积云。仅通过行为检测,不依赖特定模组代码。</s>
+    <s id="Volken.ModSettings.ShowProfiler">性能分析器覆盖层</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层(Volken.Profiler)。可通过控制台命令 'VolkenProfiler' 切换。</s>
+    
     <s id="Volken.UI.CloudSettings">云层设置</s>
     
     <!-- Group Names -->

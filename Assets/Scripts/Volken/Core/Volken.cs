@@ -88,7 +88,6 @@ public class Volken
         main.material = new Material(_cloudShader);
         main.config = CloudConfig.CreateDefault();
         main.currentConfigName = "Default";
-        main.currentResolutionScale = main.config.resolutionScale;
         main.runningOffset = main.config.offset;
         layers.Add(main);
         
@@ -100,7 +99,6 @@ public class Volken
         extra1.material = new Material(_cloudShader);
         extra1.config = CreateExtraDefaultConfig();
         extra1.currentConfigName = "ExtraDefault";
-        extra1.currentResolutionScale = extra1.config.resolutionScale;
         extra1.runningOffset = extra1.config.offset;
         layers.Add(extra1);
 
@@ -258,6 +256,9 @@ public class Volken
         farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
             ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
             : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+        // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源(每实例各自的远相机深度)
+        if (cloudRenderer != null && farCam != null)
+            cloudRenderer.farDepthSource = farCam;
         Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
             planetNode.PlanetData.HasWater);
         }
@@ -355,6 +356,9 @@ public class Volken
                 farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
                     ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
                     : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+                // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
+                if (cloudRenderer != null && farCam != null)
+                    cloudRenderer.farDepthSource = farCam;
 
                 Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
                     craftNode.Parent.PlanetData.HasWater);

@@ -8,28 +8,52 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /*
-    Volken Pipeline Overview (Multi-Layer):
+    Volken Pipeline Overview (Multi-Layer, Multi-Camera):
 
     1. Write depth from far camera to a render texture
     2. Write depth from near camera to the same texture
     3. Downsample the combined depth texture for later use in depth aware upscaling
     4. For each active layer:
        a. Set dynamic shader properties (wind, rotation, reprojection matrix)
-       b. Render volumetrics to layer.cloudTex (optionally blend with history buffer)
+       b. Render volumetrics to view.cloudTex (optionally blend with history buffer)
        c. Copy output to history buffer
-    5. For each active layer: Upscale layer.cloudTex to full resolution
+    5. For each active layer: Upscale view.cloudTex to full resolution
     6. Chain-composite all layers onto the scene:
        - Additive mode: result.rgb += cloudColor (zero visual interference)
        - Standard mode: result = src * transmittance + cloudColor (physical occlusion)
+
+    Multi-Camera (PIP 等额外摄像机) 设计:
+    - 每个 CloudRenderer 实例 = 一台相机,所有渲染目标 / 时序历史 / 云空间重投影都在
+      CloudLayerView(本实例独享)里,与其它相机完全隔离 —— 不同相机互不踩坏对方的 RT/历史。
+    - farDepthSource 指向"这台相机的远相机"的 FarCameraScript(主视角 = 游戏 FarCamera;
+      额外相机 = 与其共享同一 targetTexture 的更低 depth 相机,即 PIP 的 scaled-space 克隆)。
+    - 风/自转累积量是全球共享的 CloudLayer 状态,每帧只推进一次(AdvanceGlobalCloudState)。
+    - 保留 [ImageEffectOpaque](必须):体积云在【不透明 pass 之后、透明 pass 之前】合成,
+      透明物体(水面/玻璃/UI)才能正确遮挡云。去掉后云被画在所有透明内容之上(大问题)。
+      原"开 PIP 后全部云消失 + 报错"的根因是全局共享状态(static farDepthTex + 全局一套
+      RT/历史,多相机互相 Release/重建),已由每相机隔离修复;属性本身每相机独立生效,与
+      是否多相机无关。
 */
 
 public class CloudRenderer : MonoBehaviour
 {
-    // === Shared depth render targets (one set for all layers) ===
+    // === Shared depth render targets (one set per CloudRenderer instance / camera) ===
     private RenderTexture combinedDepthTex;
     private RenderTexture lowResDepthTex;
     private Camera cam;
     private static Mesh _fullscreenTriangle; // 阶段二 MRT 全屏三角形
+
+    /// <summary>
+    /// 本实例的远相机深度源(主视角 = 游戏 FarCamera 的 FarCameraScript;PIP = 与克隆主相机
+    /// 共享同一 targetTexture 的更低 depth 相机上的 FarCameraScript)。
+    /// </summary>
+    public FarCameraScript farDepthSource;
+
+    /// <summary>本相机独享的每层渲染状态(与其它 CloudRenderer 实例完全隔离)。</summary>
+    private readonly Dictionary<CloudLayer, CloudLayerView> _views = new Dictionary<CloudLayer, CloudLayerView>();
+
+    // 全球风/自转推进:每帧只推进一次(所有相机共享同一全局云状态;推进两次 = 云速翻倍)
+    private static int _lastGlobalAdvanceFrame = -1;
 
     // KSA 完整结构:非新鲜格的本帧 raymarch 混合权重(lerp(重投影历史, 本帧, _TssBlend))。
     // 本帧分量越大越追运动(不拖影),历史降噪越弱;0.5 平衡追踪与降噪。
@@ -53,6 +77,14 @@ public class CloudRenderer : MonoBehaviour
         }
     }
 
+    private void OnEnable()
+    {
+        // 本相机需要自己的深度纹理:Clouds.shader 的 NearDepth pass 采样 _CameraDepthTexture。
+        // 额外相机(JNO 不会帮它开 depthTextureMode)必须由我们自己开。
+        if (cam != null) cam.depthTextureMode |= DepthTextureMode.Depth;
+        TryResolveFarDepthSource();
+    }
+
     private void OnPlayerChangedSoi(ICraftNode playerCraftNode, IPlanetNode newParent)
     {
         if (playerCraftNode.Parent.Parent == null)
@@ -63,8 +95,6 @@ public class CloudRenderer : MonoBehaviour
                 if (layer?.config != null)
                 {
                     layer.config.enabled = false;
-                    layer.frameNumber = 0;   // 方案 C:切换天体 → 历史失效 → 冷启动全步进
-                    layer.prevCloudAngle = float.NaN; // 云转角相位作废,首帧回退世界空间重投影
                 }
             }
         }
@@ -76,10 +106,14 @@ public class CloudRenderer : MonoBehaviour
                 if (layer?.config != null)
                 {
                     layer.config.enabled = hasAtmo && layer.config.enabled;
-                    layer.frameNumber = 0;   // 方案 C:切换天体 → 历史失效 → 冷启动全步进
-                    layer.prevCloudAngle = float.NaN; // 云转角相位作废,首帧回退世界空间重投影
                 }
             }
+        }
+        // 方案 C:切换天体 → 本相机历史失效 → 冷启动全步进(每相机各清各的)
+        foreach (var view in _views.Values)
+        {
+            view.frameNumber = 0;
+            view.prevCloudAngle = float.NaN; // 云转角相位作废,首帧回退世界空间重投影
         }
     }
 
@@ -95,13 +129,12 @@ public class CloudRenderer : MonoBehaviour
     {
         try
         {
-            foreach (var layer in Volken.Instance.layers)
-            {
-                if (layer == null) continue;
-                layer.frameNumber = 0;
-                ClearTemporalHistory(layer);
-            }
             Mod.Log("Volken:CloudRenderer frame recentered Δ=" + positionDelta.magnitude.ToString("F1") + "m — TSS history cleared");
+            foreach (var view in _views.Values)
+            {
+                view.frameNumber = 0;
+                view.ClearHistory();
+            }
         }
         catch (Exception ex)
         {
@@ -109,49 +142,62 @@ public class CloudRenderer : MonoBehaviour
         }
     }
 
-    /// <summary>清空某层时序历史(颜色/场景深度/云面距离),使 Upscale 的 validHist 全 0 → 全走本帧。</summary>
-    private void ClearTemporalHistory(CloudLayer layer)
-    {
-        var prevActive = RenderTexture.active;
-        var rt = layer.historyTex;
-        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
-        rt = layer.historyDepthTex;
-        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
-        rt = layer.historyCloudDepthTex;
-        if (rt != null && rt.IsCreated()) { RenderTexture.active = rt; GL.Clear(true, true, Color.clear); }
-        RenderTexture.active = prevActive;
-    }
-
     public void CloudRenderManualRefresh()
     {
+        BuildViews();
         CreateSharedRenderTextures();
         SetAllLayersShaderProperties();
         // Ensure each layer has its RTs created
-        foreach (var layer in Volken.Instance.layers)
+        foreach (var kv in _views)
         {
-            if (layer != null && layer.config != null)
+            if (kv.Key != null && kv.Key.config != null)
             {
-                layer.currentResolutionScale = layer.config.resolutionScale;
+                kv.Value.currentResolutionScale = kv.Key.config.resolutionScale;
             }
         }
+    }
+
+    /// <summary>把 _views 与 Volken.Instance.layers 对齐(层列表运行时不变,防御性重建)。</summary>
+    private void BuildViews()
+    {
+        if (Volken.Instance == null) return;
+        var stale = _views.Keys.Where(k => !Volken.Instance.layers.Contains(k)).ToList();
+        foreach (var k in stale)
+        {
+            _views[k].ReleaseRenderTextures();
+            _views.Remove(k);
+        }
+        foreach (var layer in Volken.Instance.layers)
+        {
+            if (layer != null && !_views.ContainsKey(layer)) _views[layer] = new CloudLayerView(layer);
+        }
+    }
+
+    private CloudLayerView GetView(CloudLayer layer)
+    {
+        CloudLayerView view;
+        _views.TryGetValue(layer, out view);
+        return view;
     }
 
     private void CreateSharedRenderTextures()
     {
         var res = Screen.currentResolution;
+        EnsureDepthTextures(Mathf.Max(1, res.width), Mathf.Max(1, res.height));
+        EnsureLowResDepthTex(new Vector2Int(Mathf.Max(1, res.width / 2), Mathf.Max(1, res.height / 2)));
+    }
+
+    /// <summary>按【本相机输出尺寸】创建/重建全清深度纹理(不再写死 Screen.currentResolution)。</summary>
+    private void EnsureDepthTextures(int renderW, int renderH)
+    {
+        if (combinedDepthTex != null && combinedDepthTex.IsCreated() &&
+            combinedDepthTex.width == renderW && combinedDepthTex.height == renderH)
+            return;
 
         if (combinedDepthTex != null && combinedDepthTex.IsCreated())
             combinedDepthTex.Release();
-        combinedDepthTex = new RenderTexture(res.width, res.height, 0, RenderTextureFormat.RFloat);
+        combinedDepthTex = new RenderTexture(renderW, renderH, 0, RenderTextureFormat.RFloat);
         combinedDepthTex.Create();
-
-        // Low-res depth RT will be recreated when needed (depends on layer resolution)
-        // We create a default one here
-        if (lowResDepthTex != null && lowResDepthTex.IsCreated())
-            lowResDepthTex.Release();
-        Vector2Int lowRes = Vector2Int.RoundToInt(0.5f * new Vector2(res.width, res.height));
-        lowResDepthTex = new RenderTexture(Mathf.Max(1, lowRes.x), Mathf.Max(1, lowRes.y), 0, RenderTextureFormat.RFloat);
-        lowResDepthTex.Create();
     }
 
     private void EnsureLowResDepthTex(Vector2Int targetSize)
@@ -175,9 +221,9 @@ public class CloudRenderer : MonoBehaviour
         if (lowResDepthTex != null && lowResDepthTex.IsCreated())
             lowResDepthTex.Release();
 
-        foreach (var layer in Volken.Instance.layers)
+        foreach (var view in _views.Values)
         {
-            layer?.ReleaseRenderTextures();
+            view?.ReleaseRenderTextures();
         }
     }
 
@@ -203,36 +249,108 @@ public class CloudRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// Sets per-frame dynamic properties for a specific layer.
+    /// 解析本实例的远相机深度源(纯通用规则,不依赖任何 mod 的名字/类型/函数):
+    /// 1) 与本相机共享同一 targetTexture 的"更低 depth 相机"(= PIP 的 scaled-space 克隆相机,
+    ///    PigeonEye 把克隆太空相机挂在克隆主相机下且共用一个渲染目标)。优先子相机,其次任意相机。
+    /// 2) 主视角回退:游戏 FarCamera(Volken.Instance.farCam)。
     /// </summary>
-    public void SetLayerDynamicProperties(CloudLayer layer)
+    public void TryResolveFarDepthSource()
     {
-        if (layer?.config == null || layer.material == null) return;
+        if (farDepthSource != null) return;
+        try
+        {
+            Camera spaceCam = null;
+            if (cam != null)
+            {
+                foreach (Camera child in GetComponentsInChildren<Camera>(true))
+                {
+                    if (child == cam) continue;
+                    if (child.targetTexture == cam.targetTexture && child.depth < cam.depth)
+                    {
+                        spaceCam = child;
+                        break;
+                    }
+                }
+            }
+            if (spaceCam == null && cam != null && cam.targetTexture != null)
+            {
+                foreach (Camera other in UnityEngine.Object.FindObjectsOfType<Camera>())
+                {
+                    if (other == null || other == cam) continue;
+                    if (other.targetTexture == cam.targetTexture && other.depth < cam.depth)
+                    {
+                        spaceCam = other;
+                        break;
+                    }
+                }
+            }
+            if (spaceCam != null)
+            {
+                var fcs = spaceCam.GetComponent<FarCameraScript>();
+                if (fcs == null) fcs = spaceCam.gameObject.AddComponent<FarCameraScript>();
+                farDepthSource = fcs;
+                return;
+            }
+            // 主视角:回退到游戏 FarCamera
+            if (Volken.Instance?.farCam != null) farDepthSource = Volken.Instance.farCam;
+        }
+        catch (Exception ex)
+        {
+            Mod.Log("Volken:CloudRenderer.TryResolveFarDepthSource ERROR: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 全球风/自转推进(所有相机共享):每帧只执行一次。
+    /// 旧实现把这段写在 SetLayerDynamicProperties 里,每台渲染相机都会推一次 → 有 N 台额外
+    /// 相机时云速/自转 N 倍加速。
+    /// </summary>
+    private static void AdvanceGlobalCloudState()
+    {
+        if (_lastGlobalAdvanceFrame == Time.frameCount) return;
+        _lastGlobalAdvanceFrame = Time.frameCount;
+
+        if (Volken.Instance == null) return;
+        var craftNode = Game.Instance?.FlightScene?.CraftNode;
+        if (craftNode == null || craftNode.ReferenceFrame == null || craftNode.CraftScript == null) return;
+        float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
+
+        foreach (var layer in Volken.Instance.layers)
+        {
+            if (layer?.config == null) continue;
+
+            // Wind with direction
+            Vector3 north = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.North);
+            Vector3 east = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.East);
+            float rad = Mathf.Deg2Rad * layer.config.windDirection;
+            Vector3 windDir = Mathf.Cos(rad) * north + Mathf.Sin(rad) * east;
+            float speedFactor = GetWindSpeedFactor(layer.config.windDirection);
+
+            // Update running offset (don't modify config.offset directly)
+            layer.runningOffset += layer.config.windSpeed * 0.1f * speedFactor * deltaTime * windDir;
+            layer.runningOffset.x -= Mathf.Floor(layer.runningOffset.x);
+            layer.runningOffset.y -= Mathf.Floor(layer.runningOffset.y);
+            layer.runningOffset.z -= Mathf.Floor(layer.runningOffset.z);
+
+            // Self-rotation
+            layer.accumulatedRotation += layer.config.globalRotationAngular * 5e-4f * deltaTime;
+        }
+    }
+
+    /// <summary>
+    /// Sets per-frame dynamic properties for a specific layer on THIS camera.
+    /// </summary>
+    public void SetLayerDynamicProperties(CloudLayer layer, CloudLayerView view, int renderW, int renderH)
+    {
+        if (layer?.config == null || layer.material == null || view == null) return;
 
         var craftNode = Game.Instance.FlightScene.CraftNode;
         Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
         var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-        float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
-
-        // Wind with direction
-        Vector3 north = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.North);
-        Vector3 east = craftNode.ReferenceFrame.PlanetToFrameVector(craftNode.CraftScript.FlightData.East);
-        float rad = Mathf.Deg2Rad * layer.config.windDirection;
-        Vector3 windDir = Mathf.Cos(rad) * north + Mathf.Sin(rad) * east;
-        float speedFactor = GetWindSpeedFactor(layer.config.windDirection);
-
-        // Update running offset (don't modify config.offset directly)
-        layer.runningOffset += layer.config.windSpeed * 0.1f * speedFactor * deltaTime * windDir;
-        layer.runningOffset.x -= Mathf.Floor(layer.runningOffset.x);
-        layer.runningOffset.y -= Mathf.Floor(layer.runningOffset.y);
-        layer.runningOffset.z -= Mathf.Floor(layer.runningOffset.z);
-
-        // Self-rotation
-        layer.accumulatedRotation += layer.config.globalRotationAngular * 5e-4f * deltaTime;
 
         var mat = layer.material;
         mat.SetFloat("currentRotation", layer.accumulatedRotation);
-        mat.SetFloat("maxDepth", 0.9f * FarCameraScript.maxFarDepth);
+        mat.SetFloat("maxDepth", 0.9f * (farDepthSource != null ? farDepthSource.maxFarDepth : cam.farClipPlane));
         mat.SetVector("sphereCenter", planetCenter);
         mat.SetVector("lightDir", sun.transform.forward);
         mat.SetVector("cloudOffset", layer.runningOffset);
@@ -250,9 +368,9 @@ public class CloudRenderer : MonoBehaviour
         // 再乘上一帧 view-proj → reprojUV 指向"同一云特征"上一帧的位置,残影/割裂随之消失。
         // φ = 自转累积角 + 风平移折算的经度角(2π·runningOffset.x,spherical.x 单位 1=2π)。
         float cloudPhi = layer.accumulatedRotation + 2.0f * Mathf.PI * layer.runningOffset.x;
-        float dPhi = float.IsNaN(layer.prevCloudAngle) ? 0.0f : cloudPhi - layer.prevCloudAngle;
-        mat.SetMatrix("reprojMat", layer.prevViewProjMat * BuildCloudSpaceRepro(dPhi, planetCenter));
-        layer.prevCloudAngle = cloudPhi;
+        float dPhi = float.IsNaN(view.prevCloudAngle) ? 0.0f : cloudPhi - view.prevCloudAngle;
+        mat.SetMatrix("reprojMat", view.prevViewProjMat * BuildCloudSpaceRepro(dPhi, planetCenter));
+        view.prevCloudAngle = cloudPhi;
         // 阶段二:观察射线用相机 transform 轴直接构造(NDC 来自 clip 坐标,无投影矩阵约定歧义)。
         // 注意:不要用 cameraToWorldMatrix 的第2列当 fwd——Unity 视图约定里那是 -forward,会反向。
         mat.SetVector("_CamPos", cam.transform.position);
@@ -261,14 +379,15 @@ public class CloudRenderer : MonoBehaviour
         mat.SetVector("_CamRight", cam.transform.right);
         mat.SetVector("_CamUp", cam.transform.up);
         mat.SetFloat("_TanHalfFovV", Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad));
-        mat.SetFloat("_Aspect", cam.aspect);
+        // 宽高比:以本相机当前渲染目标(source)为准 —— 额外相机的 targetTexture 宽高比才是其真实视场
+        mat.SetFloat("_Aspect", renderW / (float)Mathf.Max(1, renderH));
         mat.SetVector("clipPlanes", new Vector2(cam.nearClipPlane, cam.farClipPlane));
 
         mat.SetFloat("_NearThreshold", layer.config.nearThreshold);
 
-        // Per-layer resolution-aware blue noise scale
+        // Per-layer resolution-aware blue noise scale(按本相机输出尺寸)
         mat.SetVector("blueNoiseScale",
-            layer.currentResolutionScale * new Vector2(Screen.width, Screen.height) / 512.0f);
+            layer.config.resolutionScale * new Vector2(renderW, renderH) / 512.0f);
 
         // Surface radius (shared across layers)
         mat.SetFloat("surfaceRadius", (float)Game.Instance.FlightScene.CraftNode.Parent.PlanetData.Radius);
@@ -307,17 +426,17 @@ public class CloudRenderer : MonoBehaviour
 
         if (tcfg.useTemporalUpscale)
         {
-            if (layer.temporalSequence == null || layer.temporalSequence.Length != totalCells)
+            if (view.temporalSequence == null || view.temporalSequence.Length != totalCells)
             {
-                layer.temporalSequence = UpscalingPixelSequence.FindOptimalSamplingSequence(upX, upY);
-                layer.frameNumber = 0;   // 格网变化 → 历史相位作废 → 冷启动
+                view.temporalSequence = UpscalingPixelSequence.FindOptimalSamplingSequence(upX, upY);
+                view.frameNumber = 0;   // 格网变化 → 历史相位作废 → 冷启动
             }
             // 冷启动无需特判全步进:历史为空时 Upscale 走"本帧有效"分支 → 全屏直接拿本帧 raymarch。
-            int cell = layer.temporalSequence[layer.frameNumber % totalCells];
+            int cell = view.temporalSequence[view.frameNumber % totalCells];
             mat.SetVector("_SampleCell", new Vector2(cell % upX, cell / upX));
             mat.SetVector("_Upscale", new Vector2(upX, upY));
             mat.SetFloat("_UseTemporal", 1f);
-            layer.frameNumber++;
+            view.frameNumber++;
         }
         else
         {
@@ -326,15 +445,15 @@ public class CloudRenderer : MonoBehaviour
             mat.SetFloat("_UseTemporal", 0f);
         }
         mat.SetVector("_LowResSize", new Vector2(
-            layer.cloudTex != null ? layer.cloudTex.width : 1f,
-            layer.cloudTex != null ? layer.cloudTex.height : 1f));
+            view.cloudTex != null ? view.cloudTex.width : 1f,
+            view.cloudTex != null ? view.cloudTex.height : 1f));
 
         // Update reprojection matrix for next frame
         // 2026-08-25 割裂线根因修复:重投影必须用【GPU 投影】(GL.GetGPUProjectionMatrix)而非逻辑
         // cam.projectionMatrix。Clouds 顶点着色器用 v.vertex(光栅化 clip)重建射线,D3D 下 GPU
         // clip 与逻辑投影 Y 约定相反;此前用逻辑投影 → reprojUV 与 i.uv 垂直镜像 → 历史采错行
         // → 云带边缘镜像鬼影 = 割裂线(运动残影开时可见,时序开时闪烁)。改用 GPU 投影后二者一致。
-        layer.prevViewProjMat = GL.GetGPUProjectionMatrix(cam.projectionMatrix, true) * cam.worldToCameraMatrix;
+        view.prevViewProjMat = GL.GetGPUProjectionMatrix(cam.projectionMatrix, true) * cam.worldToCameraMatrix;
     }
 
     /// <summary>
@@ -418,11 +537,11 @@ public class CloudRenderer : MonoBehaviour
     /// 轨道云诊断日志(2s 节流):打印运行态参数(相机海拔/速度/每层淡入/体积云是否运行/RT 尺寸/漂移状态/真实配置),
     /// 用于定位 2D 与体积云"范围差一圈"或"速度不同"的根因。
     /// </summary>
-    private void LogOrbitDiagnostics(List<CloudLayer> activeLayers, float camAlt, int orbitPass)
+    private void LogOrbitDiagnostics(List<CloudLayerView> activeViews, float camAlt, int orbitPass)
     {
         bool anyOrbit = false;
-        foreach (var layer in activeLayers)
-            if (layer.config != null && layer.config.useOrbitClouds) { anyOrbit = true; break; }
+        foreach (var view in activeViews)
+            if (view.layer.config != null && view.layer.config.useOrbitClouds) { anyOrbit = true; break; }
         if (!anyOrbit) return;
 
         if (Time.realtimeSinceStartup - _lastOrbitDiagLogTime < 2f) return;
@@ -454,17 +573,17 @@ public class CloudRenderer : MonoBehaviour
         if (lowResDepthTex != null)
             sb.Append(" lowDepth=").Append(lowResDepthTex.width).Append('x').Append(lowResDepthTex.height);
         LogProjectionCheck(sb);
-        foreach (var layer in activeLayers)
+        foreach (var view in activeViews)
         {
-            var c = layer.config;
-            sb.Append(" | L").Append(layer.layerIndex)
-              .Append(" fade=").Append(layer.orbitFade.ToString("F3"))
-              .Append(" volRun=").Append(layer.orbitFade < 0.999f ? 1 : 0)
-              .Append(" orbitRT=").Append(layer.orbitCloudTex != null ? layer.orbitCloudTex.width + "x" + layer.orbitCloudTex.height : "null");
+            var c = view.layer.config;
+            sb.Append(" | L").Append(view.layer.layerIndex)
+              .Append(" fade=").Append(view.orbitFade.ToString("F3"))
+              .Append(" volRun=").Append(view.orbitFade < 0.999f ? 1 : 0)
+              .Append(" orbitRT=").Append(view.orbitCloudTex != null ? view.orbitCloudTex.width + "x" + view.orbitCloudTex.height : "null");
             if (c == null) continue;
             // 漂移/自转状态(2D 与体积云共用同一材质 uniform,验证"速度"是否一致)
-            sb.Append(" rot=").Append(layer.accumulatedRotation.ToString("F3"))
-              .Append(" off=").Append(layer.runningOffset.ToString("F2"))
+            sb.Append(" rot=").Append(view.layer.accumulatedRotation.ToString("F3"))
+              .Append(" off=").Append(view.layer.runningOffset.ToString("F2"))
               .Append(" wind=").Append(c.windSpeed.ToString("F2")).Append('@').Append(c.windDirection.ToString("F0"))
               .Append(" globRot=").Append(c.globalRotationAngular.ToString("F2"))
               .Append(" rotRate=").Append((c.globalRotationAngular * 5e-4f).ToString("G4")).Append("rad/s")
@@ -536,11 +655,11 @@ public class CloudRenderer : MonoBehaviour
     /// 几何:行星剪影是圆,屏幕半径 = focal·tan(asin(R/d)),圆心 = 行星中心屏幕投影(与相机朝向无关);
     /// R03/R15 = 亮度阈值 0.03/0.15 的云最远像素半径;ring = maxR − limb(>0 表示云伸出行星边缘的像素)。
     /// </summary>
-    private void LogCloudCoverage(List<CloudLayer> activeLayers, float camAlt, Vector3 planetCenter, float surfaceRadius)
+    private void LogCloudCoverage(List<CloudLayerView> activeViews, float camAlt, Vector3 planetCenter, float surfaceRadius)
     {
         bool anyDebug = false;
-        foreach (var layer in activeLayers)
-            if (layer.config != null && layer.config.orbitDebugMode > 0.5f) { anyDebug = true; break; }
+        foreach (var view in activeViews)
+            if (view.layer.config != null && view.layer.config.orbitDebugMode > 0.5f) { anyDebug = true; break; }
         if (!anyDebug) return;
         if (cam == null) return;
 
@@ -553,24 +672,25 @@ public class CloudRenderer : MonoBehaviour
         float limbPx = focalPx * Mathf.Tan(Mathf.Asin(Mathf.Clamp(surfaceRadius / dist, 0f, 0.999f)));
         Vector2 planetScreen = cam.WorldToScreenPoint(planetCenter);   // 左下原点,像素
 
-        foreach (var layer in activeLayers)
+        foreach (var view in activeViews)
         {
+            var layer = view.layer;
             if (layer.config == null || !layer.config.useOrbitClouds) continue;
-            if (layer.orbitCloudTex == null) continue;
+            if (view.orbitCloudTex == null) continue;
             var sb = new System.Text.StringBuilder();
             sb.Append("Volken:Coverage L").Append(layer.layerIndex)
               .Append(" alt=").Append(camAlt.ToString("F0"))
-              .Append(" fade=").Append(layer.orbitFade.ToString("F3"))
+              .Append(" fade=").Append(view.orbitFade.ToString("F3"))
               .Append(" pCtr=").Append(planetScreen.x.ToString("F0")).Append(',').Append(planetScreen.y.ToString("F0"))
               .Append(" limb=").Append(limbPx.ToString("F0")).Append("px");
             // 2D 轨道云(仅本帧确实渲染过:淡入>0)
-            if (layer.orbitFade > 0.001f)
-                MeasureCloudRT(layer.orbitCloudTex, planetScreen, limbPx, "2d", sb);
+            if (view.orbitFade > 0.001f)
+                MeasureCloudRT(view.orbitCloudTex, planetScreen, limbPx, "2d", sb);
             else
                 sb.Append(" 2d=skip");
             // 体积云(仅本帧确实渲染过:淡入<0.999;否则 cloudTex 是陈旧帧)
-            if (layer.cloudTex != null && layer.orbitFade < 0.999f)
-                MeasureCloudRT(layer.cloudTex, planetScreen, limbPx, "vol", sb);
+            if (view.cloudTex != null && view.orbitFade < 0.999f)
+                MeasureCloudRT(view.cloudTex, planetScreen, limbPx, "vol", sb);
             else
                 sb.Append(" vol=skip");
             Mod.Log(sb.ToString());
@@ -625,7 +745,9 @@ public class CloudRenderer : MonoBehaviour
         try
         {
             // 0. Validate
-            if (FarCameraScript.farDepthTex == null)
+            TryResolveFarDepthSource();
+            RenderTexture farDepthTex = farDepthSource != null ? farDepthSource.farDepthTex : null;
+            if (farDepthTex == null)
             {
                 Graphics.Blit(source, destination);
                 return;
@@ -638,24 +760,31 @@ public class CloudRenderer : MonoBehaviour
                 return;
             }
 
-            // 1. Check RTs for all active layers (create on first frame or config change:
-            //    分辨率 / TSS 开关 / 格网变化都会改变 cloudRes 与历史尺寸 → 重建)
+            BuildViews();
+            int renderW = Mathf.Max(1, source.width);
+            int renderH = Mathf.Max(1, source.height);
+
+            // 1. Check RTs for all active layers (create on first frame or config/size change.
+            //    分辨率 / TSS 开关 / 格网变化都会改变 cloudRes 与历史尺寸 → 重建;按【本相机】输出尺寸)
             foreach (var layer in activeLayers)
             {
+                var view = GetView(layer);
+                if (view == null) continue;
                 bool tss = layer.config.useTemporalUpscale;
                 int upX = Mathf.Max(1, layer.config.upscaleX);
                 int upY = Mathf.Max(1, layer.config.upscaleY);
                 float orbitRes = Mathf.Clamp(layer.config.orbitResolutionScale, 0.1f, 1f);
-                bool needsCreate = layer.cloudTex == null || !layer.cloudTex.IsCreated() ||
-                    Mathf.Abs(layer.currentResolutionScale - layer.config.resolutionScale) > 0.001f ||
-                    Mathf.Abs(layer.currentOrbitRes - orbitRes) > 0.001f ||
-                    layer.currentTemporal != (tss ? 1 : 0) ||
-                    layer.currentUpX != upX || layer.currentUpY != upY;
+                bool needsCreate = !view.IsCreated ||
+                    view.currentW != renderW || view.currentH != renderH ||
+                    Mathf.Abs(view.currentResolutionScale - layer.config.resolutionScale) > 0.001f ||
+                    Mathf.Abs(view.currentOrbitRes - orbitRes) > 0.001f ||
+                    view.currentTemporal != (tss ? 1 : 0) ||
+                    view.currentUpX != upX || view.currentUpY != upY;
                 if (needsCreate)
                 {
-                    layer.ReleaseRenderTextures();
-                    layer.currentResolutionScale = layer.config.resolutionScale;
-                    layer.CreateRenderTextures(Screen.width, Screen.height);
+                    view.ReleaseRenderTextures();
+                    view.currentResolutionScale = layer.config.resolutionScale;
+                    view.CreateRenderTextures(renderW, renderH);
                 }
             }
 
@@ -663,35 +792,42 @@ public class CloudRenderer : MonoBehaviour
             int maxLowW = 1, maxLowH = 1;
             foreach (var layer in activeLayers)
             {
-                if (layer.cloudTex != null)
+                var view = GetView(layer);
+                if (view != null && view.cloudTex != null)
                 {
-                    maxLowW = Mathf.Max(maxLowW, layer.cloudTex.width);
-                    maxLowH = Mathf.Max(maxLowH, layer.cloudTex.height);
+                    maxLowW = Mathf.Max(maxLowW, view.cloudTex.width);
+                    maxLowH = Mathf.Max(maxLowH, view.cloudTex.height);
                 }
             }
+            EnsureDepthTextures(renderW, renderH);
             EnsureLowResDepthTex(new Vector2Int(maxLowW, maxLowH));
 
-            // 2. Depth processing (shared, once)
+            // 2. Depth processing (once per camera)
             var matRef = activeLayers[0].material; // any layer's material works for depth passes
             int nearDepthPass = matRef.FindPass("NearDepth");
             int downsamplePass = matRef.FindPass("DownsampleDepth");
-            Graphics.Blit(FarCameraScript.farDepthTex, combinedDepthTex, matRef, nearDepthPass);
+            Graphics.Blit(farDepthTex, combinedDepthTex, matRef, nearDepthPass);
             Graphics.Blit(combinedDepthTex, lowResDepthTex, matRef, downsamplePass);
 
-            // 2.5 轨道云:相机海拔 → 每层淡入因子(0=纯体积云,1=纯 2D)。
-            //     海拔分派与 KSA 一致:camAlt < start → 仅体积;start~end → 两者+交叉淡入;> end → 仅 2D。
+            // 2.5 轨道云:相机海拔 → 每层淡入因子(0=纯体积云,1=纯 2D),按本相机海拔分派
             int orbitPass = matRef.FindPass("OrbitClouds");
             float camAlt = ComputeCameraAltitude();
             foreach (var layer in activeLayers)
             {
-                layer.orbitFade = ComputeOrbitFade(layer.config, camAlt);
-                bool orbitOnly = layer.orbitFade >= 0.999f;
+                var view = GetView(layer);
+                if (view == null) continue;
+                view.orbitFade = ComputeOrbitFade(layer.config, camAlt);
+                bool orbitOnly = view.orbitFade >= 0.999f;
                 // 进入纯 2D 的瞬间清时序历史,防止切回体积云时旧历史残影(冷启动路径已在 Upscale 内)
-                if (orbitOnly && !layer.orbitOnlyLastFrame)
-                    ClearTemporalHistory(layer);
-                layer.orbitOnlyLastFrame = orbitOnly;
+                if (orbitOnly && !view.orbitOnlyLastFrame)
+                    view.ClearHistory();
+                view.orbitOnlyLastFrame = orbitOnly;
             }
-            LogOrbitDiagnostics(activeLayers, camAlt, orbitPass);
+            var activeViews = activeLayers.Select(l => GetView(l)).Where(v => v != null).ToList();
+            LogOrbitDiagnostics(activeViews, camAlt, orbitPass);
+
+            // 全球风/自转推进:每帧一次(所有相机共享,避免 N 台相机时云速 N 倍)
+            AdvanceGlobalCloudState();
 
             // 3. Render each layer (independent raymarch, MRT: color + cloud depth)
             int cloudsPass = matRef.FindPass("Clouds");
@@ -715,16 +851,18 @@ public class CloudRenderer : MonoBehaviour
 
             foreach (var layer in activeLayers)
             {
-                // 所有层都推进风/自转/重投影矩阵(2D 轨道 pass 也依赖 currentRotation/cloudOffset;
-                // prevViewProjMat 保持新鲜,切回体积云时重投影不失效)
-                SetLayerDynamicProperties(layer);
+                var view = GetView(layer);
+                if (view == null) continue;
+                // 相机相关动态属性(reprojMat/_CamPos/_SampleCell 等,每相机每层各自设置;
+                // 风/自转已由 AdvanceGlobalCloudState 每帧推进一次)
+                SetLayerDynamicProperties(layer, view, renderW, renderH);
                 // 高空纯 2D:跳过体积 raymarch(本特性的性能大头;Upscale/历史也一并跳过)
-                if (layer.orbitFade >= 0.999f) continue;
+                if (view.orbitFade >= 0.999f) continue;
 
                 layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
                 // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat) + cloudMVTex(RG 本帧运动矢量)
-                var mrt = new RenderBuffer[] { layer.cloudTex.colorBuffer, layer.cloudDepthTex.colorBuffer, layer.cloudMVTex.colorBuffer };
-                Graphics.SetRenderTarget(mrt, layer.cloudTex.depthBuffer);
+                var mrt = new RenderBuffer[] { view.cloudTex.colorBuffer, view.cloudDepthTex.colorBuffer, view.cloudMVTex.colorBuffer };
+                Graphics.SetRenderTarget(mrt, view.cloudTex.depthBuffer);
                 layer.material.SetPass(cloudsPass);
                 Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
 
@@ -733,24 +871,26 @@ public class CloudRenderer : MonoBehaviour
                 int dilatePass = layer.material.FindPass("DilateMV");
                 if (dilatePass >= 0)
                 {
-                    var mvTmp1 = RenderTexture.GetTemporary(layer.cloudMVTex.width, layer.cloudMVTex.height, 0, layer.cloudMVTex.format);
-                    var mvTmp2 = RenderTexture.GetTemporary(layer.cloudMVTex.width, layer.cloudMVTex.height, 0, layer.cloudMVTex.format);
-                    Graphics.Blit(layer.cloudMVTex, mvTmp1, layer.material, dilatePass);
+                    var mvTmp1 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
+                    var mvTmp2 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
+                    Graphics.Blit(view.cloudMVTex, mvTmp1, layer.material, dilatePass);
                     Graphics.Blit(mvTmp1, mvTmp2, layer.material, dilatePass);
-                    Graphics.Blit(mvTmp2, layer.cloudMVDilatedTex, layer.material, dilatePass);
+                    Graphics.Blit(mvTmp2, view.cloudMVDilatedTex, layer.material, dilatePass);
                     RenderTexture.ReleaseTemporary(mvTmp1);
                     RenderTexture.ReleaseTemporary(mvTmp2);
                 }
             }
 
-            // 3.5 轨道云(2D 壳着色):每层渲染到 orbitCloudTex(仅当淡入因子>0;pass 缺失时优雅降级为纯体积云)
+            // 3.5 轨道云(2D 壳着色):每层渲染到 view.orbitCloudTex(仅当淡入因子>0;pass 缺失时优雅降级为纯体积云)
             if (orbitPass >= 0)
             {
                 foreach (var layer in activeLayers)
                 {
-                    if (layer.orbitFade <= 0.001f) continue;
+                    var view = GetView(layer);
+                    if (view == null) continue;
+                    if (view.orbitFade <= 0.001f) continue;
                     // Blit 的 source 不被 OrbitClouds pass 采样(纯壳着色),仅作为合法非空输入
-                    Graphics.Blit(lowResDepthTex, layer.orbitCloudTex, layer.material, orbitPass);
+                    Graphics.Blit(lowResDepthTex, view.orbitCloudTex, layer.material, orbitPass);
                 }
             }
 
@@ -759,40 +899,44 @@ public class CloudRenderer : MonoBehaviour
             int upscalePass = matRef.FindPass("Upscale");
             foreach (var layer in activeLayers)
             {
-                if (layer.orbitFade >= 0.999f) continue;   // 高空纯 2D:体积时序链路整条跳过
+                var view = GetView(layer);
+                if (view == null) continue;
+                if (view.orbitFade >= 0.999f) continue;   // 高空纯 2D:体积时序链路整条跳过
 
                 var mat = layer.material;
-                mat.SetTexture("CloudDepthTex", layer.cloudDepthTex);
-                mat.SetTexture("CloudMVDilatedTex", layer.cloudMVDilatedTex);   // 本帧膨胀 MV
+                mat.SetTexture("CloudDepthTex", view.cloudDepthTex);
+                mat.SetTexture("CloudMVDilatedTex", view.cloudMVDilatedTex);   // 本帧膨胀 MV
                 mat.SetTexture("CombinedDepthTex", combinedDepthTex);
-                mat.SetTexture("HistoryTex", layer.historyTex);
-                mat.SetTexture("HistoryDepthTex", layer.historyDepthTex);
-                mat.SetTexture("HistoryCloudDepthTex", layer.historyCloudDepthTex);
-                Graphics.Blit(layer.cloudTex, layer.upscaledCloudTex, layer.material, upscalePass);
+                mat.SetTexture("HistoryTex", view.historyTex);
+                mat.SetTexture("HistoryDepthTex", view.historyDepthTex);
+                mat.SetTexture("HistoryCloudDepthTex", view.historyCloudDepthTex);
+                Graphics.Blit(view.cloudTex, view.upscaledCloudTex, mat, upscalePass);
 
                 // 时序写回:全清上采样结果 → 历史(下一帧在 Upscale 里按 MV 重投影采样);
                 // 云面距离历史 = 本帧低清 cloudDepth 上采样到全清(供下一帧 cloudGate 校验)
-                Graphics.Blit(layer.upscaledCloudTex, layer.historyTex);
-                Graphics.Blit(combinedDepthTex, layer.historyDepthTex);
-                Graphics.Blit(layer.cloudDepthTex, layer.historyCloudDepthTex);
+                Graphics.Blit(view.upscaledCloudTex, view.historyTex);
+                Graphics.Blit(combinedDepthTex, view.historyDepthTex);
+                Graphics.Blit(view.cloudDepthTex, view.historyCloudDepthTex);
             }
 
             // 5. Chain-composite: iterate layers, applying composite mode
             int compositePass = matRef.FindPass("Composite");
-            RenderTexture result = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+            RenderTexture result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
             Graphics.Blit(source, result);
 
             foreach (var layer in activeLayers)
             {
-                matRef.SetTexture("UpscaledCloudTex", layer.upscaledCloudTex);
-                matRef.SetTexture("OrbitCloudTex", layer.orbitCloudTex);
+                var view = GetView(layer);
+                if (view == null) continue;
+                matRef.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
+                matRef.SetTexture("OrbitCloudTex", view.orbitCloudTex);
                 matRef.SetTexture("SceneDepthTex", combinedDepthTex);
                 matRef.SetFloat("_CompositeMode",
                     layer.config.compositeMode == CompositeMode.Standard ? 1.0f : 0.0f);
                 // 交叉淡入因子:orbit pass 不可用 → 强制 0(纯体积云,等同未开启本特性)
-                matRef.SetFloat("_OrbitFade", orbitPass >= 0 ? layer.orbitFade : 0f);
+                matRef.SetFloat("_OrbitFade", orbitPass >= 0 ? view.orbitFade : 0f);
 
-                var temp = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+                var temp = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
                 Graphics.Blit(result, temp, matRef, compositePass);
                 RenderTexture.ReleaseTemporary(result);
                 result = temp;
@@ -806,7 +950,7 @@ public class CloudRenderer : MonoBehaviour
                 {
                     Vector3 probeCenter = probeCraft.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
                     float probeRadius = (float)probeCraft.Parent.PlanetData.Radius;
-                    LogCloudCoverage(activeLayers, camAlt, probeCenter, probeRadius);
+                    LogCloudCoverage(activeViews, camAlt, probeCenter, probeRadius);
                 }
             }
             catch { }

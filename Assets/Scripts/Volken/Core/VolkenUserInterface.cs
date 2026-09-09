@@ -2,6 +2,10 @@ using System;
 using System.Linq;
 using System.Xml.Linq;
 using Assets.Scripts;
+using Assets.Scripts.Cameras;
+using Assets.Scripts.Flight.MapView;
+using Assets.Scripts.Terrain.Rendering;
+using Assets.Scripts.Ui;
 using ModApi;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
@@ -22,6 +26,78 @@ public class VolkenUserInterface : MonoBehaviour
     {
         Instance = this;
         DontDestroyOnLoad(this);
+    }
+
+    // === 额外摄像机(PIP 等)体积云自动挂载 ===
+    // 约束:不修改 PigeonEye、不引用/调用其任何类型/函数 —— 只按 Unity 通用规则识别"渲染世界的
+    // 额外相机"(纯行为识别,与具体 mod 无关):
+    //   启用中 + 渲染到 RenderTexture(非屏幕) + 不是游戏 Near/Far 相机(无 SceneCameraScript) +
+    //   无 JNO 专用相机脚本(地图/UI/水面) + RT 尺寸 ≥ 320×240(排除水面反射小方图) +
+    //   与游戏 NearCamera 的 cullingMask 有交集(确实渲染世界层)。
+    // CloudRenderer 自身再通过"共享同一 targetTexture 的更低 depth 相机"配对远相机(PIP 的
+    // scaled-space 克隆),同样不依赖任何名字/类型。
+    // 开关:ModSettings.ExtraCameraClouds(默认开);关闭时卸载已挂载的额外 CloudRenderer。
+    private float _nextExtraCameraScanTime = -1f;
+
+    private void Update()
+    {
+        try
+        {
+            if (!Game.InFlightScene) return;
+            if (Time.realtimeSinceStartup < _nextExtraCameraScanTime) return;
+            _nextExtraCameraScanTime = Time.realtimeSinceStartup + 1f;
+
+            bool wantExtra = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
+            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+            foreach (var cam in UnityEngine.Object.FindObjectsOfType<Camera>())
+            {
+                if (cam == null) continue;
+                if (gameCam != null &&
+                    (cam == gameCam.NearCamera || cam == gameCam.FarCamera)) continue;
+
+                var cr = cam.GetComponent<CloudRenderer>();
+                if (wantExtra)
+                {
+                    if (cr == null && IsExtraWorldCamera(cam))
+                    {
+                        cam.gameObject.AddComponent<CloudRenderer>();
+                    }
+                }
+                else if (cr != null)
+                {
+                    UnityEngine.Object.Destroy(cr);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log("Volken: ExtraCameraClouds scan ERROR: " + ex.Message);
+        }
+    }
+
+    private static bool IsExtraWorldCamera(Camera c)
+    {
+        if (c == null || !c.enabled || !c.gameObject.activeInHierarchy) return false;
+        if (c.targetTexture == null) return false;
+        // JNO 专用相机脚本 → 排除(游戏 Near/Far、地图、UI、水面透明)
+        if (c.GetComponent<SceneCameraScript>() != null) return false;
+        if (c.GetComponent<MapCameraScript>() != null) return false;
+        if (c.GetComponent<PrimaryUICameraScript>() != null) return false;
+        if (c.GetComponent<WaterTransparencyCameraScript>() != null) return false;
+        // 小 RT 排除(水面反射 256/512 方图等)
+        if (c.targetTexture.width < 320 || c.targetTexture.height < 240) return false;
+        try
+        {
+            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+            if (gameCam == null || gameCam.NearCamera == null) return false;
+            int overlap = gameCam.NearCamera.cullingMask & c.cullingMask;
+            if (overlap == 0) return false;
+        }
+        catch
+        {
+            return false;
+        }
+        return true;
     }
 
     private void Start()
@@ -99,6 +175,9 @@ public class VolkenUserInterface : MonoBehaviour
                     {
                         Volken.Instance.farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
                     }
+                    // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
+                    if (Volken.Instance.cloudRenderer != null)
+                        Volken.Instance.cloudRenderer.farDepthSource = Volken.Instance.farCam;
                 }
                 Volken.Instance.RefreshConfigList();
                 RebuildInspectorPanel();

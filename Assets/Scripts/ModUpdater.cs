@@ -20,6 +20,10 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
     ///      (下载更新 / 稍后再说 / 不再提醒);
     ///   4. "不再提醒"用 PlayerPrefs 记住跳过的版本,以后只有出现更新版本才再次提醒。
     ///
+    /// 【不阻塞主线程】所有网络等待都在协程里异步完成(UnityWebRequest +
+    /// 总看门狗超时),等待最新版本号期间游戏主线程完全空闲,绝不会卡死;
+    /// 断网/限流等异常情况最多等待 15s 即放弃,不会无限挂起。
+    ///
     /// 每次游戏会话只检查一次(static _startedThisSession 防抖)。
     ///
     /// ==================================================================
@@ -87,6 +91,11 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
         /// <summary>
         /// 启动一次更新检查(每次游戏会话最多执行一次,重复调用会被忽略)。
         /// 移植后在目标 Mod 的 OnModLoaded 末尾调用(★⑧)。
+        ///
+        /// 【不阻塞主线程的保证】本方法本身不发起也不等待任何网络请求——
+        /// 只注册协程宿主后立即返回。真正的 HTTP 请求在协程里异步执行
+        /// (UnityWebRequest + 逐帧轮询 + 总看门狗),等待最新版本号期间
+        /// 主线程完全空闲;即便网络异常/断网,最多等 15s 也会主动放弃。
         /// </summary>
         public void CheckForUpdate()
         {
@@ -100,14 +109,14 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
                 _localVersion = Mod.Instance.ModVersion;
                 if (_localVersion == null)
                 {
-                    Mod.Log("Volken: 更新检查跳过——ModVersion 为空"); // ★③
+                    Mod.Log("更新检查跳过——ModVersion 为空"); // ★③
                     return;
                 }
 
                 if (string.IsNullOrWhiteSpace(LatestVersionUrl))
                 {
                     // 兜底:URL 为空(如调试时临时清空)则只打日志,不弹窗
-                    Mod.Log("Volken: 更新检查——LatestVersionUrl 未配置,当前版本 {0}", _localVersion); // ★③
+                    Mod.Log("更新检查——LatestVersionUrl 未配置,当前版本 {0}", _localVersion); // ★③
                     return;
                 }
 
@@ -122,7 +131,7 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
             }
             catch (Exception ex)
             {
-                Mod.Log("Volken: 更新检查初始化失败: {0}", ex); // ★③
+                Mod.Log("更新检查初始化失败: {0}", ex); // ★③
             }
         }
 
@@ -132,33 +141,44 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
         /// </summary>
         public IEnumerator FetchRoutine()
         {
+            // 总看门狗:无论网络多慢/多坏,整个"等最新版本号"的过程必须在
+            // deadline 前结束(Time.realtimeSinceStartup 不受暂停/卡顿影响)。
+            // UnityWebRequest.timeout 只管单个请求,这里管整体等待——双保险,
+            // 保证等待永远有上限,绝不无限挂起(也不存在任何同步阻塞主线程的调用)。
+            const float totalTimeoutSeconds = 15f;
+            var deadline = Time.realtimeSinceStartup + totalTimeoutSeconds;
+
             Version latest = null;
             var got = false;
 
             // 通道1:GitHub Releases API
-            yield return TryFetchVersion(LatestVersionUrl, v => { latest = v; got = true; }, () => { });
+            yield return TryFetchVersion(LatestVersionUrl, deadline, v => { latest = v; got = true; }, () => { });
 
-            // 通道2:API 失败(限流/断网/无 release)时回退到 version.txt
-            if (!got)
+            // 通道2:API 失败(限流/断网/无 release)时回退到 version.txt;
+            // 前提是还没到总看门狗期限(否则直接放弃,不再发起第二次请求)。
+            if (!got && Time.realtimeSinceStartup < deadline)
             {
-                Mod.Log("Volken: 更新检查——API 通道不可用,回退到 version.txt"); // ★③
-                yield return TryFetchVersion(VersionFileUrl, v => { latest = v; got = true; }, () => { });
+                Mod.Log("更新检查——API 通道不可用,回退到 version.txt"); // ★③
+                yield return TryFetchVersion(VersionFileUrl, deadline, v => { latest = v; got = true; }, () => { });
             }
 
             if (!got || latest == null)
             {
-                Mod.Log("Volken: 更新检查——所有通道均失败,本次跳过提醒"); // ★③
+                if (Time.realtimeSinceStartup >= deadline)
+                    Mod.Log("更新检查——等待版本号超时(>{0}s),本次跳过提醒", totalTimeoutSeconds); // ★③
+                else
+                    Mod.Log("更新检查——所有通道均失败,本次跳过提醒"); // ★③
                 yield break;
             }
 
-            Mod.Log("Volken: 更新检查——当前 {0},网站最新 {1}", _localVersion, latest); // ★③
+            Mod.Log("更新检查——当前 {0},网站最新 {1}", _localVersion, latest); // ★③
             if (latest <= _localVersion) yield break; // 已是最新,不打扰
 
             // 用户点过"不再提醒"且该版本已跳过?
             if (Version.TryParse(PlayerPrefs.GetString(SkippedVersionPrefKey, ""), out var skipped)
                 && latest <= skipped)
             {
-                Mod.Log("Volken: 更新检查——版本 {0} 已被用户跳过提醒", latest); // ★③
+                Mod.Log("更新检查——版本 {0} 已被用户跳过提醒", latest); // ★③
                 yield break;
             }
 
@@ -174,20 +194,37 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
 
         /// <summary>
         /// 抓取指定 URL 并解析版本号。成功时回调 onSuccess(version),失败时回调 onFail。
+        /// deadline = 总看门狗期限(Time.realtimeSinceStartup),超过则主动 Abort 放弃。
         /// 两个通道共用的下载+解析原语。
         /// </summary>
-        private IEnumerator TryFetchVersion(string url, Action<Version> onSuccess, Action onFail)
+        private IEnumerator TryFetchVersion(string url, float deadline, Action<Version> onSuccess, Action onFail)
         {
             using (var request = UnityWebRequest.Get(url))
             {
                 request.timeout = 10;
                 // GitHub 的 URL(API 与 raw)都要求非空 User-Agent,否则返回 403
                 request.SetRequestHeader("User-Agent", "VolkenModUpdater/1.0");
-                yield return request.SendWebRequest();
+
+                // 关键点:这里是纯异步等待,主线程完全空闲,不会阻塞游戏。
+                // 逐帧轮询 isDone 而不是直接 `yield return request.SendWebRequest()`,
+                // 是为了每帧顺带检查总看门狗 deadline——超时就主动 Abort 中断,
+                // 把"等版本号"变成一个必然有上限、必然结束的过程。
+                var operation = request.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (Time.realtimeSinceStartup >= deadline)
+                    {
+                        request.Abort(); // 主动中断并释放连接,随后随 using 一起释放
+                        Mod.Log("更新检查——总等待超时,已中断请求 {0}", url); // ★③
+                        onFail?.Invoke();
+                        yield break;
+                    }
+                    yield return null; // 每帧只做一次布尔比较,开销可忽略
+                }
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    Mod.Log("Volken: 更新检查——请求失败 {0}: {1}", url, request.error); // ★③
+                    Mod.Log("更新检查——请求失败 {0}: {1}", url, request.error); // ★③
                     onFail?.Invoke();
                     yield break;
                 }
@@ -198,7 +235,7 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
                 }
                 else
                 {
-                    Mod.Log("Volken: 更新检查——无法解析 {0} 的版本,原文: {1}", url, request.downloadHandler.text); // ★③
+                    Mod.Log("更新检查——无法解析 {0} 的版本,原文: {1}", url, request.downloadHandler.text); // ★③
                     onFail?.Invoke();
                 }
             }
@@ -261,7 +298,7 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
                     if (!string.IsNullOrEmpty(DownloadUrl))
                         Application.OpenURL(DownloadUrl);
                     else
-                        Mod.Log("Volken: 更新下载页 DownloadUrl 未配置"); // ★③
+                        Mod.Log("更新下载页 DownloadUrl 未配置"); // ★③
                 };
 
                 // 稍后再说:仅关闭,下次启动仍会提醒
@@ -277,7 +314,7 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
             }
             catch (Exception ex)
             {
-                Mod.Log("Volken: 更新提醒弹窗失败: {0}", ex); // ★③
+                Mod.Log("更新提醒弹窗失败: {0}", ex); // ★③
             }
         }
 
@@ -295,6 +332,13 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
                 {
                     StartCoroutine(Owner.FetchRoutine());
                 }
+            }
+
+            // 保险:万一宿主对象被销毁(异常场景切换/重载等),立刻停掉协程,
+            // 确保不会有悬挂的网络等待残留。
+            private void OnDestroy()
+            {
+                StopAllCoroutines();
             }
         }
     }

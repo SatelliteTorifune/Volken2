@@ -33,9 +33,8 @@ namespace Assets.Scripts
         /// <value>The singleton instance of the mod object.</value>
         public static Mod Instance { get; } = GetModInstance<Mod>();
 
-        public GameObject VolkenUI;
-        public GameObject forceSettingScriptLoadGameObject;
-        public bool hasHarmony { get; private set; } = false;
+        private GameObject VolkenUI;
+        public GameObject ForceSettingScriptLoadGameObject;
         
         /// <summary>
         /// Gets the mod version as reported by the mod manifest (ModInfo.Version), e.g. 0.6.
@@ -53,10 +52,10 @@ namespace Assets.Scripts
             VolkenUI.AddComponent<VolkenUserInterface>();
             GameObject.DontDestroyOnLoad(VolkenUI);
             VolkenUI.SetActive(true);
-            forceSettingScriptLoadGameObject=new GameObject("ForceSettingObject");
-            forceSettingScriptLoadGameObject.AddComponent<ForceSetting>();
-            GameObject.DontDestroyOnLoad(forceSettingScriptLoadGameObject);
-            forceSettingScriptLoadGameObject.SetActive(false);
+            ForceSettingScriptLoadGameObject=new GameObject("ForceSettingObject");
+            ForceSettingScriptLoadGameObject.AddComponent<ForceSetting>();
+            GameObject.DontDestroyOnLoad(ForceSettingScriptLoadGameObject);
+            ForceSettingScriptLoadGameObject.SetActive(false);
             Volken.Initialize();
             VolkenProfiler.ProfilerController.Create();
             RegisterCommands();

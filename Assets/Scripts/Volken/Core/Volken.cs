@@ -259,7 +259,7 @@ public class Volken
         // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源(每实例各自的远相机深度)
         if (cloudRenderer != null && farCam != null)
             cloudRenderer.farDepthSource = farCam;
-        Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+        Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
             planetNode.PlanetData.HasWater);
         }
         catch (Exception ex)
@@ -360,7 +360,7 @@ public class Volken
                 if (cloudRenderer != null && farCam != null)
                     cloudRenderer.farDepthSource = farCam;
 
-                Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+                Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
                     craftNode.Parent.PlanetData.HasWater);
             }
             else

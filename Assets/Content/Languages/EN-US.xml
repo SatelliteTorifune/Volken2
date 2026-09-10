@@ -1,4 +1,20 @@
 <Strings>
+    <!-- Mod Settings -->
+    <s id="Volken.ModSettings.NoiseMapIndex">Noise Map</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">Selects the noise texture used for the volumetric cloud shape (1-5).</s>
+    <s id="Volken.ModSettings.MinHeight">MinHeight</s>
+    <s id="Volken.ModSettings.MinHeightDesc">Altitude (m) below which the water transparency override takes effect (when Alter Transparency is enabled).</s>
+    <s id="Volken.ModSettings.ShowDevLog">Show Dev Log</s>
+    <s id="Volken.ModSettings.ShowDevLogDesc">Show log messages for developers.</s>
+    <s id="Volken.ModSettings.AlterTransparency">Alter Transparency</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">Override the game's water transparency setting based on altitude (the original transparency setting has been altered into this one).</s>
+    <s id="Volken.ModSettings.WaterReflection">Water Reflection</s>
+    <s id="Volken.ModSettings.WaterReflectionDesc">Render volumetric clouds into the water reflection.</s>
+    <s id="Volken.ModSettings.ExtraCameraClouds">Extra Camera Clouds</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Auto-render volumetric clouds on extra world cameras (PIP windows etc.). Detect by behavior only, no mod-specific code.</s>
+    <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay (Volken.Profiler). Toggle with console command 'VolkenProfiler'.</s>
+    
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
     
     <!-- Group Names -->
@@ -20,6 +36,7 @@
     <s id="Volken.UI.UseStockCloudMap">Use Stock Cloud Distribution</s>
     <s id="Volken.UI.StockCloudUnavailable">No stock cloud data for this planet.</s>
     <s id="Volken.UI.StockMapStrength">Stock Map Strength</s>
+    <s id="Volken.UI.StockDensityScale">Stock Region Density</s>
     <s id="Volken.UI.StockMaskInfluence">Stock Mask Influence</s>
     <s id="Volken.UI.StockAlignSign">Stock Align Sign</s>
     <s id="Volken.UI.StockAlignAngleOffset">Stock Align Angle (deg)</s>
@@ -80,6 +97,19 @@
     <s id="Volken.UI.HistoryBlend">History Blend</s>
     <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale (1/N stepping)</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
+
+    <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
+    <s id="Volken.UI.OrbitClouds">Orbit Clouds (2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">Use Orbit Clouds (2D at high altitude)</s>
+    <s id="Volken.UI.OrbitTransitionStart">Transition Band Start (m)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">Transition Band End (m)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">2D Shading Anchor Altitude (0 = auto)</s>
+    <s id="Volken.UI.OrbitDensityBoost">2D Optical Depth Multiplier</s>
+    <s id="Volken.UI.OrbitBrightness">2D Brightness</s>
+    <s id="Volken.UI.OrbitReliefStrength">2D Relief (normal-map) Strength</s>
+    <s id="Volken.UI.OrbitDetailStrength">2D Detail Texture Strength</s>
+    <s id="Volken.UI.OrbitResolutionScale">2D Resolution Scale</s>
+    <s id="Volken.UI.OrbitDebugMode">2D Debug Split-Screen (vol/2D, transition band only)</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>
@@ -113,4 +143,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´° hey I don't think there should be clouds here</s>
     <s id="Volken.UI.NoStarClouds">Why you are trying to give star cloud???</s>
+    
+    <!-- Update Reminder -->
+    <s id="Volken.UI.UpdateAvailable">A new version of Volken is available!</s>
+    <s id="Volken.UI.UpdateNewVersion">New version: {0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">Your version: {0}</s>
+    <s id="Volken.UI.UpdateDownload">Download</s>
+    <s id="Volken.UI.UpdateLater">Later</s>
+    <s id="Volken.UI.UpdateDismiss">Don't Remind Again</s>
 </Strings>

@@ -56,12 +56,12 @@ public class Volken
         {
             _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds/Clouds.shader");
         }
-        catch (Exception ex) { Mod.LOG("Volken: Cloud shader load error: " + ex); }
+        catch (Exception ex) { Mod.Log("Volken: Cloud shader load error: " + ex); }
 
         if (_cloudShader == null)
         {
             try { _cloudShader = Shader.Find("Hidden/Clouds"); }
-            catch (Exception ex) { Mod.LOG("Volken: Shader.Find fallback error: " + ex); }
+            catch (Exception ex) { Mod.Log("Volken: Shader.Find fallback error: " + ex); }
         }
 
         planetConfigList = PlanetConfigList.LoadFromFile(CloudConfigListName);
@@ -88,7 +88,6 @@ public class Volken
         main.material = new Material(_cloudShader);
         main.config = CloudConfig.CreateDefault();
         main.currentConfigName = "Default";
-        main.currentResolutionScale = main.config.resolutionScale;
         main.runningOffset = main.config.offset;
         layers.Add(main);
         
@@ -100,7 +99,6 @@ public class Volken
         extra1.material = new Material(_cloudShader);
         extra1.config = CreateExtraDefaultConfig();
         extra1.currentConfigName = "ExtraDefault";
-        extra1.currentResolutionScale = extra1.config.resolutionScale;
         extra1.runningOffset = extra1.config.offset;
         layers.Add(extra1);
 
@@ -142,12 +140,12 @@ public class Volken
     public void AddConfig(string cfg)
     {
         _availableConfigs.Add(cfg);
-        Mod.LOG($"Volken: Added config {cfg}, now has {_availableConfigs.Count} configs");
+        Mod.Log($"Volken: Added config {cfg}, now has {_availableConfigs.Count} configs");
     }
 
     public void RefreshConfigList()
     {
-        Mod.LOG("Refreshing config list");
+        Mod.Log("Refreshing config list");
         try
         {
             var planetNode = Game.Instance?.FlightScene?.CraftNode?.Parent;
@@ -163,7 +161,7 @@ public class Volken
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error refreshing config list: " + ex);
+            Mod.Log("Volken: Error refreshing config list: " + ex);
             _availableConfigs = new List<string> { "Default" };
         }
     }
@@ -213,7 +211,7 @@ public class Volken
                     extra.config.CopyFrom(loaded);
                     extra.currentConfigName = extraCfgName;
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error loading extra config: " + ex); }
             }
         }
 
@@ -258,12 +256,15 @@ public class Volken
         farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
             ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
             : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
-        Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+        // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源(每实例各自的远相机深度)
+        if (cloudRenderer != null && farCam != null)
+            cloudRenderer.farDepthSource = farCam;
+        Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
             planetNode.PlanetData.HasWater);
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: OnSceneLoaded ERROR: " + ex);
+            Mod.Log("Volken: OnSceneLoaded ERROR: " + ex);
         }
     }
 
@@ -336,7 +337,7 @@ public class Volken
                             extra.config.CopyFrom(loaded);
                             extra.currentConfigName = extraCfgName;
                         }
-                        catch (Exception ex) { Mod.LOG("Volken: Error loading extra config: " + ex); }
+                        catch (Exception ex) { Mod.Log("Volken: Error loading extra config: " + ex); }
                     }
                 }
 
@@ -355,8 +356,11 @@ public class Volken
                 farCam = gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>() == null
                     ? gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>()
                     : gameCam.FarCamera.gameObject.GetComponent<FarCameraScript>();
+                // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
+                if (cloudRenderer != null && farCam != null)
+                    cloudRenderer.farDepthSource = farCam;
 
-                Mod.Instance.forceSettingScriptLoadGameObject.SetActive(
+                Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
                     craftNode.Parent.PlanetData.HasWater);
             }
             else
@@ -367,7 +371,7 @@ public class Volken
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: OnPlayerChangedSoi ERROR: " + ex);
+            Mod.Log("Volken: OnPlayerChangedSoi ERROR: " + ex);
         }
     }
 

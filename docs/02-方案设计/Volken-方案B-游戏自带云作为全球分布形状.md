@@ -140,7 +140,7 @@ return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
 ## 6. 预期效果与风险
 
 - **预期**:"Volken 的蓬松体积云 + 游戏的全球分布/纬度带"。云的位置、大小、纬度带与游戏一致,体积与光照仍是 Volken。
-- **风险 1(已知)**:coverage 阈值与 stock 值域([0,1])的平衡。若实测出现"零云/整片糊",可先调 `stockMapStrength` 或微调 `coverage`;后续可加 `stockCoverage` 独立补偿(本次不做,保持精简)。
+- **风险 1(已知)**:coverage 阈值与 stock 值域([0,1])的平衡。若实测出现"零云/整片糊",可先调 `stockMapStrength` 或微调 `coverage`;后续可加独立补偿 —— **已实现为 `stockDensityScale`(方案 A,区域内密度缩放,保留足迹边缘),见 `Volken-方案A-stockDensityScale-自带云区域内密度缩放.md`**。
 - **风险 2**:对齐约定(参考系→本体系)需进游戏实测一次;已有 `stockAlignSign/AngleOffset` 旋钮兜底。
 - **性能**:每次密度采样多 1 次 cubemap SampleLevel(比 3D Worley 便宜)。**重要**:该采样被 `if (useStockCloudMap > 0.5)` uniform 分支包裹——开关关闭或星球无自带云时整段采样被跳过,零额外开销(修复了初版"无条件采样导致关掉开关仍变卡"的回归)。开启时按每次密度采样计,代价为一次 cache 友好的 cubemap 读取;若仍觉卡,优先调低 `numLightSamplePoints` / `resolutionScale`(现有质量滑条)。
 

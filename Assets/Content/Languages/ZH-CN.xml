@@ -1,4 +1,20 @@
 <Strings>
+    <!-- Mod Settings -->
+    <s id="Volken.ModSettings.NoiseMapIndex">噪点贴图</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">选择体积云形状使用的噪点贴图(1-5)。</s>
+    <s id="Volken.ModSettings.MinHeight">最小高度</s>
+    <s id="Volken.ModSettings.MinHeightDesc">启用“修改水面透明度”时,低于此高度(米)将启用水面透明。</s>
+    <s id="Volken.ModSettings.ShowDevLog">显示开发日志</s>
+    <s id="Volken.ModSettings.ShowDevLogDesc">是否显示开发日志。</s>
+    <s id="Volken.ModSettings.AlterTransparency">修改水面透明度</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">根据高度覆盖游戏的水面透明度设置(原版透明度设置已被此设置替代)。</s>
+    <s id="Volken.ModSettings.WaterReflection">水面反射</s>
+    <s id="Volken.ModSettings.WaterReflectionDesc">将体积云渲染到水面反射中。</s>
+    <s id="Volken.ModSettings.ExtraCameraClouds">附加相机云层</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">在附加世界相机(画中画窗口等)上自动渲染体积云。仅通过行为检测,不依赖特定模组代码。</s>
+    <s id="Volken.ModSettings.ShowProfiler">性能分析器覆盖层</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层(Volken.Profiler)。可通过控制台命令 'VolkenProfiler' 切换。</s>
+    
     <s id="Volken.UI.CloudSettings">云层设置</s>
     
     <!-- Group Names -->
@@ -20,6 +36,7 @@
     <s id="Volken.UI.UseStockCloudMap">使用游戏自带云分布</s>
     <s id="Volken.UI.StockCloudUnavailable">该星球没有自带云数据。</s>
     <s id="Volken.UI.StockMapStrength">自带云混合强度</s>
+    <s id="Volken.UI.StockDensityScale">自带云区域内密度</s>
     <s id="Volken.UI.StockMaskInfluence">自带云遮罩影响</s>
     <s id="Volken.UI.StockAlignSign">自带云对齐方向</s>
     <s id="Volken.UI.StockAlignAngleOffset">自带云对齐角(度)</s>
@@ -81,6 +98,19 @@
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
     <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
+
+    <!-- 轨道云(2D 壳着色 + 过渡带交叉淡入) -->
+    <s id="Volken.UI.OrbitClouds">轨道云(2D)</s>
+    <s id="Volken.UI.UseOrbitClouds">使用轨道云(高空 2D)</s>
+    <s id="Volken.UI.OrbitTransitionStart">过渡带起点(米)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">过渡带终点(米)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">2D 着色锚点高度(0=自动)</s>
+    <s id="Volken.UI.OrbitDensityBoost">2D 光学厚度乘数</s>
+    <s id="Volken.UI.OrbitBrightness">2D 亮度</s>
+    <s id="Volken.UI.OrbitReliefStrength">2D 浮雕(法线)强度</s>
+    <s id="Volken.UI.OrbitDetailStrength">2D 细节纹理强度</s>
+    <s id="Volken.UI.OrbitResolutionScale">2D 分辨率缩放</s>
+    <s id="Volken.UI.OrbitDebugMode">2D 调试分屏(左体积/右2D,须在过渡带)</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">配置 '{0}' 已保存!</s>
@@ -114,4 +144,12 @@
     
     <s id="Volken.UI.NoCloudsHere">°`_´°你觉得这里应该有云吗我请问了</s>
     <s id="Volken.UI.NoStarClouds">你为什么要给恒星加云???</s>
+    
+    <!-- 更新提醒 -->
+    <s id="Volken.UI.UpdateAvailable">发现 Volken 新版本!</s>
+    <s id="Volken.UI.UpdateNewVersion">最新版本:{0}</s>
+    <s id="Volken.UI.UpdateCurrentVersion">当前版本:{0}</s>
+    <s id="Volken.UI.UpdateDownload">立刻更新</s>
+    <s id="Volken.UI.UpdateLater">稍后再说</s>
+    <s id="Volken.UI.UpdateDismiss">不再提醒</s>
 </Strings>

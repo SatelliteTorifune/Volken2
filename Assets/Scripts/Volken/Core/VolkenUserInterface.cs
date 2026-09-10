@@ -2,6 +2,10 @@ using System;
 using System.Linq;
 using System.Xml.Linq;
 using Assets.Scripts;
+using Assets.Scripts.Cameras;
+using Assets.Scripts.Flight.MapView;
+using Assets.Scripts.Terrain.Rendering;
+using Assets.Scripts.Ui;
 using ModApi;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
@@ -22,6 +26,78 @@ public class VolkenUserInterface : MonoBehaviour
     {
         Instance = this;
         DontDestroyOnLoad(this);
+    }
+
+    // === 额外摄像机(PIP 等)体积云自动挂载 ===
+    // 约束:不修改 PigeonEye、不引用/调用其任何类型/函数 —— 只按 Unity 通用规则识别"渲染世界的
+    // 额外相机"(纯行为识别,与具体 mod 无关):
+    //   启用中 + 渲染到 RenderTexture(非屏幕) + 不是游戏 Near/Far 相机(无 SceneCameraScript) +
+    //   无 JNO 专用相机脚本(地图/UI/水面) + RT 尺寸 ≥ 320×240(排除水面反射小方图) +
+    //   与游戏 NearCamera 的 cullingMask 有交集(确实渲染世界层)。
+    // CloudRenderer 自身再通过"共享同一 targetTexture 的更低 depth 相机"配对远相机(PIP 的
+    // scaled-space 克隆),同样不依赖任何名字/类型。
+    // 开关:ModSettings.ExtraCameraClouds(默认开);关闭时卸载已挂载的额外 CloudRenderer。
+    private float _nextExtraCameraScanTime = -1f;
+
+    private void Update()
+    {
+        try
+        {
+            if (!Game.InFlightScene) return;
+            if (Time.realtimeSinceStartup < _nextExtraCameraScanTime) return;
+            _nextExtraCameraScanTime = Time.realtimeSinceStartup + 1f;
+
+            bool wantExtra = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
+            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+            foreach (var cam in UnityEngine.Object.FindObjectsOfType<Camera>())
+            {
+                if (cam == null) continue;
+                if (gameCam != null &&
+                    (cam == gameCam.NearCamera || cam == gameCam.FarCamera)) continue;
+
+                var cr = cam.GetComponent<CloudRenderer>();
+                if (wantExtra)
+                {
+                    if (cr == null && IsExtraWorldCamera(cam))
+                    {
+                        cam.gameObject.AddComponent<CloudRenderer>();
+                    }
+                }
+                else if (cr != null)
+                {
+                    UnityEngine.Object.Destroy(cr);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log("Volken: ExtraCameraClouds scan ERROR: " + ex.Message);
+        }
+    }
+
+    private static bool IsExtraWorldCamera(Camera c)
+    {
+        if (c == null || !c.enabled || !c.gameObject.activeInHierarchy) return false;
+        if (c.targetTexture == null) return false;
+        // JNO 专用相机脚本 → 排除(游戏 Near/Far、地图、UI、水面透明)
+        if (c.GetComponent<SceneCameraScript>() != null) return false;
+        if (c.GetComponent<MapCameraScript>() != null) return false;
+        if (c.GetComponent<PrimaryUICameraScript>() != null) return false;
+        if (c.GetComponent<WaterTransparencyCameraScript>() != null) return false;
+        // 小 RT 排除(水面反射 256/512 方图等)
+        if (c.targetTexture.width < 320 || c.targetTexture.height < 240) return false;
+        try
+        {
+            var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
+            if (gameCam == null || gameCam.NearCamera == null) return false;
+            int overlap = gameCam.NearCamera.cullingMask & c.cullingMask;
+            if (overlap == 0) return false;
+        }
+        catch
+        {
+            return false;
+        }
+        return true;
     }
 
     private void Start()
@@ -51,7 +127,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception ex)
             {
-                Mod.LOG("Volken: Error OnSceneLoaded: " + ex);
+                Mod.Log("Volken: Error OnSceneLoaded: " + ex);
             }
         }
         else
@@ -65,7 +141,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception exception)
             {
-                Mod.LOG("Volken: Error OnSceneLoaded: " + exception);
+                Mod.Log("Volken: Error OnSceneLoaded: " + exception);
             }
         }
     }
@@ -99,6 +175,9 @@ public class VolkenUserInterface : MonoBehaviour
                     {
                         Volken.Instance.farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
                     }
+                    // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
+                    if (Volken.Instance.cloudRenderer != null)
+                        Volken.Instance.cloudRenderer.farDepthSource = Volken.Instance.farCam;
                 }
                 Volken.Instance.RefreshConfigList();
                 RebuildInspectorPanel();
@@ -115,7 +194,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error in OnPlayerChangedSoi: " + ex);
+            Mod.Log("Volken: Error in OnPlayerChangedSoi: " + ex);
         }
     }
 
@@ -153,7 +232,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error building flight UI: " + ex);
+            Mod.Log("Volken: Error building flight UI: " + ex);
         }
     }
 
@@ -173,7 +252,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error toggling UI: " + ex);
+            Mod.Log("Volken: Error toggling UI: " + ex);
             try
             {
                 CreateInspectorPanel();
@@ -184,7 +263,7 @@ public class VolkenUserInterface : MonoBehaviour
             }
             catch (Exception createEx)
             {
-                Mod.LOG("Volken: Error creating panel: " + createEx);
+                Mod.Log("Volken: Error creating panel: " + createEx);
             }
         }
     }
@@ -202,7 +281,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Mod.LOG($"error in VolkenInterface.CreateInspectorPanel {e}");
+                    Mod.Log($"error in VolkenInterface.CreateInspectorPanel {e}");
                 }
             }
 
@@ -244,7 +323,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error creating inspector panel: " + ex);
+            Mod.Log("Volken: Error creating inspector panel: " + ex);
             inspectorPanel = null;
         }
     }
@@ -272,7 +351,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error saving config: " + ex);
+                    Mod.Log("Volken: Error saving config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorSavingConfig"));
                 }
@@ -319,7 +398,7 @@ public class VolkenUserInterface : MonoBehaviour
                         }
                         catch (Exception ex)
                         {
-                            Mod.LOG("Volken: Error saving new config: " + ex);
+                            Mod.Log("Volken: Error saving new config: " + ex);
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                                 Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
                         }
@@ -331,7 +410,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error creating save dialog: " + ex);
+                    Mod.Log("Volken: Error creating save dialog: " + ex);
                 }
             }));
         configManagementGroup.Add(saveAsButton);
@@ -368,7 +447,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error loading config: " + ex);
+                    Mod.Log("Volken: Error loading config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorLoadingConfig"));
                 }
@@ -388,7 +467,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error resetting config: " + ex);
+                    Mod.Log("Volken: Error resetting config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorResettingConfig"));
                 }
@@ -407,7 +486,7 @@ public class VolkenUserInterface : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    Mod.LOG("Volken: Error setting config: " + ex);
+                    Mod.Log("Volken: Error setting config: " + ex);
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString("Volken.UI.ErrorGettingConfig"));
                 }
@@ -442,7 +521,7 @@ public class VolkenUserInterface : MonoBehaviour
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSaved"), title));
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error saving config: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error saving config: " + ex); }
             }));
         group.Add(saveCurrentButton);
 
@@ -474,11 +553,11 @@ public class VolkenUserInterface : MonoBehaviour
                                 RebuildInspectorPanel();
                             }
                         }
-                        catch (Exception ex) { Mod.LOG("Volken: Error saving: " + ex); }
+                        catch (Exception ex) { Mod.Log("Volken: Error saving: " + ex); }
                         finally { inputDialog?.Close(); }
                     };
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error creating dialog: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error creating dialog: " + ex); }
             }));
         group.Add(saveAsButton);
 
@@ -503,7 +582,7 @@ public class VolkenUserInterface : MonoBehaviour
                             string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigLoaded"), title, newConfig));
                     }
                 }
-                catch (Exception ex) { Mod.LOG("Volken: Error loading: " + ex); }
+                catch (Exception ex) { Mod.Log("Volken: Error loading: " + ex); }
             },
             Volken.Instance._availableConfigs);
         group.Add(loadDropdown);
@@ -590,6 +669,8 @@ public class VolkenUserInterface : MonoBehaviour
         group.Add(stockLayerDropdown);
         CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
             s => { cfg.stockMapStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockDensityScale"), () => cfg.stockDensityScale,
+            s => { cfg.stockDensityScale = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
         CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
             s => { cfg.stockMaskInfluence = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
         CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
@@ -717,6 +798,11 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
     }
 
@@ -755,6 +841,50 @@ public class VolkenUserInterface : MonoBehaviour
             },
             new System.Collections.Generic.List<string> { "Additive", "Standard" });
         group.Add(compositeDropdown);
+
+        // === 方案 B/方案 A: 游戏自带云分布 + 区域内密度缩放(与主层一致) ===
+        var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
+            () => cfg.useStockCloudMap, s =>
+            {
+                if (s && StockCloudMap.Current == null)
+                {
+                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.StockCloudUnavailable"));
+                    cfg.useStockCloudMap = false;
+                    return;
+                }
+                cfg.useStockCloudMap = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(stockToggleModel);
+
+        // 选择用游戏哪一层云作为分布(0=低,1=中,2=高,3=按层对应)
+        var stockLayerOptions = new System.Collections.Generic.List<string>
+        {
+            Locale.GetString("Volken.UI.StockLayerLow"),
+            Locale.GetString("Volken.UI.StockLayerMid"),
+            Locale.GetString("Volken.UI.StockLayerHigh"),
+            Locale.GetString("Volken.UI.StockLayerPerBand")
+        };
+        var stockLayerDropdown = new DropdownModel(Locale.GetString("Volken.UI.StockMapLayer"),
+            () => stockLayerOptions[Mathf.Clamp(cfg.stockMapLayer, 0, 3)],
+            (val) =>
+            {
+                int idx = stockLayerOptions.IndexOf(val);
+                if (idx >= 0) cfg.stockMapLayer = idx;
+                Volken.Instance.ValueChanged();
+            },
+            stockLayerOptions);
+        group.Add(stockLayerDropdown);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
+            s => { cfg.stockMapStrength = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockDensityScale"), () => cfg.stockDensityScale,
+            s => { cfg.stockDensityScale = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
+            s => { cfg.stockMaskInfluence = s; Volken.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
+            s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.StockAlignAngleOffset"), () => cfg.stockAlignAngleOffset,
+            s => { cfg.stockAlignAngleOffset = s; Volken.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
 
         // === Cloud Shape ===
         CreateSlider(group, Locale.GetString("Volken.UI.Density"), () => cfg.density,
@@ -877,7 +1007,58 @@ public class VolkenUserInterface : MonoBehaviour
             s => { cfg.historyBlend = s; Volken.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
         group.Add(qualityGroup);
 
+        // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+        GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
+        CreateOrbitCloudsGroup(orbitGroup, cfg);
+        group.Add(orbitGroup);
+
         inspectorModel.Add(group);
+    }
+
+    /// <summary>
+    /// 轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。
+    /// 默认关闭 → 零回归;开启后按海拔在体积云/2D 轨道云间分派并交叉淡入。
+    /// </summary>
+    private static void CreateOrbitCloudsGroup(GroupModel group, CloudConfig cfg)
+    {
+        var orbitToggle = new ToggleModel(Locale.GetString("Volken.UI.UseOrbitClouds"),
+            () => cfg.useOrbitClouds, s =>
+            {
+                cfg.useOrbitClouds = s;
+                Volken.Instance.ValueChanged();
+            });
+        group.Add(orbitToggle);
+
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionStart"), () => cfg.orbitTransitionStartAltitude,
+            s => { cfg.orbitTransitionStartAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 200000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionEnd"), () => cfg.orbitTransitionEndAltitude,
+            s => { cfg.orbitTransitionEndAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 500000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitSampleAltitude"), () => cfg.orbitSampleAltitude,
+            s => { cfg.orbitSampleAltitude = s; Volken.Instance.ValueChanged(); }, 0f, 50000f, 0);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDensityBoost"), () => cfg.orbitDensityBoost,
+            s => { cfg.orbitDensityBoost = s; Volken.Instance.ValueChanged(); }, 0.1f, 5f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitBrightness"), () => cfg.orbitBrightness,
+            s => { cfg.orbitBrightness = s; Volken.Instance.ValueChanged(); }, 0f, 2f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitReliefStrength"), () => cfg.orbitReliefStrength,
+            s => { cfg.orbitReliefStrength = s; Volken.Instance.ValueChanged(); }, 0f, 4f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitDetailStrength"), () => cfg.orbitDetailStrength,
+            s => { cfg.orbitDetailStrength = s; Volken.Instance.ValueChanged(); }, 0f, 1f, 2);
+        CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
+            s => { cfg.orbitResolutionScale = s; Volken.Instance.ValueChanged(); }, 0.1f, 1f, 2);
+
+        // 调试分屏开关:仅在 debug 模式(ModSettings.DevMode)下显示,平时对用户隐藏
+        bool orbitDebugShown = false;
+        try { orbitDebugShown = ModSettings.Instance != null && ModSettings.Instance.DevMode; } catch { }
+        if (orbitDebugShown)
+        {
+            var debugToggle = new ToggleModel(Locale.GetString("Volken.UI.OrbitDebugMode"),
+                () => cfg.orbitDebugMode > 0.5f, s =>
+                {
+                    cfg.orbitDebugMode = s ? 1f : 0f;
+                    Volken.Instance.ValueChanged();
+                });
+            group.Add(debugToggle);
+        }
     }
 
     private static SliderModel CreateSlider(GroupModel group, string label,
@@ -913,7 +1094,7 @@ public class VolkenUserInterface : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Mod.LOG("Volken: Error rebuilding panel: " + ex);
+            Mod.Log("Volken: Error rebuilding panel: " + ex);
         }
     }
 

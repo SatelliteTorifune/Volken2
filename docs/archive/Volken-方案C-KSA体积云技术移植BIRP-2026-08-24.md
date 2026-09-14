@@ -1,5 +1,6 @@
 # Volken 方案 C —— 移植 KSA 体积云技术到 Unity BIRP（时序超采样为核心）
 
+> 状态:✅ 已归档(原状态:已实现 2026-08-24,2026-08-27 收工;时序超采样为核心)
 > 日期:2026-08-24
 > 适用管线:Unity **Built-in Render Pipeline (BIRP)**（Volken 现状:OnRenderImage / Graphics.Blit / _CameraDepthTexture）
 > 目标:把 KSA(Kitten Space Agency) 体积云管线中可复用的技术,按 BIRP 的 API 与约束翻译成 Volken 的实现方案。**一期只做"时序超采样 + 最优采样序列"这一件事**(收益/成本比最高),运动矢量膨胀、FlowMap 风场、照地云影列为后续。
@@ -381,7 +382,7 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 **诊断清理(2026-08-27)**:删除全部 TSS 诊断回读——`CloudRenderer.cs` 的 `LogMVStats`/`_mvReadTex`(含 MVSTATS 日志)。
 `Mod.LOG` 仅保留错误处理(OnRenderImage ERROR / 配置读写错误等)。CloudRenderer.cs 现 484 行,大括号平衡。
 
-**JNO 冲突(2026-08-27,已定位,详见 [../01-问题排查/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md](../01-问题排查/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE.md))**:
+**JNO 冲突(2026-08-27,已定位,详见 [Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE-2026-08-27.md](Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE-2026-08-27.md))**:
 "看不到云 + 自带云开关锁死"根因 = JNOmultiplayerTest 的 `MultiPlayerUI.OnSceneLoaded` 在
 `inspectorPanel == null` 时抛 NRE → 中断 SceneLoaded 事件链 → Volken.OnSceneLoaded 被跳过
 (未建 CloudRenderer + 未加载 StockCloudMap)。修复:JNO 侧 `MultiPlayerUI.OnSceneLoaded` 加 null 保护(手动应用);

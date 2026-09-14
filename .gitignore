@@ -10,6 +10,9 @@
 # Ignore JNO mod files
 ModAssetBundles
 
+# Ignore local-only path mapping (privacy: never commit)
+docs/LOCAL_PATHS.md
+
 # Ignore plugins
 /Assets/Plugins/**/*.dll
 /Assets/Plugins/**/*.pdb

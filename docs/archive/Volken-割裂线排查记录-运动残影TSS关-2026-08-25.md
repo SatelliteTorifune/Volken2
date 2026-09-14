@@ -1,7 +1,7 @@
 # Volken-割裂线排查记录 · 运动残影(TSS 关闭)
 
-> 状态:排查中(证据充分,根因待 DIAGPROJ 探针最终确认)
-> 关联方案:[../02-方案设计/Volken-方案C-KSA体积云技术移植(BIRP).md](../02-方案设计/Volken-方案C-KSA体积云技术移植(BIRP).md)
+> 状态:✅ 已归档(原状态:已修复 2026-08-25;根因 = 重投影 Y 约定镜像,GPU 投影修复)
+> 关联方案:[Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md](Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md)
 > 创建:2026-08-25(凌晨,用户睡前整理)
 
 ---
@@ -56,7 +56,7 @@ o.col = (1.0 - finalHistoryBlend) * raymarchOutput + finalHistoryBlend * history
 
 ## 4. 诊断日志证据(2026-08-24 深夜 / 2026-08-25 凌晨两轮)
 
-日志源:`C:\Users\usami\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log`
+日志源:`<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log`
 触发:按 **F1** 重臂探查(PROBE_FRAMES=15 帧);TSS 关、histBlend=0.90、resScale=0.5。
 
 ### 4.1 三个探查会话画像

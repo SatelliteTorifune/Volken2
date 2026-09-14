@@ -1,5 +1,6 @@
 # Volken 冲突排查:JNOmultiplayerTest 的 NRE 中断 SceneLoaded 事件链
 
+> 状态:✅ 已归档(原状态:已定位并修复 2026-08-27;根因 = JNO `MultiPlayerUI.OnSceneLoaded` NRE 中断事件链)
 > 日期:2026-08-27
 > 现象:Volken 云完全看不到;**「使用游戏自带云分布」开关无法开启**(提示"该星球没有自带云数据")。此组合此前出现过一次,本次定位到根因。
 
@@ -67,7 +68,7 @@ private void OnSceneLoaded(object Sender, SceneEventArgs e)
 
 ### 4.1 JNO 侧(根因,建议修复)`MultiPlayerUI.OnSceneLoaded` 加 null 保护
 
-文件:`C:\renko\unityProjects\JNOmultiplayerTest\Assets\Scripts\MultiPlayerUI.cs`(L618-626)
+文件:`<JNO_MP>\Assets\Scripts\MultiPlayerUI.cs`(L618-626)
 
 ```csharp
 private void OnSceneLoaded(object Sender, SceneEventArgs e)

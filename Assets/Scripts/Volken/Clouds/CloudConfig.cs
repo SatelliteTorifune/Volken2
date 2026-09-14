@@ -344,7 +344,7 @@ public class CloudConfig
             offset = new Vector3(0.0718077943f, 0.565190852f, 0.00633700658f),
             windSpeed = -0.0007840574f,
             windDirection = 0f,
-            globalRotationAngular = 0.316963434f,
+            globalRotationAngular = -0.05f,
             scatterStrength = 0.170936152f,
             atmoBlendFactor = 2.66011786f,
             cloudColor = new Color(1f, 1f, 1f, 1f),

@@ -1,7 +1,7 @@
 # Volken 方案 A —— `stockDensityScale` 自带云"区域内密度缩放"
 
 > 日期:2026-09-06(设计)+ 2026-09-06(落地,修正版)
-> 状态:**已实现**
+> 状态:✅ 已归档(原状态:已实现 2026-09-06;区域内密度缩放,保边缘)
 > 前置:方案 B(`useStockCloudMap` 游戏自带云分布)已实现并默认关闭
 > 命名说明:本文"方案 A"= 自带云区域内的密度控制;与方案 B(自带云分布接入)、方案 C(时序超采样)并列为同一套编号体系。轨道云文档里的 "A 管线 / B 管线" 是另一语境(2D 壳着色的渲染路径取舍),与本方案无关。
 > **设计演进**:本方案最初按"区域内覆盖阈值重映射"(`stockCoverage`/`stockSoft`)实现;实测/需求确认后改为**区域内密度缩放**(`stockDensityScale`),因为阈值会收缩/吃掉自带云足迹边缘,而需求是**保留边缘、只调区域内部密度**。历史设计见文末 §9。
@@ -116,7 +116,7 @@ float4 dist   = lerp(float4(1,1,1,1), stockBand, stockEff * valid);
 
 ### 3.3 为什么不是覆盖分解 F2(rotDistStrength)
 
-`./Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail.md` 的 F2 = `coverage ×= lerp(1, rotDistValue, strength)`:
+`Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md` 的 F2 = `coverage ×= lerp(1, rotDistValue, strength)`:
 - 该文档**未实现**(代码无 `rotDistStrength`/`biomeStrength`);
 - 即便实现,自带云近二值 → F2 只做"区域内有没有云"的存在性门控,**削不薄足迹内部**。
 
@@ -175,8 +175,8 @@ float4 dist   = lerp(float4(1,1,1,1), stockBand, stockEff * valid);
 
 ## 8. 参考
 
-- [./Volken-方案B-游戏自带云作为全球分布形状.md](./Volken-方案B-游戏自带云作为全球分布形状.md) —— 自带云接入的原始设计(风险 1 已预告"后续可加独立补偿",现实现为 `stockDensityScale`)。
-- [./Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail.md](./Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail.md) —— F2(未实现)与 §3.3 的对比。
+- [Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md](Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md) —— 自带云接入的原始设计(风险 1 已预告"后续可加独立补偿",现实现为 `stockDensityScale`)。
+- [Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md](Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md) —— F2(未实现)与 §3.3 的对比。
 - `Clouds.shader` `SampleLightRay`(:549-572) —— §4 附带优化的落点。
 
 ---

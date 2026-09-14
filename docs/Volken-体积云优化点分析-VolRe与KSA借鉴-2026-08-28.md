@@ -1,10 +1,11 @@
 # Volken2 体积云优化点分析 —— 借鉴 VolRe(blackrack KSP EVE)与 KSAre(KSA)
 
+> 状态:📋 优化路线图(分析完成;T0 已部分落地,Light Volume/PlaceRays 为长期项)
 > 分析日期:2026-08-28
 > 范围:
 > - 本项目:`Assets/Scripts/Volken/`(CloudRenderer / CloudLayer / CloudNoise / CloudConfig / Clouds.shader / CloudNoiseCompute.compute)
-> - 参考 A:`C:/renko/shitProgram/VolRe/Atmosphere/`(KSP 体积云,反编译 C#)
-> - 参考 B:`C:/renko/shitProgram/KSAre/KSA/KSA/`(KSA Vulkan 体积云,方案 C 移植母本)
+> - 参考 A:`<VOLRE_REF>`(KSP 体积云,反编译 C#)
+> - 参考 B:`<KSA_REF>`(KSA Vulkan 体积云,方案 C 移植母本)
 
 ---
 

@@ -11,6 +11,7 @@ using UnityEngine.Rendering;
 
 namespace Assets.Scripts
 {
+    using Volken.Core;
     #region NavPanelController HarmonyPatch
     [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
     class LayoutRebuiltPatch

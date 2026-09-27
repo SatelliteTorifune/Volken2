@@ -13,9 +13,87 @@
     <s id="Volken.ModSettings.ExtraCameraClouds">附加相机云层</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">在附加世界相机(画中画窗口等)上自动渲染体积云。仅通过行为检测,不依赖特定模组代码。</s>
     <s id="Volken.ModSettings.ShowProfiler">性能分析器覆盖层</s>
-    <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层(Volken.Profiler)。可通过控制台命令 'VolkenProfiler' 切换。</s>
-    
+    <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层(VolkenProfiler)。可通过控制台命令 'VolkenProfiler' 切换。</s>
+
     <s id="Volken.UI.CloudSettings">云层设置</s>
+
+    <!-- 天气(SP2 移植:总体 / 云层联动 / 雨 / 雾 / 雷) -->
+    <s id="Volken.UI.Weather">天气</s>
+    <s id="Volken.UI.WeatherUnavailable">天气系统未初始化(请重载飞行场景)。</s>
+    <s id="Volken.UI.WeatherPlanet">行星</s>
+    <s id="Volken.UI.WeatherValue">天气值</s>
+    <s id="Volken.UI.WeatherActive">运行中</s>
+    <s id="Volken.UI.WeatherActiveOn">已启动(本行星天气已启用)</s>
+    <s id="Volken.UI.WeatherActiveOff">未启动(需启用本行星天气)</s>
+    <s id="Volken.UI.WeatherAltitude">海拔 / 太阳时 / 云内淡化</s>
+    <s id="Volken.UI.WeatherEnabled">启用天气(本行星)</s>
+    <s id="Volken.UI.WeatherEnabledOn">本行星天气已启用。</s>
+    <s id="Volken.UI.WeatherEnabledOff">本行星天气已关闭。</s>
+    <s id="Volken.UI.WeatherDynamic">动态天气</s>
+    <s id="Volken.UI.WeatherManualValue">天气值(强制)</s>
+    <s id="Volken.UI.WeatherConfigSaved">天气配置已保存(与云层同一份 PlanetConfigList.xml)。</s>
+    <s id="Volken.UI.WeatherResetToDefault">已重置为默认(记得点“保存当前配置”)</s>
+    <s id="Volken.UI.WeatherNotImplemented">此联动机制暂未实现,以下参数为占位(默认 0 = 不改变云层)。</s>
+
+    <s id="Volken.UI.WeatherCloudLinkage">云层联动(未实现)</s>
+    <s id="Volken.UI.CloudLinkageEnabled">启用云层联动</s>
+    <s id="Volken.UI.CloudLinkageCoverage">天气 → 云覆盖度</s>
+    <s id="Volken.UI.CloudLinkageDarken">天气 → 云色暗化</s>
+    <s id="Volken.UI.CloudLinkageWind">天气 → 云风速</s>
+
+    <s id="Volken.UI.WeatherRain">雨(已移除,占位)</s>
+    <s id="Volken.UI.WeatherRainRemoved">雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>
+    <s id="Volken.UI.RainEnabled">启用雨</s>
+    <s id="Volken.UI.RainTriggerValue">触发天气值</s>
+    <s id="Volken.UI.RainAmount">粒子数量</s>
+    <s id="Volken.UI.RainDomainRadius">粒子域半径(米)</s>
+    <s id="Volken.UI.RainAdaptiveDomain">域半径随速度自适应</s>
+    <s id="Volken.UI.RainFallSpeed">下落速度(米/秒)</s>
+    <s id="Volken.UI.RainStrength">雨强度</s>
+    <s id="Volken.UI.RainWindInfluence">受风影响</s>
+    <s id="Volken.UI.RainStreakLength">雨丝长度(米)</s>
+    <s id="Volken.UI.RainStreakWidth">雨丝宽度(米)</s>
+    <s id="Volken.UI.RainVolume">雨声音量</s>
+
+    <s id="Volken.UI.WeatherFog">雾(已移除,占位)</s>
+    <s id="Volken.UI.WeatherFogRemoved">雾系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>
+    <s id="Volken.UI.FogEnabled">启用高度雾</s>
+    <s id="Volken.UI.FogBaseHeight">雾底高度(米)</s>
+    <s id="Volken.UI.FogHeight">雾层厚度(米)</s>
+    <s id="Volken.UI.FogDensity">雾密度</s>
+    <s id="Volken.UI.FogHeightFalloff">高度衰减</s>
+    <s id="Volken.UI.FogMaxOpacity">最大不透明度</s>
+    <s id="Volken.UI.FogStartDistance">起雾距离(米)</s>
+    <s id="Volken.UI.FogColorBlend">雾色混合</s>
+
+    <s id="Volken.UI.WeatherLightning">雷</s>
+    <s id="Volken.UI.LightningEnabled">启用雷电</s>
+    <s id="Volken.UI.LightningStormValue">触发天气值</s>
+    <s id="Volken.UI.LightningTriggerNow">立刻劈一道</s>
+    <s id="Volken.UI.LightningTriggered">已触发闪电。</s>
+    <s id="Volken.UI.LightningStats">落雷状态</s>
+    <s id="Volken.UI.LightningInactive">未激活(需启用雷电 + 天气值达雷暴档)</s>
+    <s id="Volken.UI.LightningMinDelay">最小间隔(秒)</s>
+    <s id="Volken.UI.LightningMaxDelay">最大间隔(秒)</s>
+    <s id="Volken.UI.LightningTargetRange">落点散布(米)</s>
+    <s id="Volken.UI.LightningSpawnRange">源点散布(米)</s>
+    <s id="Volken.UI.LightningArcs">主干段数</s>
+    <s id="Volken.UI.LightningInaccuracy">主干抖动</s>
+    <s id="Volken.UI.LightningSplits">每段分叉数</s>
+    <s id="Volken.UI.LightningWidth">闪电粗细</s>
+    <s id="Volken.UI.LightningFlashIntensity">闪光强度</s>
+    <s id="Volken.UI.LightningLightIntensity">落雷点光强度</s>
+    <s id="Volken.UI.LightningLightRange">落雷点光范围(米)</s>
+    <s id="Volken.UI.ThunderVolume">雷声音量</s>
+    <s id="Volken.UI.ThunderDelay">雷声延迟(秒)</s>
+    <s id="Volken.UI.ThunderDistanceAttenuation">雷声距离衰减</s>
+
+    <s id="Volken.UI.WeatherTiming">天气节奏</s>
+    <s id="Volken.UI.WeatherMinDuration">最短持续(秒)</s>
+    <s id="Volken.UI.WeatherMaxDuration">最长持续(秒)</s>
+    <s id="Volken.UI.WeatherFadeSpeed">淡变速度(/秒)</s>
+    <s id="Volken.UI.WeatherTimeScaleFollow">时间加速跟随</s>
+    <s id="Volken.UI.WeatherFoggyDawn">黎明起雾</s>
     
     <!-- Group Names -->
     <s id="Volken.UI.ConfigManagement">配置管理</s>
@@ -63,7 +141,6 @@
     <s id="Volken.UI.CloudColorBlue">云层颜色:蓝</s>
     <s id="Volken.UI.ScatterStrength">散射强度</s>
     <s id="Volken.UI.AtmosphereBlendFactor">大气混合系数</s>
-    <s id="Volken.UI.NearThreshold">亚阈值</s>
     <s id="Volken.UI.ScatterPower">散射力度</s>
     <s id="Volken.UI.MultiScatterBlend">多次散射混合</s>
     <s id="Volken.UI.AmbientScatter">环境散射</s>
@@ -93,7 +170,6 @@
     <s id="Volken.UI.StepSizeFalloff">步长衰减</s>
     <s id="Volken.UI.NumberOfLightSamples">光源采样数</s>
     <s id="Volken.UI.LightMarchDistance">光照步进距离</s>
-    <s id="Volken.UI.Threshold">阈值</s>
     <s id="Volken.UI.RayOffsetStrength">光线偏移强度</s>
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样(1/N 子集步进)</s>
@@ -123,16 +199,9 @@
     <s id="Volken.UI.ErrorResettingConfig">重置配置时出错!</s>
     <s id="Volken.UI.ConfigSetToDefaultII">配置重置为默认 II!</s>
     <s id="Volken.UI.ErrorGettingConfig">加载配置时出错!</s>
-    <s id="Volken.UI.ErrorCreatingSaveDialog">Error creating save dialog: {0}</s>
-    <s id="Volken.UI.ErrorBuildingFlightUI">Error building flight UI: {0}</s>
-    <s id="Volken.UI.ErrorTogglingUI">Error toggling UI: {0}</s>
-    <s id="Volken.UI.ErrorCreatingPanel">Error creating panel: {0}</s>
-    <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Error OnSceneLoaded: {0}</s>
-    <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Error in OnPlayerChangedSoi: {0}</s>
     <!-- Extra Layer UI -->
     <s id="Volken.UI.ExtraLayer">额外云层: {0}</s>
     <s id="Volken.UI.ExtraLayerEnabled">{0} 启用</s>
-    <s id="Volken.UI.CompositeMode">合成模式</s>
     <s id="Volken.UI.ExtraLayerConfig">{0} 配置</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} 保存当前</s>
     <s id="Volken.UI.ExtraLayerSaveAs">{0} 另存为...</s>

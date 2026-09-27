@@ -10,7 +10,7 @@
 
 给 **SimpleRockets 2 / JNO**(Steam AppID 870200)写**体积云 mod `Volken`**(Unity 工程,跑在 **Built-in Render Pipeline (BIRP)** 的屏幕后处理链上)。核心是 `Clouds.shader` 的 raymarch 体积云 + 时序超采样(TSS/KSA 结构)+ 游戏自带云分布接入。
 
-**当前进度**:方案 A/B/C 全部已实现并归档(自带云区域内密度缩放、自带云全球分布、KSA 时序超采样移植);轨道 2D 云 + 过渡带交叉淡入已实现;割裂线根因(重投影 Y 镜像)已修复;JNO 冲突已定位修复;水面反射云(方案 A)已落地。**未完成/待办**:to-do 高优先项「切换至有大气星球时 config 卡住」、星环渲染顺序、高轨道云层 scale;优化路线图剩余项(Light Volume / PlaceRays / 噪声 mipmap / HDR RT);水体大修实施未排期;方案 C 的 N/S 风重投影缺口。
+**当前进度**:方案 A/B/C 全部已实现并归档(自带云区域内密度缩放、自带云全球分布、KSA 时序超采样移植);轨道 2D 云 + 过渡带交叉淡入已实现;割裂线根因(重投影 Y 镜像)已修复;JNO 冲突已定位修复;水面反射云(方案 A)已落地。**天气系统(SP2 移植)范围已缩减为「只做雷电」** —— 雨(阶段 2)与雾(阶段 3)的实现已整体移除、待重做(复盘:[`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md));**天气参数按预设名独立存**(预设名与云层**互相独立、不做配对联动**,落在 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`;旧的内联 `<Weather>` 会在读取清单时自动迁移)。**未完成/待办**:to-do 高优先项「切换至有大气星球时 config 卡住」、星环渲染顺序、高轨道云层 scale;优化路线图剩余项(Light Volume / PlaceRays / 噪声 mipmap / HDR RT);水体大修实施未排期;方案 C 的 N/S 风重投影缺口。
 
 ## 1. 关键路径
 
@@ -21,6 +21,7 @@
 | 文档索引 | `docs/README.md`(四节:活跃 / 归档 / 决策速查 / 写入规则) |
 | 会话上下文 | `docs/AGENT_CONTEXT.md`(本文件) |
 | 活跃 backlog | `docs/to-do.md` |
+| 跨界移植/调试方法论(雨雾移植失败复盘,通用铁律) | `docs/Volken-天气雨雾移植失败教训-2026-09-27.md`(做任何"细长 billboard / GPU 粒子 / 相机相关朝向"特性前必读) |
 | 本机路径映射(真实值,**仅本地**) | `docs/LOCAL_PATHS.md`(已被 `.gitignore` 排除,严禁上传) |
 | 游戏运行日志 | `<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log` |
 | 反编译游戏源码(只读) | `<JNO_CODE>`(含 `SimpleRockets2/`、`ModApi/`) |
@@ -33,9 +34,12 @@
 
 | 文件 | 职责 |
 |---|---|
-| `Core/Volken.cs` | mod 入口:`OnSceneLoaded` 注册/初始化、`CloudRenderer` 创建、`StockCloudMap.LoadFor/Release`(有大气 SOI 进/出) |
+| `Core/VolkenMod.cs` | mod 入口:`OnSceneLoaded` 注册/初始化、`CloudRenderer` 创建、`StockCloudMap.LoadFor/Release`(有大气 SOI 进/出) |
 | `Core/VolkenUserInterface.cs` | UI(方案 A/B/C 分组、覆盖分解滑块、轨道云组、本地化);曾含自愈初始化 `Update` 驱动,已撤除 |
-| `Core/PlanetConfig.cs` / `Core/SerializableTypes.cs` | 行星/配置序列化类型 |
+| `Core/PlanetConfig.cs` | **行星 → 预设名 的映射**:`PlanetConfig`(`PlanetName`/`CloudConfigName`/`ExtraCloudConfigName`/**`WeatherConfigName`** + `LegacyWeather`,后者**仅用于迁移旧内联格式**)+ `PlanetConfigList`(清单读写 + 旧格式迁移 + `Get/SetWeatherConfig`)。落盘 `UserData/VolkenConfig/PlanetConfigList.xml`。**云与天气的预设互相独立**(各自的名字、各自的列表、各自新建保存,**不做配对联动**):云 `UserData/VolkenConfig/{行星}/{预设}.xml`,天气 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(类在 `Core/VolkenWeatherConfig.cs`,含 `GetAllConfigNames`)。⚠️ `AddConfig` 对已有行星只更新预设名(勿改回 `Add`) |
+| `Weather/VolkenWeather.cs` | 天气状态机单例:天气值推进/随机/淡变、相机指标(海拔/太阳时/云内淡化)、雷电起停。**各子系统阈值读自己的配置字段**(`rain.triggerValue` / `lightning.stormValue`),不用任何全局档位常量 |
+| ~~`Weather/WeatherTypes.cs`~~ | **❌ 已删除(2026-09-27)** —— SP2 的全局天气档位常量(Clear/Few/Rainy/Stormy…)+ `Classify`。**Volken 刻意不要"全局预设"这一层**:云/雨/雾/雷的参数全部由玩家逐项设置并序列化。`Classify` 的去向 = `VolkenWeather.DescribeWeatherValue`(纯显示,**不要在它上面加逻辑**) |
+| `Core/SerializableTypes.cs` | 序列化辅助类型 |
 | `Clouds/CloudRenderer.cs` | **核心**(~484 行):`[ImageEffectOpaque] OnRenderImage` 全流程(远近深度合并 → 逐层 Cloud pass → DilateMV → Upscale → Composite);`SetLayerDynamicProperties`;`BuildCloudSpaceRepro`(云空间重投影,`prevViewProjMat = GL.GetGPUProjectionMatrix(...) * worldToCameraMatrix`);订阅 `IGameView.ReferenceFrameRecentered`(原点重置清历史) |
 | `Clouds/CloudLayer.cs` | 每层 RT 管理(cloudTex/cloudDepth/cloudMV、historyTex/historyDepthTex/historyCloudDepthTex);`SetStaticShaderProperties`;TSS 开关按层处理 |
 | `Clouds/CloudConfig.cs` | 配置:coverage/density/layerStrengths、`useStockCloudMap/stockMapStrength/stockDensityScale/stockMaskInfluence/stockAlign*`、`useOrbitClouds/orbitTransition*`、TSS 相关;`low/mid/highAltitudeThreshold` 为**死配置**(勿删,旧 XML 兼容) |
@@ -47,8 +51,8 @@
 | `Clouds/FarCameraScript.cs` / `DepthCapture.cs` | 远相机 CommandBuffer 深度抓取(`farDepthTex`,不用 OnRenderImage,避免割裂线) |
 | `Clouds/CloudLayerView.cs` | 调试/视图辅助 |
 | `Water/ForceSetting.cs` | 按高度切换水透明等强制设置(水体 A 阶段雏形) |
-| `PlanetRing/PlanetRingPatch.cs` | 星环渲染(相关待办:星环渲染顺序错误) |
-| `HarmonyPatches/` | `LayoutRebuiltPatch.cs`、`AnotherPatch.cs` 等 Harmony patch |
+| `PlanetRing/PlanetRingsZWriteFix.cs` | 星环渲染(相关待办:星环渲染顺序错误) |
+| `HarmonyPatches/` | `LayoutRebuiltPatch.cs`、`PlanetRingsShaderPatch.cs` 等 Harmony patch |
 | `Debug/`(NoiseVisualizer / RaymarchDebug)、`Profiler/` | 诊断与性能工具 |
 
 ## 3. 已确定的技术事实(不要再重复调研)
@@ -73,6 +77,14 @@
 - 体积云靠 `DepthTex`(lowResDepthTex)在场景深度处提前终止;OrbitClouds 同样采样 DepthTex,`sceneDepth <= tStart` 返回透明(craft 遮挡一致)。
 - 近/远深度相机拼接缝历史已修(CommandBuffer);RFloat `cloudDepthTex/histCloudDepthTex` 读 R 通道(勿读 alpha)。
 
+**通用架构铁律(雨/雾移植失败的沉淀,详见 [`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md) §5)**
+- **细长 billboard 的"长"必须在屏幕平面内表达**:长度轴只由**物理量**决定,宽度轴由**视线**决定(`W = normalize(cross(L, viewDir))`);世界空间长度轴 + 任意宽度轴 → 视角相关地退化成"横块"。
+- **沿视线的方向分量对屏幕方向贡献恒为 0** → 归一化近零向量 = 噪声(径向爆散);退化情况必须显式兜底。
+- **每帧都会调到的路径里禁止"重置动画进度"**;重入守卫只能比较**目标值**,且**只能读状态,不能挡在"改状态的逻辑"前面**(否则状态机被自己的守卫锁死)。
+- **诊断必须量你关心的那个量所在的轴**(屏幕问题就量屏幕空间),并同时输出**当前值 + 内部状态**,才能区分"从没触发"与"触发后被重置"。
+- **日志按消息去重后再统计次数**(同一条 Unity shader 错误会对 N 个 kernel × M 个平台各报一遍);优先用**累计计数器**而非节流日志。
+- **先标定数量级,再调观感**:密度(个/m³)、域半径、停留时长(域直径 / 相机速度)要同时满足;`GraphicsBuffer.GetData` 是同步回读,不可常驻。
+
 **坐标原点重置(浮动原点)**
 - SR2 会 `RecenterReferenceFrame`(离帧中心>5000m / 帧速>1000m/s / 时间加速每帧 / 表面锁定切换)→ 世界坐标整体平移 → 时序历史失效。
 - 修复:订阅 ModApi `IGameView.ReferenceFrameRecentered`(委托签名 `(IReferenceFrame, Vector3d, Vector3d)`),回调清空历史 + `frameNumber=0` 冷启动。
@@ -84,7 +96,7 @@
 
 ## 4. 游戏 API 关键入口(反编译确认 / ModApi)
 
-- `Game.Instance.SceneManager.SceneLoaded`(Volken `OnSceneLoaded` 注册处,`Volken.cs` L69)
+- `Game.Instance.SceneManager.SceneLoaded`(Volken `OnSceneLoaded` 注册处,`VolkenMod.cs` L69)
 - `ModApi` `IGameView.ReferenceFrameRecentered`(原点重置事件,委托 `(IReferenceFrame, Vector3d, Vector3d)`)
 - `PlanetCubemapUtility.LoadCubemap(data, PlanetCubemapType.Clouds, size, false)`(自带云 cubemap 加载;`PlanetCubemapType.Clouds` R/G/B/A 语义)
 - `WaterReflectionPlaneScript.UpdateReflections(Vector3, Vector3[, Camera])`(水面平面反射,`_WaterReflectionTexture`;反射云挂钩点,见实时反射适配分析)

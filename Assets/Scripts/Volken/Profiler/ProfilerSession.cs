@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace VolkenProfiler
 {
+    
     /// <summary>GPU 焦点性能快照(只读数据)。</summary>
     public struct ProfilerSnapshot
     {
@@ -196,7 +197,7 @@ namespace VolkenProfiler
         {
             try
             {
-                var volken = Volken.Instance;
+                var volken = Volken.Core.VolkenMod.Instance;
                 if (volken == null)
                 {
                     return null;

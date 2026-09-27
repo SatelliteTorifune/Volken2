@@ -203,7 +203,7 @@ namespace Assets.Scripts // ===== 耦合点⑤:命名空间,移植到新 Mod 时
             {
                 request.timeout = 10;
                 // GitHub 的 URL(API 与 raw)都要求非空 User-Agent,否则返回 403
-                request.SetRequestHeader("User-Agent", "VolkenModUpdater/1.0");
+                request.SetRequestHeader("User-Agent", "VolkenUpdater/1.0");
 
                 // 关键点:这里是纯异步等待,主线程完全空闲,不会阻塞游戏。
                 // 逐帧轮询 isDone 而不是直接 `yield return request.SendWebRequest()`,

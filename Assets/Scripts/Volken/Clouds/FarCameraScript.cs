@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.Rendering;
-
 /// <summary>
 /// Captures the far camera's linearized depth into a render texture for the cloud pipeline.
 ///
@@ -14,97 +13,104 @@ using UnityEngine.Rendering;
 /// 相机各自持有自己的远相机深度纹理 —— 否则多台额外相机会在同一个 static 纹理上互相 Release/
 /// 重建,导致命令缓冲写入已释放纹理(报错/云消失)。
 /// </summary>
-public class FarCameraScript : MonoBehaviour
+
+namespace Volken.Clouds
 {
-    public float maxFarDepth;
-    public RenderTexture farDepthTex;
+    
 
-    private Camera _cam;
-    // dedicated material instance: its "clipPlanes" uniform must hold the FAR camera's planes,
-    // while the shared cloud material gets overwritten with the near camera's planes every frame
-    private Material _depthMat;
-    private CommandBuffer _commandBuffer;
-    private const CameraEvent CaptureEvent = CameraEvent.AfterForwardOpaque;
-
-    /// <summary>本脚本挂载的相机。</summary>
-    public Camera Camera => _cam;
-
-    private void Awake()
+    public class FarCameraScript : MonoBehaviour
     {
-        _cam = GetComponent<Camera>();
-        _cam.depthTextureMode |= DepthTextureMode.Depth;
-        _depthMat = new Material(Volken.Instance.MainLayer?.material?.shader);
-    }
+        public float maxFarDepth;
+        public RenderTexture farDepthTex;
 
-    private void OnEnable()
-    {
-        RebuildResources();
-    }
+        private Camera _cam;
+        // dedicated material instance: its "clipPlanes" uniform must hold the FAR camera's planes,
+        // while the shared cloud material gets overwritten with the near camera's planes every frame
+        private Material _depthMat;
+        private CommandBuffer _commandBuffer;
+        private const CameraEvent CaptureEvent = CameraEvent.AfterForwardOpaque;
 
-    private void OnDisable()
-    {
-        RemoveCommandBuffer();
-    }
+        /// <summary>本脚本挂载的相机。</summary>
+        public Camera Camera => _cam;
 
-    private void OnPreRender()
-    {
-        maxFarDepth = _cam.farClipPlane;
+        private void Awake()
+        {
+            _cam = GetComponent<Camera>();
+            _cam.depthTextureMode |= DepthTextureMode.Depth;
+            _depthMat = new Material(Volken.Core.VolkenMod.Instance.MainLayer?.material?.shader);
+        }
 
-        // recreate resources on resolution changes
-        if (farDepthTex == null || !farDepthTex.IsCreated() ||
-            farDepthTex.width != _cam.pixelWidth || farDepthTex.height != _cam.pixelHeight)
+        private void OnEnable()
         {
             RebuildResources();
         }
 
-        _depthMat.SetVector("clipPlanes", new Vector2(_cam.nearClipPlane, _cam.farClipPlane));
-    }
-
-    private void RebuildResources()
-    {
-        if (_cam == null || _depthMat == null)
+        private void OnDisable()
         {
-            return;
+            RemoveCommandBuffer();
         }
 
-        RemoveCommandBuffer();
-
-        if (farDepthTex != null)
+        private void OnPreRender()
         {
-            farDepthTex.Release();
-        }
+            maxFarDepth = _cam.farClipPlane;
 
-        farDepthTex = new RenderTexture(_cam.pixelWidth, _cam.pixelHeight, 0, RenderTextureFormat.RFloat);
-        farDepthTex.Create();
-
-        _commandBuffer = new CommandBuffer { name = "Volken Far Depth Capture" };
-        _commandBuffer.Blit(BuiltinRenderTextureType.None, farDepthTex, _depthMat, _depthMat.FindPass("FarDepth"));
-        // restore the camera's own target so the rest of the frame renders normally
-        _commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
-        _cam.AddCommandBuffer(CaptureEvent, _commandBuffer);
-    }
-
-    private void RemoveCommandBuffer()
-    {
-        if (_commandBuffer != null)
-        {
-            if (_cam != null)
+            // recreate resources on resolution changes
+            if (farDepthTex == null || !farDepthTex.IsCreated() ||
+                farDepthTex.width != _cam.pixelWidth || farDepthTex.height != _cam.pixelHeight)
             {
-                _cam.RemoveCommandBuffer(CaptureEvent, _commandBuffer);
+                RebuildResources();
             }
-            _commandBuffer.Release();
-            _commandBuffer = null;
+
+            _depthMat.SetVector("clipPlanes", new Vector2(_cam.nearClipPlane, _cam.farClipPlane));
         }
-    }
 
-    private void OnDestroy()
-    {
-        RemoveCommandBuffer();
-
-        if (farDepthTex != null)
+        private void RebuildResources()
         {
-            farDepthTex.Release();
-            farDepthTex = null;
+            if (_cam == null || _depthMat == null)
+            {
+                return;
+            }
+
+            RemoveCommandBuffer();
+
+            if (farDepthTex != null)
+            {
+                farDepthTex.Release();
+            }
+
+            farDepthTex = new RenderTexture(_cam.pixelWidth, _cam.pixelHeight, 0, RenderTextureFormat.RFloat);
+            farDepthTex.Create();
+
+            _commandBuffer = new CommandBuffer { name = "Volken Far Depth Capture" };
+            _commandBuffer.Blit(BuiltinRenderTextureType.None, farDepthTex, _depthMat, _depthMat.FindPass("FarDepth"));
+            // restore the camera's own target so the rest of the frame renders normally
+            _commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+            _cam.AddCommandBuffer(CaptureEvent, _commandBuffer);
+        }
+
+        private void RemoveCommandBuffer()
+        {
+            if (_commandBuffer != null)
+            {
+                if (_cam != null)
+                {
+                    _cam.RemoveCommandBuffer(CaptureEvent, _commandBuffer);
+                }
+                _commandBuffer.Release();
+                _commandBuffer = null;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            RemoveCommandBuffer();
+
+            if (farDepthTex != null)
+            {
+                farDepthTex.Release();
+                farDepthTex = null;
+            }
         }
     }
+
 }

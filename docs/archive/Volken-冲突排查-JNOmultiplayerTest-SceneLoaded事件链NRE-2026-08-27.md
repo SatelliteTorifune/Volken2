@@ -56,7 +56,7 @@ private void OnSceneLoaded(object Sender, SceneEventArgs e)
 
 1. JNO 的 `MultiPlayerUI` 是 `DontDestroyOnLoad` 常驻组件,在 `Mod.OnModInitialized` 里创建,`Awake` 中订阅 `SceneManager.SceneLoaded`。JNO 的 mod 加载早于 Volken → 在事件链中**靠前**。
 2. 用户**从未打开过联机面板**时 `inspectorPanel == null` → `inspectorPanel.Visible = false` 抛 **NullReferenceException**(IL 偏移 0x16,即该行)。
-3. .NET 多播委托中**一个处理器抛异常会中断其后所有处理器** → 排在 JNO 后面的 Volken `OnSceneLoaded`(`Volken.cs` L69 注册)与 `VolkenUserInterface.OnSceneLoaded` **都被跳过**。
+3. .NET 多播委托中**一个处理器抛异常会中断其后所有处理器** → 排在 JNO 后面的 Volken `OnSceneLoaded`(`VolkenMod.cs` L69 注册)与 `VolkenUserInterface.OnSceneLoaded` **都被跳过**。
 4. 结果:
    - `OnSceneLoaded` 未执行 → **未创建 `CloudRenderer`** → 看不到云。
    - 未调用 `StockCloudMap.LoadFor` → `StockCloudMap.Current == null` → **自带云开关锁死**。
@@ -94,7 +94,7 @@ private void OnSceneLoaded(object Sender, SceneEventArgs e)
 
 即使其他 mod/游戏的事件处理器再抛异常,Volken 也会在飞行场景中周期性自检并补初始化。
 
-`Volken.cs` 新增(已改):
+`VolkenMod.cs` 新增(已改):
 
 ```csharp
 public void EnsureCloudInitIfNeeded()

@@ -22,23 +22,67 @@ namespace Volken.Weather
     ///      直接用 <c>lightning.stormValue</c>(默认 2.5,可调)表达同一语义,
     ///      再加一个 <c>VolkenWeatherConfig.LightningSection.enabled</c> 总开关。
     ///   2. 雷声音频:SP2 从 <c>EnviroAudioModule.thunderClips</c> 随机;这里从 mod bundle 里
-    ///      载入 <c>enviro_thunder_1~5.ogg</c>(自 sp2d4 素材工程拷入),缺失时静默降级为无雷声。
+    ///      载入 <c>volkenThrunder-near-1~4.wav</c> 与 <c>volkenThrunder-far-1~5.wav</c>,
+    ///      缺失时静默降级为无雷声。**近/远各一组**,按落点到观测者的距离选(见下)。
     ///   3. 云层中高:SP2 读 Enviro 的 <c>bottomCloudsHeight/topCloudsHeight</c>;这里读
     ///      Volken 主层的 <c>layerHeights/layerSpreads/layerStrengths</c> —— 保证雷从**真正的云**里出来。
     ///
-    /// 【雷声延迟】原版固定 0.05s(它把"光线先到、声音后到"忽略了)。
-    /// 本实现给 <c>thunderDistanceAttenuation</c>(0~1):0 = 恒 0.05s(原版行为),
-    /// 1 = 按真实声速 343 m/s 延迟。用 <c>AudioSource.PlayScheduled</c> 做定时,不占协程。
+    /// 【雷声延迟 / 音色(2026-09-28 真实化改造)】原版固定 0.05s(它把"光线先到、声音后到"忽略了)。
+    /// 现在按三步走,每一步都能在日志里看到:
+    ///   ① **距离**:落点到**观测者(相机,与 craft 同参考系)**的欧氏距离 <c>strikeDist</c>。
+    ///      ⚠️ 修掉了一个老 bug:此前 <c>OnBoltLanded</c> 回传的是 <c>Distance(bolt起点, 落点)</c>,
+    ///      也就是 **bolt 自身长度**(云底到地面那几公里),**与玩家在哪毫无关系** ——
+    ///      所以"远雷/近雷"之前根本没在按距离区分。
+    ///   ② **声速**:读 <c>ICraftFlightData.AtmosphereSample.SpeedOfSound</c>。
+    ///      它由行星大气成分与**平均表面温度**算出(<c>sqrt(γ·k·T/m)</c>),**不随高度变化** ——
+    ///      游戏自己的马赫数/阻力用的就是它,所以这里照用,不去自算(自算会与 HUD 打架)。
+    ///      无物理大气或高度 ≥ 大气顶时它恒为 0 → 回退 <c>thunderFallbackSpeedOfSound</c>。
+    ///      实测量级:Droo 340 / Cylero 233 / Tydos 931 m/s —— 硬编码 343 在 Tydos 上要差 2.7 倍。
+    ///   ③ **音色阈值**:<c>strikeDist &lt;= thunderNearDistance</c> → near,否则 far。
+    /// 延迟 = <c>lerp(thunderDelay, 声程 / 声速, thunderDistanceAttenuation)</c>,用
+    /// <c>AudioSource.PlayScheduled</c> 定时,不占协程(<c>0</c> = 回到原版 0.05s 行为)。
     /// </summary>
     public class LightningModule : MonoBehaviour
     {
-        private const string ThunderPathFormat = "Assets/Scripts/Volken/Weather/Audio/enviro_thunder_{0}.ogg";
-        private const int ThunderClipCount = 5;
-        private const float SpeedOfSound = 343f;
+        /// <summary>近雷素材路径模板(参数 = 序号 1..<see cref="NearClipCount"/>)。</summary>
+        private const string NearThunderPathFormat = "Assets/Scripts/Volken/Weather/Audio/volkenThrunder-near-{0}.wav";
 
+        /// <summary>远雷素材路径模板(参数 = 序号 1..<see cref="FarClipCount"/>)。</summary>
+        private const string FarThunderPathFormat = "Assets/Scripts/Volken/Weather/Audio/volkenThrunder-far-{0}.wav";
+
+        private const int NearClipCount = 4;
+        private const int FarClipCount = 5;
+
+        /// <summary>
+        /// 同时可发声的雷声通道数。
+        ///
+        /// 【为什么不是 1 个 AudioSource】雷声素材最长约 16s,而 <c>lightning.minDelay</c>
+        /// 下限是 0.05s —— 单个 AudioSource 上第二次 <c>PlayScheduled</c> 会**顶掉**第一条,
+        /// 听感是"雷声突然断掉",这是最容易听出来的不真实之一。
+        /// 多个通道轮转,配合一个最小冷却:密度够高时最坏情况是"新雷抢占最旧通道"。
+        /// </summary>
+        private const int ThunderVoices = 4;
+
+        /// <summary>两次雷声之间的最小间隔(秒),低于它就不播(防止极端配置把 4 个通道全打满)。</summary>
+        private const float MinThunderCooldown = 0.6f;
+
+        /// <summary>主干/分叉 shader(<c>Hidden/Volken/LightningBolt</c>)。</summary>
         private Shader _boltShader;
-        private readonly List<AudioClip> _thunderClips = new List<AudioClip>();
-        private AudioSource _audioSource;
+
+        /// <summary>落点闪光 shader(<c>Hidden/Volken/LightningFlash</c>)。见 <see cref="LoadFlashShader"/>。</summary>
+        private Shader _flashShader;
+
+        /// <summary>近雷素材(落点近时用:短促、起始即峰值)。</summary>
+        private readonly List<AudioClip> _nearClips = new List<AudioClip>();
+
+        /// <summary>远雷素材(落点远时用:延迟起峰、长隆隆)。</summary>
+        private readonly List<AudioClip> _farClips = new List<AudioClip>();
+
+        /// <summary>雷声发声通道池(轮转 + 冷却,见 <see cref="ThunderVoices"/>)。</summary>
+        private AudioSource[] _thunderVoices;
+        private int _nextVoice;
+        private float _lastThunderTime = -999f;
+
         private bool _assetsLoaded;
 
         private Coroutine _stormRoutine;
@@ -61,7 +105,44 @@ namespace Volken.Weather
                 try { _boltShader = Shader.Find("Hidden/Volken/LightningBolt"); }
                 catch { }
             }
+            LoadFlashShader();
             LoadAudioAssets();
+        }
+
+        /// <summary>
+        /// 载入落点闪光 shader。
+        ///
+        /// 【为什么是独立的第二个 shader】两者原来共用一个双 Pass shader,靠 Pass 名区分 ——
+        /// 但**一个 Material 只用 Shader 的第一个匹配 Pass**,那两个 Pass 又没有 LightMode 标签,
+        /// 结果闪光球一直在跑主干那套逻辑(它的 <c>_CoreWidth</c>/halo 完全没生效)。
+        /// 拆成各含单一 Pass 的两个 shader 之后不存在"选错 Pass"的可能。
+        ///
+        /// 载入失败不致命:此时 <see cref="LightningBolt.Create"/> 会让闪光球退化用 bolt shader
+        /// (画法不对但可见),而不是让材质变紫红。
+        /// </summary>
+        private void LoadFlashShader()
+        {
+            try
+            {
+                _flashShader = Mod.LoadVolkenAsset<Shader>(
+                    "Assets/Scripts/Volken/Weather/LightningFlash.shader", false);
+            }
+            catch (Exception ex)
+            {
+                Mod.Log("Volken:LightningModule flash shader load error: " + ex.Message);
+            }
+
+            if (_flashShader == null)
+            {
+                try { _flashShader = Shader.Find("Hidden/Volken/LightningFlash"); }
+                catch { }
+            }
+
+            if (_flashShader == null)
+            {
+                Mod.Log("Volken:LightningModule flash shader NOT FOUND — strike flash will fall back to the bolt shader " +
+                        "(add LightningFlash.shader to ModData.asset._otherAssets and rebuild)");
+            }
         }
 
         private void LoadAudioAssets()
@@ -77,42 +158,57 @@ namespace Volken.Weather
             //     为空,内部同样会走游戏的 LoadAudio 去 Resources 里找 —— 够不到 mod bundle。
             // 自建 AudioSource 的代价:不经过游戏的音效混音组,不受"音效音量"滑块控制,
             // 因此音量在 VolkenWeatherConfig.LightningSection.thunderVolume 里单独给(默认 0.65)。
+            //
+            // 【2026-09-28】改成 ThunderVoices 个通道轮转,长期配置(rolloff/spread)在每次播放时
+            // 按当前配置刷新(见 ConfigureVoice)—— 面板上调阈值/衰减要立刻听得出差别。
             try
             {
-                _audioSource = gameObject.AddComponent<AudioSource>();
-                _audioSource.playOnAwake = false;
-                _audioSource.loop = false;
-                _audioSource.spatialBlend = 1f;                  // 3D
-                _audioSource.rolloffMode = AudioRolloffMode.Logarithmic;
-                _audioSource.minDistance = 200f;
-                _audioSource.maxDistance = 60000f;
-                _audioSource.dopplerLevel = 0f;
-                _audioSource.spread = 60f;
-                _audioSource.bypassReverbZones = true;
+                _thunderVoices = new AudioSource[ThunderVoices];
+                for (int i = 0; i < ThunderVoices; i++)
+                {
+                    var src = gameObject.AddComponent<AudioSource>();
+                    src.playOnAwake = false;
+                    src.loop = false;
+                    src.spatialBlend = 1f;                  // 3D
+                    src.rolloffMode = AudioRolloffMode.Logarithmic;
+                    src.dopplerLevel = 0f;
+                    src.bypassReverbZones = true;
+                    _thunderVoices[i] = src;
+                }
             }
             catch (Exception ex)
             {
                 Mod.Log("Volken:LightningModule AudioSource creation failed: " + ex.Message);
             }
 
-            for (int i = 1; i <= ThunderClipCount; i++)
+            LoadClipSet(NearThunderPathFormat, NearClipCount, _nearClips, "near");
+            LoadClipSet(FarThunderPathFormat, FarClipCount, _farClips, "far");
+
+            int total = _nearClips.Count + _farClips.Count;
+            Mod.Log($"Volken:LightningModule loaded thunder clips: near={_nearClips.Count}/{NearClipCount} " +
+                    $"far={_farClips.Count}/{FarClipCount} voices={(_thunderVoices != null ? _thunderVoices.Length : 0)}" +
+                    (total == 0
+                        ? " (SILENT — the audio is not in the asset bundle: check ModData.asset._otherAssets, then rebuild)"
+                        : ""));
+        }
+
+        /// <summary>载入一组雷声素材(缺失 = 静默跳过,素材没打进 bundle 是预期情况,不刷红字)。</summary>
+        private static void LoadClipSet(string pathFormat, int count, List<AudioClip> into, string label)
+        {
+            for (int i = 1; i <= count; i++)
             {
                 try
                 {
-                    string path = string.Format(ThunderPathFormat, i);
-                    // required: false —— 素材没打进 bundle 是预期情况,不要刷红字
+                    string path = string.Format(pathFormat, i);
                     var clip = Mod.LoadVolkenAsset<AudioClip>(path, false);
                     if (clip == null) continue;
-                    _thunderClips.Add(clip);
+                    into.Add(clip);
                 }
                 catch (Exception ex)
                 {
-                    Mod.Log($"Volken:LightningModule thunder clip {i} load failed: {ex.Message}");
+                    Mod.Log($"Volken:LightningModule {label} thunder clip {i} load failed: {ex.Message}");
                 }
             }
-
-            Mod.Log($"Volken:LightningModule loaded {_thunderClips.Count}/{ThunderClipCount} thunder clips" +
-                    (_thunderClips.Count == 0 ? " (silent — check that the audio is in the asset bundle)" : ""));
         }
 
         /// <summary>天气/行星变化时由 <c>VolkenWeather</c> 调用,按需起停雷暴循环。</summary>
@@ -135,7 +231,14 @@ namespace Volken.Weather
                     _stormRoutine = null;
                 }
                 TimeToNextStrike = 0f;
-                Mod.Log("Volken:LightningModule storm loop stopped");
+
+                // 【2026-09-28】停用时把**在播的闪电**一起清掉:离开飞行场景时若有一道雷
+                // 正在播,它自己会随场景卸载消失,但"根物体 + 硬性寿命兜底"之前,
+                // 残留物有可能被带到下一个场景 —— 这是"闪电永久存在"最常见的入口。
+                int before = LightningBolt.ActiveCount;
+                LightningBolt.DestroyAll();
+
+                Mod.Log($"Volken:LightningModule storm loop stopped (cleared {before} in-flight bolt(s))");
             }
         }
 
@@ -230,11 +333,11 @@ namespace Volken.Weather
                 if (cam == null) cam = Camera.main;
             }
 
-            Transform parent = null;
-            try { parent = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera?.transform; }
-            catch { }
-
-            var bolt = LightningBolt.Create(parent, _boltShader, cam);
+            // 【2026-09-28】bolt 不再挂到相机下面(旧实现见 LightningBolt 类注释):
+            // 挂在 inactive 的相机下会让 bolt 自己在层级里也 inactive,
+            // 进而在自己身上 StartCoroutine 静默失败 → 自毁链断掉 → 闪电永久残留。
+            // 现在 bolt 是根物体,生命周期完全由自己负责。
+            var bolt = LightningBolt.Create(_boltShader, _flashShader, cam);
             bolt.flashIntensity = cfg.lightning.flashIntensity;
             bolt.flashPlaneIntensity = cfg.lightning.flashIntensity * 0.4f;
             bolt.arcs = cfg.lightning.arcs;
@@ -249,46 +352,196 @@ namespace Volken.Weather
             Vector3 landing = to;
             Vector3 camPos = cam != null ? cam.transform.position : Vector3.zero;
 
-            bolt.OnBoltLanded = distance =>
+            // 云底海拔(ASL):远雷的声源更接近"云底那一段通道",见 PlayThunderForStrike 的说明。
+            // 取不到云层带时给 0 = 等价于"只用落点距离",不会算出一个荒唐的值。
+            bool haveCloudBand = TryGetCloudBand(out float cloudBottom, out float cloudTop);
+            float cloudBaseAsl = haveCloudBand ? cloudBottom : 0f;
+            Camera observerCam = cam;
+            // 观测者处的地表法线:声程分解要用它区分"垂直/水平"(world Y/Z 不能当水平用,参考系可能被旋转)
+            Vector3 radialUp = GetRadialUp(camPos);
+
+            bolt.OnBoltLanded = () =>
             {
-                // 雷声:延迟 = lerp(原版 0.05s, 真实声速传播, thunderDistanceAttenuation)
-                float at = Mathf.Clamp01(cfg.lightning.thunderDistanceAttenuation);
-                float delay = Mathf.Lerp(cfg.lightning.thunderDelay, distance / SpeedOfSound, at);
-                float volume = cfg.lightning.thunderVolume * Mathf.Lerp(1f, DistanceVolume(distance), at);
-                PlayThunder(landing, volume, delay);
+                // 注意:回调里**不再**回传距离 —— 老代码传的是 bolt 自身长度(与玩家无关),
+                // 距离必须在这里按"落点 ↔ 观测者"现算,见 PlayThunderForStrike。
+                //
+                // 观测者位置在**回调里**取而不是在 `CastBolt` 里捕获:bolt 的动画要跑约 0.2s,
+                // 这期间相机可能已经移动了。取不到就退回 CastBolt 时的位置(有界、非致命)。
+                Vector3 observerPos = camPos;
+                try
+                {
+                    if (observerCam != null) observerPos = observerCam.transform.position;
+                }
+                catch { }
+
+                PlayThunderForStrike(landing, observerPos, cloudBaseAsl, radialUp, cfg);
             };
 
             bolt.CastBolt(origin, landing);
             _boltCount++;
+            // camDist 是**起手时**的落点距离,仅供参考;真正决定延迟/音色的是雷声那一刻现算的距离,
+            // 由 PlayThunder 的 `thunder [...] dist=…` 那行打印。
             Mod.Log($"Volken:LightningModule bolt #{_boltCount} from {origin} to {landing} " +
-                    $"(len={Vector3.Distance(origin, landing):F0}m camDist={Vector3.Distance(camPos, landing):F0}m)");
+                    $"(len={Vector3.Distance(origin, landing):F0}m strikeDist~{Vector3.Distance(camPos, landing):F0}m)");
         }
 
         /// <summary>
-        /// 雷声音量随距离衰减(只在 <c>thunderDistanceAttenuation &gt; 0</c> 时叠加,作为额外的听觉距离感)。
-        /// 1000m 内不衰减;之后按 1/距离 收,最低留 0.25 免得远处雷完全听不见。
+        /// 一道雷的**雷声**全流程:① 距离 → ② 声速定延迟 → ③ 阈值选 near/far → 发声。
+        ///
+        /// 【① 距离】<c>strikeDist</c> = 落点到**观测者**的距离。
+        /// 观测者取相机:在 JNO 里近相机与飞船同参考系、相距只有几米,而 <b>AudioListener 就挂在它上面</b> ——
+        /// 用相机位置能保证"延迟""音色阈值""3D 定位"三者用的是同一个原点,不会互相打架。
+        ///
+        /// 【声程而非直线距离】雷声由整条放电通道(云底 ↔ 落点)发出,远处观测者先听到的是
+        /// 声程最短的那一段(通常是云底那一端)。所以按 <c>thunderSourceBlend</c> 在
+        /// "落点距离"与"云底距离"之间取一个声程,默认各半。
+        /// 实测量级(D=3 km、云底 2 km、Droo 340 m/s):地面观测者 8.8 s;观测者升到云底高度时
+        /// 落点距离 3.6 km 而云底距离 3.0 km → 混合后 9.7 s(比纯落点距离短约 0.3 s)。
+        /// 修正幅度不大但方向正确,且不花额外代价。
+        ///
+        /// 【② 声速】取 <c>ICraftFlightData.AtmosphereSample.SpeedOfSound</c>(游戏口径,与马赫数同源)。
+        /// 真空 / 高度超出大气顶时它恒为 0 → 回退配置里的兜底值,绝不去除 0。
+        ///
+        /// 【③ 阈值】<c>strikeDist &lt;= thunderNearDistance</c> → 近雷素材组,否则远雷素材组。
+        /// 组内随机一条;某一组为空时自动落到另一组(素材只打了一半也能出声)。
         /// </summary>
-        private static float DistanceVolume(float distance)
+        private void PlayThunderForStrike(Vector3 strikePos, Vector3 observerPos, float cloudBaseAsl,
+                                          Vector3 radialUp, VolkenWeatherConfig cfg)
         {
-            const float near = 1000f;
-            if (distance <= near) return 1f;
-            return Mathf.Clamp(near / distance, 0.25f, 1f);
+            var lcfg = cfg.lightning;
+
+            // ---- ① 距离 / 声程 ----
+            float strikeDist = Vector3.Distance(observerPos, strikePos);
+            float pathDist = strikeDist;
+            if (lcfg.thunderSourceBlend > 0f)
+            {
+                // 云底那一端的声程:沿**地表法线**分解,得到真正的垂直/水平分量。
+                // ⚠️ 不能用 world Y/Z 当"水平" —— 参考系可能被旋转(行星坐标系的 Y 才是"上")。
+                Vector3 toStrike = strikePos - observerPos;
+                float vert = Mathf.Abs(Vector3.Dot(toStrike, radialUp));   // 高度差
+                float horizSq = Mathf.Max(0f, toStrike.sqrMagnitude - vert * vert);
+                float obsAsl = VolkenWeather.Instance?.CameraAltitudeAsl ?? 0f;
+                float cloudBaseVert = Mathf.Abs(cloudBaseAsl - obsAsl);
+                float cloudBaseDist = Mathf.Sqrt(horizSq + cloudBaseVert * cloudBaseVert);
+                pathDist = Mathf.Lerp(strikeDist, Mathf.Min(strikeDist, cloudBaseDist),
+                    Mathf.Clamp01(lcfg.thunderSourceBlend));
+            }
+
+            // ---- ② 声速 ----
+            float c = GetSpeedOfSound();
+            if (c <= 1f)
+            {
+                c = Mathf.Max(1f, lcfg.thunderFallbackSpeedOfSound);
+            }
+
+            // ---- 延迟 / 音量(0 = 回到原版:恒 0.05s + 恒音量) ----
+            float at = Mathf.Clamp01(lcfg.thunderDistanceAttenuation);
+            float delay = Mathf.Lerp(lcfg.thunderDelay, pathDist / c, at);
+            float volume = lcfg.thunderVolume * Mathf.Lerp(1f, DistanceVolume(strikeDist, lcfg.thunderNearDistance), at);
+
+            // ---- ③ near / far ----
+            bool near = strikeDist <= lcfg.thunderNearDistance;
+
+            PlayThunder(strikePos, volume, delay, near, strikeDist, pathDist, c);
         }
 
-        private void PlayThunder(Vector3 position, float volume, float delay)
+        /// <summary>
+        /// 观测者(飞船)当前所在处的**声速**(米/秒);取不到 / 无物理大气 / 超出大气顶 → 返回 0。
+        ///
+        /// 数据源 = <c>ICraftFlightData.AtmosphereSample.SpeedOfSound</c>。它是 JNO 自己算马赫数
+        /// 用的那个值(<c>DragPhysics</c>: <c>Mach = |v| / speedOfSound</c>),由行星大气的
+        /// <c>MeanGamma / MeanMassPerMolecule / MeanSurfaceTemperature</c> 三者算出,**不随高度变化**。
+        /// 因此这里读它而不是自己按温度算 —— 保证与游戏 HUD 完全一致。
+        ///
+        /// 实测量级:Droo 340、Cylero 233、Tydos 931 m/s(硬编码 343 在 Tydos 上要差 2.7 倍)。
+        /// </summary>
+        private static float GetSpeedOfSound()
         {
-            if (_thunderClips.Count == 0 || _audioSource == null) return;
-
-            var clip = _thunderClips[UnityEngine.Random.Range(0, _thunderClips.Count)];
             try
             {
-                _audioSource.transform.position = position;
-                _audioSource.clip = clip;
-                _audioSource.volume = Mathf.Clamp01(volume);
-                // PlayScheduled 定时播放:不占协程,时间点精确(与 SP2 的"延迟 0.05s 后播雷声"等价,
-                // 本实现还额外支持按声速传播的真实延迟)。
+                var flightData = Game.Instance?.FlightScene?.CraftNode?.CraftScript?.FlightData;
+                if (flightData == null) return 0f;
+
+                // AtmosphereSample 是 struct(按值返回),没有空引用风险;
+                // 无物理大气 / 高度 ≥ 大气顶时 SpeedOfSound 保持默认 0。
+                return flightData.AtmosphereSample.SpeedOfSound;
+            }
+            catch
+            {
+                return 0f;
+            }
+        }
+
+        /// <summary>
+        /// 雷声音量随距离的额外衰减(只在 <c>thunderDistanceAttenuation &gt; 0</c> 时叠加)。
+        ///
+        /// 换算成"能量按 1/距离":这里给的是**线性音量**,所以用 <c>sqrt(near/d)</c> ——
+        /// 若直接用 <c>near/d</c>,叠加 AudioSource 自带的对数 rolloff 会把远处的雷压到听不见。
+        /// 阈值一半以内不衰减;之后缓慢收,最低留 0.25,免得远雷完全消失。
+        /// </summary>
+        private static float DistanceVolume(float distance, float nearDistance)
+        {
+            float inner = Mathf.Max(1f, nearDistance * 0.5f);   // 阈值一半以内视为"就在跟前"
+            if (distance <= inner) return 1f;
+            return Mathf.Clamp(Mathf.Sqrt(inner / distance), 0.25f, 1f);
+        }
+
+        /// <summary>
+        /// 按当前配置刷新某个通道的 3D 参数。
+        ///
+        /// 【为什么远雷要把 spread 拉大】<c>spread</c> = 声源在 3D 空间里的"张角"。
+        /// 近雷是一个点(炸响),远雷是**头顶一大片区域**在响 —— 60° 对远雷太"尖",
+        /// 听上去像一个远处的小喇叭。这条对"真实感"的贡献比阈值本身更大。
+        /// </summary>
+        private static void ConfigureVoice(AudioSource src, bool near, float nearDistance)
+        {
+            src.minDistance = near ? Mathf.Max(10f, nearDistance * 0.15f) : nearDistance;
+            src.maxDistance = Mathf.Max(src.minDistance * 4f, nearDistance * 12f);
+            src.spread = near ? 60f : 160f;
+        }
+
+        private void PlayThunder(Vector3 position, float volume, float delay, bool near,
+                                 float strikeDist, float pathDist, float speedOfSound)
+        {
+            int nearCount = _nearClips.Count;
+            int farCount = _farClips.Count;
+            if (nearCount + farCount == 0 || _thunderVoices == null || _thunderVoices.Length == 0) return;
+
+            // 某一组为空时自动落到另一组:素材只打了一半也能出声,而不是静默
+            if (near && nearCount == 0) near = false;
+            else if (!near && farCount == 0) near = true;
+            var clips = near ? _nearClips : _farClips;
+
+            // 最小冷却:防止极端配置(minDelay 下限 0.05s)把通道池打成"每条都抢断前一条"
+            if (Time.unscaledTime - _lastThunderTime < MinThunderCooldown)
+            {
+                Mod.Log($"Volken:LightningModule thunder skipped (cooldown {MinThunderCooldown:F1}s, " +
+                        $"dist={strikeDist:F0}m)");
+                return;
+            }
+            _lastThunderTime = Time.unscaledTime;
+
+            var clip = clips[UnityEngine.Random.Range(0, clips.Count)];
+            try
+            {
+                if (_nextVoice < 0 || _nextVoice >= _thunderVoices.Length) _nextVoice = 0;
+                var src = _thunderVoices[_nextVoice];
+                _nextVoice = (_nextVoice + 1) % _thunderVoices.Length;
+
+                float nearDistance = VolkenWeather.Instance?.Config?.lightning?.thunderNearDistance ?? 2000f;
+                ConfigureVoice(src, near, nearDistance);
+
+                src.transform.position = position;
+                src.clip = clip;
+                src.volume = Mathf.Clamp01(volume);
+                // PlayScheduled 定时播放:不占协程、时间点精确。dspTime 是**真实时间**,
+                // 不受 Time.timeScale / 游戏倍速影响 —— 这正是"声音按真实秒到达"该有的行为。
                 double startTime = AudioSettings.dspTime + Mathf.Max(0f, delay);
-                _audioSource.PlayScheduled(startTime);
+                src.PlayScheduled(startTime);
+
+                Mod.Log($"Volken:LightningModule thunder [{(near ? "near" : "far")}] " +
+                        $"dist={strikeDist:F0}m path={pathDist:F0}m c={speedOfSound:F0}m/s " +
+                        $"delay={delay:F2}s vol={volume:F2} clip={clip.name}");
             }
             catch (Exception ex)
             {

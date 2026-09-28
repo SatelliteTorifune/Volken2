@@ -85,8 +85,11 @@
     <s id="Volken.UI.LightningLightIntensity">落雷点光强度</s>
     <s id="Volken.UI.LightningLightRange">落雷点光范围(米)</s>
     <s id="Volken.UI.ThunderVolume">雷声音量</s>
-    <s id="Volken.UI.ThunderDelay">雷声延迟(秒)</s>
-    <s id="Volken.UI.ThunderDistanceAttenuation">雷声距离衰减</s>
+    <s id="Volken.UI.ThunderDelay">零距离时的雷声延迟(秒)</s>
+    <s id="Volken.UI.ThunderDistanceAttenuation">雷声声速延迟 / 距离衰减</s>
+    <s id="Volken.UI.ThunderNearDistance">近雷/远雷分界距离(米)</s>
+    <s id="Volken.UI.ThunderFallbackSpeedOfSound">兜底声速(米/秒)</s>
+    <s id="Volken.UI.ThunderSourceBlend">雷声声源:云底混合</s>
 
     <s id="Volken.UI.WeatherTiming">天气节奏</s>
     <s id="Volken.UI.WeatherMinDuration">最短持续(秒)</s>

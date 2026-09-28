@@ -85,8 +85,11 @@
     <s id="Volken.UI.LightningLightIntensity">Strike Light Intensity</s>
     <s id="Volken.UI.LightningLightRange">Strike Light Range (m)</s>
     <s id="Volken.UI.ThunderVolume">Thunder Volume</s>
-    <s id="Volken.UI.ThunderDelay">Thunder Delay (s)</s>
-    <s id="Volken.UI.ThunderDistanceAttenuation">Thunder Distance Falloff</s>
+    <s id="Volken.UI.ThunderDelay">Thunder Delay at 0 Distance (s)</s>
+    <s id="Volken.UI.ThunderDistanceAttenuation">Thunder Sound-Speed Delay / Falloff</s>
+    <s id="Volken.UI.ThunderNearDistance">Near/Far Thunder Threshold (m)</s>
+    <s id="Volken.UI.ThunderFallbackSpeedOfSound">Fallback Speed of Sound (m/s)</s>
+    <s id="Volken.UI.ThunderSourceBlend">Thunder Source: Cloud-Base Blend</s>
 
     <s id="Volken.UI.WeatherTiming">Weather Timing</s>
     <s id="Volken.UI.WeatherMinDuration">Min Duration (s)</s>

@@ -1,28 +1,33 @@
-// Volken 天气系统 —— 闪电材质(BIRP 原生,不依赖任何管线特性)。
+// Volken 天气系统 —— 闪电材质:**主干 / 分叉**(BIRP 原生,不依赖任何管线特性)。
 //
 // 【为什么自己写】SP2 用的 Enviro 闪电材质是商业资产包内的,按计划 §3 决策不引入 Enviro3,
 // 因此按 <c>Enviro.Lightning</c> 对材质的实际要求重写:只要一个可被 C# 反复
 // <c>SetFloat("_Intensity", ...)</c> 的发光强度即可(每段随机 0~2、闪光瞬间 50、淡出递减)。
 //
-// 【Pass 说明】
-//   Pass "Bolt"   —— 闪电主干/分叉(LineRenderer 用)。加色混合、关深度写入、深度测试开
-//                    (被地形/建筑挡住 —— 这是想要的:山后的闪电不该穿山)。
-//   Pass "Flash"  —— 落雷点的球状闪光(SP2 的 planeMat)。加色、ZTest Always,
-//                    因为它表达的是"整个视野被照亮",不该被任何几何体遮挡。
+// 【2026-09-28 拆成两个 shader —— 修"闪电偶发紫红色"】
+//   紫红色 = Unity 在"材质丢失 / shader 无法使用"时回退的 Error shader。
+//   原先主干与落点闪光共用一个双 Pass shader,靠 Pass 名 "Bolt"/"Flash" 区分,
+//   而 **一个 Material 只用 Shader 的第一个匹配 Pass**,这两个 Pass 又都没有 LightMode 标签,
+//   所以:
+//     - 落点闪光球实际上一直在跑 "Bolt" 那个 Pass(_CoreWidth / halo 全部没生效);
+//     - C# 里想"按名字启用某个 Pass"的做法不可靠(无 LightMode 时名字不构成可区分的 Pass)。
+//   现在拆成各含单一 Pass 的两个 shader,**一个 Material 只有一个 Pass 可选**,不存在歧义。
+//   落点闪光见 <c>LightningFlash.shader</c>。
+//
+// 【Pass 说明】主干/分叉(LineRenderer 用):加色混合、关深度写入、深度测试开
+//             —— 被地形/建筑挡住(这是想要的:山后的闪电不该穿山)。
 Shader "Hidden/Volken/LightningBolt"
 {
     Properties
     {
         _Color     ("Color", Color) = (0.85, 0.9, 1.0, 1.0)
         _Intensity ("Intensity", Float) = 1.0
-        _CoreWidth ("Core Width", Range(0.0, 1.0)) = 0.35
     }
 
     SubShader
     {
         Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "IgnoreProjector" = "True" }
 
-        // ===================== 闪电主干 / 分叉 =====================
         Pass
         {
             Name "Bolt"
@@ -36,20 +41,21 @@ Shader "Hidden/Volken/LightningBolt"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // 显式声明目标等级:LineRenderer 的顶点色(COLOR)与后续可能的立体渲染
+            // 都需要 ≥3.0;不写会落到默认 2.5,在部分平台上出现难查的编译/表现问题。
+            #pragma target 3.0
             #include "UnityCG.cginc"
 
             struct appdata
             {
                 float4 vertex : POSITION;
                 float4 color  : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct v2f
             {
                 float4 vertex : SV_POSITION;
                 float4 color  : COLOR;
-                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             float4 _Color;
@@ -58,9 +64,6 @@ Shader "Hidden/Volken/LightningBolt"
             v2f vert(appdata v)
             {
                 v2f o;
-                UNITY_SETUP_INSTANCE_ID(v);
-                UNITY_INITIALIZE_OUTPUT(v2f, o);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 // LineRenderer 的顶点色渐变(两端渐隐)保留下来,乘上材质色
                 o.color = v.color * _Color;
@@ -77,68 +80,12 @@ Shader "Hidden/Volken/LightningBolt"
             }
             ENDCG
         }
-
-        // ===================== 落雷点球状闪光 =====================
-        Pass
-        {
-            Name "Flash"
-            Blend SrcAlpha One
-            ZWrite Off
-            ZTest Always              // 照亮整个视野,不受几何遮挡
-            Cull Off
-            Lighting Off
-            Fog { Mode Off }
-
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include "UnityCG.cginc"
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv     : TEXCOORD0;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-            };
-
-            struct v2f
-            {
-                float4 vertex : SV_POSITION;
-                float2 uv     : TEXCOORD0;
-                UNITY_VERTEX_OUTPUT_STEREO
-            };
-
-            float4 _Color;
-            float  _Intensity;
-            float  _CoreWidth;
-
-            v2f vert(appdata v)
-            {
-                v2f o;
-                UNITY_SETUP_INSTANCE_ID(v);
-                UNITY_INITIALIZE_OUTPUT(v2f, o);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                return o;
-            }
-
-            fixed4 frag(v2f i) : SV_Target
-            {
-                // 球面 UV 到中心的径向衰减(球体网格的 UV 在极点收敛,直接算径向即可)
-                float2 d = i.uv - 0.5;
-                float r = saturate(length(d) * 2.0);
-                float core = 1.0 - smoothstep(0.0, max(1e-4, _CoreWidth), r);
-                float halo = 1.0 - smoothstep(_CoreWidth, 1.0, r);
-                float glow = core + halo * 0.25;
-
-                float3 c = lerp(_Color.rgb, float3(1, 1, 1), core);
-                float a = saturate(glow * _Intensity * 0.05);
-                return fixed4(c * a, a);
-            }
-            ENDCG
-        }
     }
 
-    Fallback Off
+    // 【2026-09-28】原来是 Fallback Off。Fallback Off 的含义是"没有任何后备 shader 可用",
+    // 一旦本 shader 因任何原因不可用,渲染出来就是 Unity 的 Error shader(**淡紫/品红**)——
+    // 正是玩家看到的现象,而且看不出是哪一步出的问题。
+    // Hidden/Internal-Colored 是 Unity 内置、任何构建里都存在的最简着色器:
+    // 回退到它至少能画出"一条能看见的加色亮线",并且明显不是我们想要的样子,便于定位。
+    Fallback "Hidden/Internal-Colored"
 }

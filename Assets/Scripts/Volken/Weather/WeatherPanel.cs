@@ -413,8 +413,21 @@ namespace Volken.Weather
                 () => weather.Config?.lightning?.thunderDelay ?? 0.05f,
                 v => Set(c => c.lightning.thunderDelay = v), 0f, 5f, 2);
             AddSlider(group, "Volken.UI.ThunderDistanceAttenuation",
-                () => weather.Config?.lightning?.thunderDistanceAttenuation ?? 0.6f,
+                () => weather.Config?.lightning?.thunderDistanceAttenuation ?? 1f,
                 v => Set(c => c.lightning.thunderDistanceAttenuation = v), 0f, 1f, 2);
+
+            // ==== 雷声真实化(2026-09-28):距离 → 声速延迟 → near/far 阈值 ====
+            // 三个新参数放在一起,方便对照调:阈值决定"听哪一组",声速决定"延迟多久",
+            // 混合比例决定"远雷的延迟要不要按云底那一段缩短"。
+            AddSlider(group, "Volken.UI.ThunderNearDistance",
+                () => weather.Config?.lightning?.thunderNearDistance ?? 2000f,
+                v => Set(c => c.lightning.thunderNearDistance = v), 100f, 20000f, 0);
+            AddSlider(group, "Volken.UI.ThunderFallbackSpeedOfSound",
+                () => weather.Config?.lightning?.thunderFallbackSpeedOfSound ?? 343f,
+                v => Set(c => c.lightning.thunderFallbackSpeedOfSound = v), 50f, 1500f, 0);
+            AddSlider(group, "Volken.UI.ThunderSourceBlend",
+                () => weather.Config?.lightning?.thunderSourceBlend ?? 0.5f,
+                v => Set(c => c.lightning.thunderSourceBlend = v), 0f, 1f, 2);
 
             parent.Add(group);
         }

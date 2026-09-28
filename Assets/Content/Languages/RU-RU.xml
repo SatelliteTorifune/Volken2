@@ -85,8 +85,11 @@
     <s id="Volken.UI.LightningLightIntensity">Яркость света удара</s>
     <s id="Volken.UI.LightningLightRange">Радиус света удара (м)</s>
     <s id="Volken.UI.ThunderVolume">Громкость грома</s>
-    <s id="Volken.UI.ThunderDelay">Задержка грома (с)</s>
-    <s id="Volken.UI.ThunderDistanceAttenuation">Затухание грома по дистанции</s>
+    <s id="Volken.UI.ThunderDelay">Задержка грома на нулевой дистанции (с)</s>
+    <s id="Volken.UI.ThunderDistanceAttenuation">Гром: задержка по скорости звука / затухание</s>
+    <s id="Volken.UI.ThunderNearDistance">Порог близкого/дальнего грома (м)</s>
+    <s id="Volken.UI.ThunderFallbackSpeedOfSound">Резервная скорость звука (м/с)</s>
+    <s id="Volken.UI.ThunderSourceBlend">Источник грома: примесь нижней кромки облаков</s>
 
     <s id="Volken.UI.WeatherTiming">Ритм погоды</s>
     <s id="Volken.UI.WeatherMinDuration">Мин. длительность (с)</s>

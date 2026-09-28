@@ -324,8 +324,42 @@ namespace Volken.Weather
             /// <summary>雷声音量(0~1)。</summary>
             public float thunderVolume = 0.65f;
 
-            /// <summary>雷声是否按距离衰减(0 = 恒音量,1 = 按 1/距离 衰减)。</summary>
-            public float thunderDistanceAttenuation = 0.6f;
+            /// <summary>雷声是否按距离衰减(0 = 恒音量 + 恒 0.05s 延迟,1 = 按 1/距离 衰减 + 真实声速延迟)。</summary>
+            public float thunderDistanceAttenuation = 1f;
+
+            /// <summary>
+            /// near / far 雷声素材的分界距离(米)。
+            ///
+            /// 落点到**观测者**的距离 ≤ 本值 → 播 <c>volkenThrunder-near-*</c>(短促、起始即峰值);
+            /// 否则 → 播 <c>volkenThrunder-far-*</c>(延迟起峰、长隆隆)。
+            ///
+            /// 默认 2000:与 <see cref="targetRange"/>(默认 3000 m)同量级 —— 落点散布范围
+            /// 大致是 0~3.6 km,阈值落在区间中位偏近处,近/远两种都能真的听到。
+            /// 对应延迟 ≈ 5.9 s(Droo 340 m/s),即"闪光后约 6 秒听到雷"。
+            /// </summary>
+            public float thunderNearDistance = 2000f;
+
+            /// <summary>
+            /// 音速取不到时的兜底值(米/秒)。默认 343(地球海平面)。
+            ///
+            /// 【何时会取不到】声速来自 <c>ICraftFlightData.AtmosphereSample.SpeedOfSound</c>,
+            /// 而它在"无物理大气"或"高度 ≥ 大气顶"时**恒为 0**(见 JNO 的
+            /// <c>PlanetAtmosphereData.SampleAltitude</c> 卫语句)。真空里没有雷声可言,
+            /// 但天气系统可能在边缘高度放雷,所以要有兜底而不是除 0。
+            /// </summary>
+            public float thunderFallbackSpeedOfSound = 343f;
+
+            /// <summary>
+            /// 雷击"声源距离"里"云底距离"的混合比例(0~1),默认 0.5。
+            ///
+            /// 【为什么不是纯"到落点的直线距离"】雷声由**整条放电通道**(云底↔落点)发出,
+            /// 不是落点一个点。远处观测者先听到的是**声程最短的那一段**(通常是云底那一端),
+            /// 所以真实延迟比"到落点距离 / 声速"要短:
+            ///   0 = 纯落点距离(远雷延迟偏长,隆隆来得太晚)
+            ///   1 = 取 min(落点距离, 云底距离)(远雷先到,近雷仍是落点的"炸响")
+            /// 默认 0.5 取两者之间。
+            /// </summary>
+            public float thunderSourceBlend = 0.5f;
 
             public void CopyFrom(LightningSection s)
             {
@@ -347,6 +381,9 @@ namespace Volken.Weather
                 thunderDelay = s.thunderDelay;
                 thunderVolume = s.thunderVolume;
                 thunderDistanceAttenuation = s.thunderDistanceAttenuation;
+                thunderNearDistance = s.thunderNearDistance;
+                thunderFallbackSpeedOfSound = s.thunderFallbackSpeedOfSound;
+                thunderSourceBlend = s.thunderSourceBlend;
             }
         }
 
@@ -459,6 +496,9 @@ namespace Volken.Weather
             lightning.thunderDelay = Mathf.Clamp(lightning.thunderDelay, 0f, 10f);
             lightning.thunderVolume = Mathf.Clamp01(lightning.thunderVolume);
             lightning.thunderDistanceAttenuation = Mathf.Clamp01(lightning.thunderDistanceAttenuation);
+            lightning.thunderNearDistance = Mathf.Max(1f, lightning.thunderNearDistance);
+            lightning.thunderFallbackSpeedOfSound = Mathf.Clamp(lightning.thunderFallbackSpeedOfSound, 1f, 5000f);
+            lightning.thunderSourceBlend = Mathf.Clamp01(lightning.thunderSourceBlend);
         }
 
         /// <summary>拷贝全部字段(供"重置为默认"/复制记录时用)。</summary>

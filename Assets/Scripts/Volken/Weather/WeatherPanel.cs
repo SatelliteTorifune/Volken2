@@ -268,43 +268,136 @@ namespace Volken.Weather
             parent.Add(group);
         }
 
-        // ======================= 雨(占位) =======================
+        // ======================= 雨(实时控制) =======================
 
         /// <summary>
-        /// 雨的参数组 —— **整组禁用**。雨实现已于 2026-09-27 整体移除
-        /// (见 docs/Volken-天气雨雾移植失败教训-2026-09-27.md),这些字段没有消费者。
-        /// 保留分组是为了:① 结构完整;② 重做雨时参数位与默认值都还在。
+        /// 雨参数组(**2026-09-29 起为实时控制**:阶段 3 正式雨滴已落地)。
+        /// 参数改完立刻推给 <see cref="RainParticles.ApplyConfig"/>(容量 → 重建 buffer、雨丝长宽 → 重建网格);
+        /// 持续型参数由 RainParticles 每帧读取静态字段。SP2 出厂值见计划 §10.15。
         /// </summary>
         private static void BuildRainGroup(GroupModel parent, VolkenWeather weather)
         {
             var group = new GroupModel(Locale.GetString("Volken.UI.WeatherRain"));
 
-            group.Add(new TextModel(Locale.GetString("Volken.UI.WeatherRainRemoved"), () => "—"));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainEnabled"),
+                () => weather.Config?.rain?.enabled ?? false, v =>
+                {
+                    Set(c => c.rain.enabled = v);
+                    RainParticles.ApplyConfig(VolkenWeather.Instance?.Config?.rain);
+                    RainParticles.SetEnabled(v ? 1 : 0);   // 内含 AttachToCurrentView
+                }));
 
-            AddDisabledToggle(group, "Volken.UI.RainEnabled",
-                () => weather.Config?.rain?.enabled ?? false);
-            AddDisabledSlider(group, "Volken.UI.RainTriggerValue", 0f, 10f, 2,
-                () => weather.Config?.rain?.triggerValue ?? 2.25f);
-            AddDisabledSlider(group, "Volken.UI.RainAmount", 0f, 200000f, 0,
-                () => weather.Config?.rain?.amount ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainDomainRadius", 10f, 400f, 0,
-                () => weather.Config?.rain?.domainRadius ?? 0f);
+            // 状态行(与雷电组同风格:实时数值)
+            group.Add(new TextModel(Locale.GetString("Volken.UI.RainStats"),
+                () => RainParticles.StatsLine()));
+
+            // 立即开关(调试用:不用等天气值到阈值)
+            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainToggleNow"), _ =>
+            {
+                bool now = !(VolkenWeather.Instance?.Config?.rain?.enabled ?? false);
+                Set(c => c.rain.enabled = now);
+                RainParticles.ApplyConfig(VolkenWeather.Instance?.Config?.rain);
+                RainParticles.SetEnabled(now ? 1 : 0);
+                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                    Locale.GetString(now ? "Volken.UI.RainOnMsg" : "Volken.UI.RainOffMsg"));
+            }));
+
+            // 密度(粒子数):SP2 出厂 100000@R50 = 0.191/m³,EVE 参考 0.139/m³
+            AddSlider(group, "Volken.UI.RainAmount",
+                () => weather.Config?.rain?.amount ?? 20000f,
+                v => ApplyRain(c => c.rain.amount = v), 1000f, 200000f, 0, true);
+
+            AddSlider(group, "Volken.UI.RainDomainRadius",
+                () => weather.Config?.rain?.domainRadius ?? 50f,
+                v => ApplyRain(c => c.rain.domainRadius = v), 10f, 400f, 0);
+
+            AddSlider(group, "Volken.UI.RainFallSpeed",
+                () => weather.Config?.rain?.fallSpeed ?? 15f,
+                v => ApplyRain(c => c.rain.fallSpeed = v), 0.5f, 60f, 1);
+
+            AddSlider(group, "Volken.UI.RainStreakLength",
+                () => weather.Config?.rain?.streakLength ?? 2.5f,
+                v => ApplyRain(c => c.rain.streakLength = v), 0.1f, 20f, 2);
+
+            AddSlider(group, "Volken.UI.RainStreakWidth",
+                () => weather.Config?.rain?.streakWidth ?? 0.1f,
+                v => ApplyRain(c => c.rain.streakWidth = v), 0.005f, 0.6f, 3);
+
+            AddSlider(group, "Volken.UI.RainStretch",
+                () => weather.Config?.rain?.stretchAmount ?? 0.045f,
+                v => ApplyRain(c => c.rain.stretchAmount = v), 0f, 0.3f, 3);
+
+            // 拉伸上限(雨丝最长 = 长度 × 本值;治"太长像面条")
+            AddSlider(group, "Volken.UI.RainStretchLimit",
+                () => weather.Config?.rain?.stretchLimit ?? 3.5f,
+                v => ApplyRain(c => c.rain.stretchLimit = v), 1f, 12f, 2);
+
+            AddSlider(group, "Volken.UI.RainEdgeFade",
+                () => weather.Config?.rain?.edgeFade ?? 0.2f,
+                v => ApplyRain(c => c.rain.edgeFade = v), 0f, 0.5f, 2);
+
+            AddSlider(group, "Volken.UI.RainSoftParticles",
+                () => weather.Config?.rain?.softParticles ?? 1f,
+                v => ApplyRain(c => c.rain.softParticles = v), 0f, 3f, 2);
+
+            AddSlider(group, "Volken.UI.RainTailFalloff",
+                () => weather.Config?.rain?.tailFalloff ?? 0.9f,
+                v => ApplyRain(c => c.rain.tailFalloff = v), 0f, 1f, 2);
+
+            AddSlider(group, "Volken.UI.RainBrightness",
+                () => weather.Config?.rain?.brightness ?? 0f,
+                v => ApplyRain(c => c.rain.brightness = v), 0f, 3f, 2);
+
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainStreamMode"),
+                () => weather.Config?.rain?.streamMode ?? true,
+                v => ApplyRain(c => c.rain.streamMode = v)));
+
+            // 出域处置(SP2 风格 = 镜像重生,从边界进入,近旁不爆闪)
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRespawnMirror"),
+                () => weather.Config?.rain?.respawnMirror ?? true,
+                v => ApplyRain(c => c.rain.respawnMirror = v)));
+
+            // 阶段 6 才接天气状态机:阈值现在就可调(手动场景下先看效果)
+            AddSlider(group, "Volken.UI.RainTriggerValue",
+                () => weather.Config?.rain?.triggerValue ?? 2.25f,
+                v => Set(c => c.rain.triggerValue = v), 0f, 10f, 2);
+
+            // ==== 海拔闸门(必需:JNO 镜头能缩到整颗星球,不限制会在太空下雨)====
+            AddSlider(group, "Volken.UI.RainCeilingAltitude",
+                () => weather.Config?.rain?.ceilingAltitude ?? 0f,
+                v => ApplyRain(c => c.rain.ceilingAltitude = v), 0f, 200000f, 0, true);
+            AddSlider(group, "Volken.UI.RainCeilingBand",
+                () => weather.Config?.rain?.ceilingBand ?? 0.4f,
+                v => ApplyRain(c => c.rain.ceilingBand = v), 0.05f, 1f, 2);
+
+            // 阶段 4 实现前禁用:域半径随相机速度自适应
             AddDisabledToggle(group, "Volken.UI.RainAdaptiveDomain",
-                () => weather.Config?.rain?.adaptiveDomain ?? false);
-            AddDisabledSlider(group, "Volken.UI.RainFallSpeed", 1f, 60f, 1,
-                () => weather.Config?.rain?.fallSpeed ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainStrength", 0f, 4f, 2,
-                () => weather.Config?.rain?.strength ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainWindInfluence", 0f, 1f, 2,
-                () => weather.Config?.rain?.windInfluence ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainStreakLength", 0.1f, 20f, 2,
-                () => weather.Config?.rain?.streakLength ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainStreakWidth", 0.001f, 1f, 3,
-                () => weather.Config?.rain?.streakWidth ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.RainVolume", 0f, 1f, 2,
-                () => weather.Config?.rain?.volume ?? 0f);
+                () => weather.Config?.rain?.adaptiveDomain ?? true);
+
+            // ==== 开发自检(原控制台指令的 UI 化:2026-09-29 删除 volkenRainP2* 系列)====
+            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainDumpLog"), _ =>
+            {
+                RainParticles.DiagStatus();   // 把完整状态写进 Player.log(方便发日志排查)
+                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.RainDumped"));
+            }));
+
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRowTest"),
+                () => RainParticles.TestRow, v =>
+                {
+                    RainParticles.TestRow = v;
+                    Mod.Diag("RainParticles: testRow = {0} (阶段2.3 等距排自检:相机前 30m 一排 3m 间距,应见 6~7 根竖条)", v);
+                }));
 
             parent.Add(group);
+        }
+
+        /// <summary>雨的 setter:写配置 + 立刻推给运行时(UI → 系统)。</summary>
+        private static void ApplyRain(Action<VolkenWeatherConfig> mutate)
+        {
+            var cfg = VolkenWeather.Instance?.Config;
+            if (cfg == null || cfg.rain == null) return;
+            mutate(cfg);
+            RainParticles.ApplyConfig(cfg.rain);
         }
 
         // ======================= 雾(占位) =======================

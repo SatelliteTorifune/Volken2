@@ -8,40 +8,6 @@ using UnityEngine.Audio;
 namespace Volken.Weather
 {
     
-    /// <summary>
-    /// 随机闪电生成 + 雷声 —— 移植自 SP2 的 <c>Enviro.EnviroLightningModule</c>。
-    ///
-    /// 【原版触发链】
-    ///   <c>lightningStorm = true</c> → <c>UpdateModule()</c> 累计间隔 →
-    ///   <c>CastLightningBoltRandom()</c>(源点 = 云层中高 <c>(云底+云顶)/2</c> 加随机偏移,
-    ///   落点 = 地面加随机偏移)→ 实例化 lightning prefab → <c>CastBolt(from, to)</c> →
-    ///   延迟 0.05s → <c>PlayRandomThunderSFX()</c>(从 <c>thunderClips</c> 里随机播一条)。
-    ///
-    /// 【SR2 侧的差异与对策】
-    ///   1. <c>lightningStorm</c> 在 SP2 是天气预设里的布尔开关;SR2 没有预设系统 →
-    ///      直接用 <c>lightning.stormValue</c>(默认 2.5,可调)表达同一语义,
-    ///      再加一个 <c>VolkenWeatherConfig.LightningSection.enabled</c> 总开关。
-    ///   2. 雷声音频:SP2 从 <c>EnviroAudioModule.thunderClips</c> 随机;这里从 mod bundle 里
-    ///      载入 <c>volkenThrunder-near-1~4.wav</c> 与 <c>volkenThrunder-far-1~5.wav</c>,
-    ///      缺失时静默降级为无雷声。**近/远各一组**,按落点到观测者的距离选(见下)。
-    ///   3. 云层中高:SP2 读 Enviro 的 <c>bottomCloudsHeight/topCloudsHeight</c>;这里读
-    ///      Volken 主层的 <c>layerHeights/layerSpreads/layerStrengths</c> —— 保证雷从**真正的云**里出来。
-    ///
-    /// 【雷声延迟 / 音色(2026-09-28 真实化改造)】原版固定 0.05s(它把"光线先到、声音后到"忽略了)。
-    /// 现在按三步走,每一步都能在日志里看到:
-    ///   ① **距离**:落点到**观测者(相机,与 craft 同参考系)**的欧氏距离 <c>strikeDist</c>。
-    ///      ⚠️ 修掉了一个老 bug:此前 <c>OnBoltLanded</c> 回传的是 <c>Distance(bolt起点, 落点)</c>,
-    ///      也就是 **bolt 自身长度**(云底到地面那几公里),**与玩家在哪毫无关系** ——
-    ///      所以"远雷/近雷"之前根本没在按距离区分。
-    ///   ② **声速**:读 <c>ICraftFlightData.AtmosphereSample.SpeedOfSound</c>。
-    ///      它由行星大气成分与**平均表面温度**算出(<c>sqrt(γ·k·T/m)</c>),**不随高度变化** ——
-    ///      游戏自己的马赫数/阻力用的就是它,所以这里照用,不去自算(自算会与 HUD 打架)。
-    ///      无物理大气或高度 ≥ 大气顶时它恒为 0 → 回退 <c>thunderFallbackSpeedOfSound</c>。
-    ///      实测量级:Droo 340 / Cylero 233 / Tydos 931 m/s —— 硬编码 343 在 Tydos 上要差 2.7 倍。
-    ///   ③ **音色阈值**:<c>strikeDist &lt;= thunderNearDistance</c> → near,否则 far。
-    /// 延迟 = <c>lerp(thunderDelay, 声程 / 声速, thunderDistanceAttenuation)</c>,用
-    /// <c>AudioSource.PlayScheduled</c> 定时,不占协程(<c>0</c> = 回到原版 0.05s 行为)。
-    /// </summary>
     public class LightningModule : MonoBehaviour
     {
         /// <summary>近雷素材路径模板(参数 = 序号 1..<see cref="NearClipCount"/>)。</summary>
@@ -58,7 +24,6 @@ namespace Volken.Weather
         ///
         /// 【为什么不是 1 个 AudioSource】雷声素材最长约 16s,而 <c>lightning.minDelay</c>
         /// 下限是 0.05s —— 单个 AudioSource 上第二次 <c>PlayScheduled</c> 会**顶掉**第一条,
-        /// 听感是"雷声突然断掉",这是最容易听出来的不真实之一。
         /// 多个通道轮转,配合一个最小冷却:密度够高时最坏情况是"新雷抢占最旧通道"。
         /// </summary>
         private const int ThunderVoices = 4;

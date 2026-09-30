@@ -1,5 +1,6 @@
 # Volken 雷声真实化可行性分析(2026-09-28)
 
+> 状态:⏸ **已转 proposals(暂停)** —— 代码 / 配置 / UI / 文案已落地(C# 0 错误),**Unity 侧打包与真机验收未做**(未做完雷声仍静音);暂不排期。**母计划**:[`sp2-weather-port-2026-09-27.md`](sp2-weather-port-2026-09-27.md)。
 > 需求(用户原话拆成三条):
 > 1. 确定"雷声来源"与 **craft** 之间的距离;
 > 2. 根据 craft 当前处的**声速**确定延迟;
@@ -78,8 +79,8 @@ strikeDist  = Vector3.Distance(observerPos, landing)
 
 | 事实 | 位置 |
 |---|---|
-| `ICraftFlightData.AtmosphereSample` | `jnoCode/ModApi/Craft/ICraftFlightData.cs` |
-| `AtmosphereSample.SpeedOfSound` → **`float`,单位 m/s** | `jnoCode/ModApi/Planet/AtmosphereSample.cs:75` |
+| `ICraftFlightData.AtmosphereSample` | `<JNO_CODE>/ModApi/Craft/ICraftFlightData.cs` |
+| `AtmosphereSample.SpeedOfSound` → **`float`,单位 m/s** | `<JNO_CODE>/ModApi/Planet/AtmosphereSample.cs:75` |
 | 取值口径 = `CalculateSpeedOfSound(MeanSurfaceTemperature, MeanGamma, MeanMassPerMolecule)` | `PlanetAtmosphereData.cs:920` |
 | 公式 = `sqrt(γ·1.38e-23·T / m_molecule)` | `PlanetAtmosphereData.cs:548-551` |
 | `MeanSurfaceTemperature = (MeanDay + MeanNight) / 2`;**过 0 时 = 0** | `PlanetAtmosphereData.cs:887` + `SampleAltitude():905` 的 `HasPhysicsAtmosphere && altitude < Height` 卫语句 |

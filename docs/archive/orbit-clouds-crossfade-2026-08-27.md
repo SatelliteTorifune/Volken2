@@ -3,7 +3,7 @@
 > 状态:✅ 已归档(原状态:已实现 M0~M3,2026-08-27 收工;轨道 2D 云 + 交叉淡入)
 > 日期:2026-08-27
 > 依据:KSA 源码(`<KSA_REF>Atmosphere/Rendering/`)实读 + Volken 现行代码
-> 关联文档:[Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md](Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md)、[../Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md](../Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md)(#2 距离淡出/LOD、#8 层壳相交排序)
+> 关联文档:[ksa-temporal-upscale-port-2026-08-24.md](ksa-temporal-upscale-port-2026-08-24.md)、[../proposals/cloud-optimization-roadmap-2026-08-28.md](../proposals/cloud-optimization-roadmap-2026-08-28.md)(#2 距离淡出/LOD、#8 层壳相交排序)
 
 ## 0. 结论速览
 

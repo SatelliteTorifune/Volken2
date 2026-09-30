@@ -41,10 +41,27 @@
     <s id="Volken.UI.CloudLinkageDarken">Погода в затемнение облаков</s>
     <s id="Volken.UI.CloudLinkageWind">Погода в ветер облаков</s>
 
-    <s id="Volken.UI.WeatherRain">Дождь (удалён, заготовка)</s>
+    <s id="Volken.UI.WeatherRain">Дождь (этап 3, в реальном времени)</s>
+    <s id="Volken.UI.RainStats">Состояние (в реальном времени)</s>
+    <s id="Volken.UI.RainToggleNow">Переключить дождь</s>
+    <s id="Volken.UI.RainOnMsg">Дождь включён</s>
+    <s id="Volken.UI.RainOffMsg">Дождь выключен</s>
+    <s id="Volken.UI.RainStreamMode">Струи вдоль относительной скорости (SP2 AlignStreaks; выкл = всегда радиально вниз)</s>
+    <s id="Volken.UI.RainStretch">Растяжение от скорости (SP2 0.045; 0 = нет)</s>
+    <s id="Volken.UI.RainStretchLimit">Предел растяжения (макс. длина = длина x это; уменьшите, если слишком длинно)</s>
+    <s id="Volken.UI.RainEdgeFade">Ширина затухания у границы домена (доля радиуса; 0 = выкл, по умолчанию 0.2)</s>
+    <s id="Volken.UI.RainSoftParticles">Мягкие частицы (0 = жёсткий край, 1 = по умолчанию SP2)</s>
+    <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи (SP2 _falloff, 0.9)</s>
+    <s id="Volken.UI.RainBrightness">Яркость (0 = исходная)</s>
     <s id="Volken.UI.WeatherRainRemoved">Система дождя удалена и будет переделана; значения ниже — заготовки и ни на что не влияют.</s>
     <s id="Volken.UI.RainEnabled">Дождь включён</s>
     <s id="Volken.UI.RainTriggerValue">Порог значения погоды</s>
+    <s id="Volken.UI.RainCeilingAltitude">Предел высоты дождя (м; 0 = без ограничения)</s>
+    <s id="Volken.UI.RainCeilingBand">Полоса затухания у предела (доля; 0.4 = верхние 40%)</s>
+    <s id="Volken.UI.RainRespawnMirror">Зеркальное перерождение (вкл = конвейер с периодическими сгустками; выкл = случайное смешивание, рекомендуется)</s>
+    <s id="Volken.UI.RainDumpLog">Записать состояние дождя в лог (для диагностики)</s>
+    <s id="Volken.UI.RainDumped">Состояние дождя записано в Player.log</s>
+    <s id="Volken.UI.RainRowTest">Отладка: тестовый ряд (SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">Количество частиц</s>
     <s id="Volken.UI.RainDomainRadius">Радиус области (м)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Адаптивный радиус области</s>

@@ -116,7 +116,7 @@ float4 dist   = lerp(float4(1,1,1,1), stockBand, stockEff * valid);
 
 ### 3.3 为什么不是覆盖分解 F2(rotDistStrength)
 
-`Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md` 的 F2 = `coverage ×= lerp(1, rotDistValue, strength)`:
+`[coverage-decomposition-2026-08-27.md](coverage-decomposition-2026-08-27.md)` 的 F2 = `coverage ×= lerp(1, rotDistValue, strength)`:
 - 该文档**未实现**(代码无 `rotDistStrength`/`biomeStrength`);
 - 即便实现,自带云近二值 → F2 只做"区域内有没有云"的存在性门控,**削不薄足迹内部**。
 
@@ -175,8 +175,8 @@ float4 dist   = lerp(float4(1,1,1,1), stockBand, stockEff * valid);
 
 ## 8. 参考
 
-- [Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md](Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md) —— 自带云接入的原始设计(风险 1 已预告"后续可加独立补偿",现实现为 `stockDensityScale`)。
-- [Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md](Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md) —— F2(未实现)与 §3.3 的对比。
+- [stock-cloud-distribution-2026-08-23.md](stock-cloud-distribution-2026-08-23.md) —— 自带云接入的原始设计(风险 1 已预告"后续可加独立补偿",现实现为 `stockDensityScale`)。
+- [coverage-decomposition-2026-08-27.md](coverage-decomposition-2026-08-27.md) —— F2(未实现)与 §3.3 的对比。
 - `Clouds.shader` `SampleLightRay`(:549-572) —— §4 附带优化的落点。
 
 ---

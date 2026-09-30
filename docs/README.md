@@ -2,62 +2,74 @@
 
 > 项目:Volken(SimpleRockets 2 / JNO 体积云 mod,Unity BIRP)
 > **新会话先读:[`AGENT_CONTEXT.md`](AGENT_CONTEXT.md)**(项目路径 / 关键文件 / 已定技术事实 / 开发约定,可直接作为提示词)。
-> 说明:本文档是 `docs/` 的导航页。**当前活跃文档:`to-do.md`(待办)、`Volken-SP2天气系统移植BIRP计划-2026-09-27.md`(天气系统,现只做雷电)、`Volken-天气雨雾移植失败教训-2026-09-27.md`(雨/雾重做前必读的复盘)、`Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md`(优化路线图)、`Volken-水体系统大修可行性分析-2026-09-02.md`(评估完成,实施未排期)**,其余已完成/历史文档已移入 [`archive/`](archive/)。
-> 约定:方案/排查/分析单一主题一个文件,写清「状态 + 决策记录」,完成后移入 `archive/` 并在此更新索引;**完整文档写入规则见 [§四](#四文档写入规则维护约定)**。
+> 说明:本文档是 `docs/` 的导航页。**三区**:根目录 = 活跃(已动手) → [`proposals/`](proposals/) = 已论证 / 待拍板(未在动手) → [`archive/`](archive/) = 已完成 / 历史。
+> **当前活跃只有一件:[`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md)(SP2 雨系统移植)**;另有 [`to-do.md`](to-do.md)(待办台账)。其余全部在 [`proposals/`](proposals/)(天气母计划 / 雷声真实化 / 体积云优化路线图 / 水体大修)与 [`archive/`](archive/)。
+> 约定:方案/排查/分析单一主题一个文件,写清「状态 + 决策记录」,未拍板移入 `proposals/`、完成移入 `archive/`,并在此更新索引;**完整文档写入规则见 [§五](#五文档写入规则维护约定)**。
 > **调试日志路径**:`<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log`(Unity 运行时日志)。
 
 ---
 
-## 一、当前活跃(尚有未完成工作)
+## 一、当前活跃(已动手)
 
 | 文档 | 主题 | 状态 | 一句话摘要 |
 |---|---|---|---|
-| [`to-do.md`](to-do.md) | **待办清单**(高/低优先度 + 已修复台账) | 📋 活跃 backlog | config 卡住(高)、星环渲染顺序/Craft 高轨道云 scale(低);已修复项附根因简述(水面覆盖云、TSS 拖影、原点重置偏移、JNO 冲突) |
-| [`Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md`](Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md) | **体积云优化路线图**(借鉴 VolRe/KSA) | 📋 分析完成,T0 部分落地 | 13 项优化点按收益排名:T0 光照解耦(50→6 样本)/距离淡出,已被方案 C、轨道云部分消化;**Light Volume、PlaceRays 为长期项** |
-| [`Volken-水体系统大修可行性分析-2026-09-02.md`](Volken-水体系统大修可行性分析-2026-09-02.md) | **水体大修可行性**(路线 A~E) | 📋 评估完成,实施未排期 | 建议先 A/B 零风险调参(运行时改参/水下观感),E 整换 shader 为数周级终局;反射云(方案 A)已落地 |
-| [`Volken-SP2天气系统移植BIRP计划-2026-09-27.md`](Volken-SP2天气系统移植BIRP计划-2026-09-27.md) | **SP2 天气系统移植(原生 BIRP)** | 🚧 实施中,**范围已缩减为「只做雷电」**(雨/雾实现已整体移除,配置保留占位待重做) | 保留:骨架(天气状态机)、**天气参数按预设名独立存(预设名与云层互相独立,`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`)**、闪电(C# 雷暴循环 + 程序化 bolt shader + 5 条雷声)、五分组天气面板、三语言文案。**已移除**:雨(compute + shader + `Rain.cs`)、雾(`FogRenderer` + `HeightFog.shader`)、雨声 —— stash 在 `%TEMP%\volken-rain-fog-stash`;**`WeatherTypes.cs`(SP2 全局天气档位)也已删除**(改为玩家逐项设置参数)。**§10.2/10.2b/10.2c0/10.2c2/10.2d 记录 30+ 处实测更正**;**§10.2e 是移除记录**;**§10.2f 是被取代的配置方案(勿照做)**;**§10.2g 是配置合并**;**§10.2h 是天气标度路线修正**;**§10.3 列剩余待真机确认项(打包清单、XML 往返)**;**复盘见 [`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md)** |
-| [`Volken-雷声真实化可行性分析-2026-09-28.md`](Volken-雷声真实化可行性分析-2026-09-28.md) | **雷声真实化**(雷击↔craft 距离 → 按声速定延迟 → 阈值选 near/far)+ **闪电永久残留修复** | 🚧 代码/配置/UI/文案已实施(C# 0 错误),**Unity 侧打包待做(未做则雷声仍静音)** | 三步都可行,游戏 API 直接提供 `AtmosphereSample.SpeedOfSound`(按行星大气成分+平均表面温度算,不随高度变;实测 Droo 340 / Cylero 233 / Tydos 931 m/s,硬编码 343 在 Tydos 上差 2.7 倍)。**修掉的坑**:① 旧 `OnBoltLanded` 回传的是"bolt 自身长度"而非到玩家的距离;② 距离衰减被算两次(改 `sqrt`);③ 单 AudioSource 互相打断(改 4 通道池 + 冷却);④ 远雷 `spread` 60°→160°;⑤ 水平/垂直分解必须沿地表法线而非 world Y/Z。**§7 另修**:闪电永久残留 —— 根因是 `StartCoroutine` 在 bolt 为 inactive 时**静默失败**(Player.log 实证),而 `Update()` 的 `if (!_fadeOut) return;` 让自毁链成为单点故障;现改为 `Update` 驱动的时间状态机 + 三条独立销毁路径 + 根物体 + `DestroyAll()`。**§8 另修**:闪电偶发**紫红色** —— 不是编译失败(日志无 shader error)而是**运行时材质被销毁**(分叉共享主干材质 + 主干 `Destroy(_boltMat)`);顺带修掉一个真 bug:两 Material 共用双 Pass shader 且两 Pass 无 `LightMode` → 落点闪光球一直在跑主干画法,现拆为 `LightningBolt.shader` + **新增 `LightningFlash.shader`**,并把 `Fallback Off` 改为 `Fallback "Hidden/Internal-Colored"`。**仍阻塞**:9 个 `volkenThrunder-*.wav` 与新增的 `LightningFlash.shader` 均无 `.meta`/GUID、`_otherAssets` 里 5 条旧 OGG GUID 全悬空 → 必须在 Unity 里导入+设导入设置+改清单+重建 |
-| [`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md) | **雨/雾移植失败复盘(根因 + 铁律 + 诊断方法)** | ✅ 复盘完成(原状态:移植失败并移除) | 直接原因 = **雨丝长度轴表达错了空间**(世界空间长度轴 + 任意宽度轴 → 视角相关的"横块");真正原因 = **诊断量错对象**(用世界空间夹角当屏幕倾角)。**4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线**;重做雨/雾**前必读** |
+| [`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md) | **SP2 雨系统 `ParticleDomain` 移植难点 + 分步计划** | 🚧 **实施中(唯一在动手的方案)** | 雨重做的执行细案 + **动手前必读**。**4 条真难点**:①SP2 的 `AlignStreaks` 是**世界空间长度轴**(正是本项目已判死刑的路线),会以**同源症状**复发(上次是"横块",SP2 在 `fwd∥视线` 时同样"横块"、另多一种"细线")→ 必须改用屏幕平面构轴;②URP 遮挡专有物在 BIRP 不存在 → 方案 A(无遮挡起步)/B(二期),并带**空深度图会让雨整体消失且无报错**的护栏;③**6 个 kernel 的 HLSL 源码全安装不存在**(只有 DXBC),且 **sp2d4 是 Unity 6000.2 而本工程 2022.3** → **必须手写 `.compute`**;④数量级必须重标定(域半径随相机速度自适应 + 密度补偿 r^2.5)。**8 阶段**各带准出判据与停止条件;**§10 为实施记录**(详见文档) |
+| [`to-do.md`](to-do.md) | **待办清单**(高/低优先度 + 已修复台账) | 📋 活跃 backlog | config 卡住(高)、星环渲染顺序/Craft 高轨道云 scale(低);已修复项附根因简述(水面覆盖云、TSS 拖影、原点重置偏移、JNO 冲突、闪电残留/紫红) |
 
 ---
 
-## 二、已归档(历史 / 已完成)
+## 二、提案 · 待拍板(`proposals/`,未在动手)
+
+> 已论证 / 已评估,但**当前不排期**;要动手时按 §五「三区流转」第 2 条移回根目录。
 
 | 文档 | 主题 | 状态 | 一句话摘要 |
 |---|---|---|---|
-| [`archive/Volken-方案A-stockDensityScale-自带云区域内密度缩放-2026-09-06.md`](archive/Volken-方案A-stockDensityScale-自带云区域内密度缩放-2026-09-06.md) | **方案 A:自带云区域内密度缩放** | ✅ 已实现归档(2026-09-06) | `stockDensityScale`(默认 1)只压区域内附加密度地板、`dist` 保足迹边缘;`scale<1` 把实心云拆成蓬松结构;翻案自阈值重映射(见 §9 历史) |
-| [`archive/Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md`](archive/Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md) | **方案 B:游戏自带云 cubemap 作全球分布形状** | ✅ 已实现归档(2026-08-23) | `useStockCloudMap` 把 Clouds cubemap 接入 layers/shape 两处分布源;`stockMapStrength=0` 逐字节回退;缺层/无云星球逐带回退 |
-| [`archive/Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md`](archive/Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md) | **方案 C:KSA 体积云技术移植(BIRP,时序超采样核心)** | ✅ 已实现归档(2026-08-24,2026-08-27 收工) | 低清全量 raymarch + 全清时序上采样 + 运动自适应;重投影 Y 镜像已修;坐标原点重置已修;JNO 冲突已定位 |
-| [`archive/Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md`](archive/Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md) | **覆盖分解:biome × 旋转分布 × tiled detail** | ✅ 已实现归档(2026-08-27) | `coverage = cloudCoverage × F_biome × F_rotDist × F_tiledDetail`,三强度默认 0 = 逐字节一致 |
-| [`archive/Volken-轨道云与过渡带交叉淡入-可行性分析-2026-08-27.md`](archive/Volken-轨道云与过渡带交叉淡入-可行性分析-2026-08-27.md) | **轨道 2D 云 + 过渡带交叉淡入** | ✅ 已实现归档(M0~M3,2026-08-27) | `OrbitClouds` 壳求交 + 同源密度采样,`orbitFade` 交叉淡入;海拔分派:低空体积云 / 高空 2D 云;夜间晨昏线已修 |
-| [`archive/Volken-割裂线排查记录-运动残影TSS关-2026-08-25.md`](archive/Volken-割裂线排查记录-运动残影TSS关-2026-08-25.md) | **割裂线排查(TSS 关 + 运动残影)** | ✅ 已修复归档(2026-08-25) | 根因 = 重投影矩阵用逻辑投影,与射线重建 clip 约定差 Y 翻转 → 历史镜像采样;修复:`GL.GetGPUProjectionMatrix` |
-| [`archive/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE-2026-08-27.md`](archive/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE-2026-08-27.md) | **JNO 联机 mod 冲突(NRE 中断 SceneLoaded 事件链)** | ✅ 已定位并修复归档(2026-08-27) | JNO `MultiPlayerUI.OnSceneLoaded` 对 null `inspectorPanel` 解引用抛 NRE → 事件链中断 → Volken 初始化被跳过;JNO 侧空值护栏(手动应用) |
-| [`archive/Volken-实时反射适配分析-2026-09-02.md`](archive/Volken-实时反射适配分析-2026-09-02.md) | **实时反射适配分析**(水面平面反射 / 机体探头) | ✅ 分析完成,方案 A 已落地归档(2026-09-02) | 云只渲染在主相机 OnRenderImage;方案 A(水面反射合入云)已落地,方案 B(机体 cubemap 探头)后置未做 |
+| [`proposals/sp2-weather-port-2026-09-27.md`](proposals/sp2-weather-port-2026-09-27.md) | **SP2 天气系统移植(原生 BIRP)母计划** | ⏸ 暂停 / 转参考(原状态:🚧 实施中,范围缩减为只做雷电) | 骨架(天气状态机)+ 雷电 + **天气参数按预设名独立存**(与云预设互不干扰,`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`)+ 五分组面板已落地;**雨/雾实现已整体移除**。**仍是最有价值的决策沿革与素材/API 底账**:§10.2/10.2b/10.2c0/10.2c2/10.2d 记录 30+ 处实测更正、§10.2e 移除记录、§10.2f 勿照做、§10.2g 配置合并、§10.2h 天气标度路线修正。活跃部分已拆出 → 雨见 §一、雷声收尾见本表下一行 |
+| [`proposals/thunder-realism-2026-09-28.md`](proposals/thunder-realism-2026-09-28.md) | **雷声真实化**(雷击↔craft 距离 → 按声速定延迟 → 阈值选 near/far)+ **闪电残留/紫红修复** | ⏸ 暂停(**代码已落地,C# 0 错误;Unity 侧打包未做 → 雷声仍静音**) | 三步都可行,游戏 API 直接提供 `AtmosphereSample.SpeedOfSound`(实测 Droo 340 / Cylero 233 / Tydos 931 m/s,硬编码 343 在 Tydos 上差 2.7 倍)。**修掉的坑**:① `OnBoltLanded` 回传的是"bolt 自身长度"而非到玩家距离;② 距离衰减算两次;③ 单 AudioSource 互相打断;④ 远雷 `spread` 60°→160°;⑤ 水平/垂直分解须沿地表法线。**§7** 闪电永久残留(协程在 inactive 静默失败)→ `Update` 时间状态机 + 三条销毁路径; **§8** 紫红 = 运行时材质被销毁 → 拆 `LightningBolt.shader` + `LightningFlash.shader`。**收尾 = 打包清单**(9 个 WAV + 新 shader 的 GUID 进 `_otherAssets`、删 5 条悬空) |
+| [`proposals/cloud-optimization-roadmap-2026-08-28.md`](proposals/cloud-optimization-roadmap-2026-08-28.md) | **体积云优化路线图**(借鉴 VolRe/KSA) | 📋 分析完成,未排期(T0 已部分被方案 C/轨道云消化) | 13 项优化点按收益排名:T0 光照解耦(50→6 样本)/距离淡出;**Light Volume、PlaceRays 为长期项** |
+| [`proposals/water-system-overhaul-2026-09-02.md`](proposals/water-system-overhaul-2026-09-02.md) | **水体大修可行性**(路线 A~E) | 📋 评估完成,未排期 | 建议先 A/B 零风险调参(运行时改参/水下观感),E 整换 shader 为数周级终局;反射云(方案 A)已落地 |
+
+---
+
+## 三、已归档(历史 / 已完成)
+
+| 文档 | 主题 | 状态 | 一句话摘要 |
+|---|---|---|---|
+| [`archive/stock-density-scale-2026-09-06.md`](archive/stock-density-scale-2026-09-06.md) | **方案 A:自带云区域内密度缩放** | ✅ 已实现归档(2026-09-06) | `stockDensityScale`(默认 1)只压区域内附加密度地板、`dist` 保足迹边缘;`scale<1` 把实心云拆成蓬松结构;翻案自阈值重映射(见 §9 历史) |
+| [`archive/stock-cloud-distribution-2026-08-23.md`](archive/stock-cloud-distribution-2026-08-23.md) | **方案 B:游戏自带云 cubemap 作全球分布形状** | ✅ 已实现归档(2026-08-23) | `useStockCloudMap` 把 Clouds cubemap 接入 layers/shape 两处分布源;`stockMapStrength=0` 逐字节回退;缺层/无云星球逐带回退 |
+| [`archive/ksa-temporal-upscale-port-2026-08-24.md`](archive/ksa-temporal-upscale-port-2026-08-24.md) | **方案 C:KSA 体积云技术移植(BIRP,时序超采样核心)** | ✅ 已实现归档(2026-08-24,2026-08-27 收工) | 低清全量 raymarch + 全清时序上采样 + 运动自适应;重投影 Y 镜像已修;坐标原点重置已修;JNO 冲突已定位 |
+| [`archive/coverage-decomposition-2026-08-27.md`](archive/coverage-decomposition-2026-08-27.md) | **覆盖分解:biome × 旋转分布 × tiled detail** | ✅ 已实现归档(2026-08-27) | `coverage = cloudCoverage × F_biome × F_rotDist × F_tiledDetail`,三强度默认 0 = 逐字节一致 |
+| [`archive/orbit-clouds-crossfade-2026-08-27.md`](archive/orbit-clouds-crossfade-2026-08-27.md) | **轨道 2D 云 + 过渡带交叉淡入** | ✅ 已实现归档(M0~M3,2026-08-27) | `OrbitClouds` 壳求交 + 同源密度采样,`orbitFade` 交叉淡入;海拔分派:低空体积云 / 高空 2D 云;夜间晨昏线已修 |
+| [`archive/seamline-reprojection-2026-08-25.md`](archive/seamline-reprojection-2026-08-25.md) | **割裂线排查(TSS 关 + 运动残影)** | ✅ 已修复归档(2026-08-25) | 根因 = 重投影矩阵用逻辑投影,与射线重建 clip 约定差 Y 翻转 → 历史镜像采样;修复:`GL.GetGPUProjectionMatrix` |
+| [`archive/jno-sceneloaded-nre-2026-08-27.md`](archive/jno-sceneloaded-nre-2026-08-27.md) | **JNO 联机 mod 冲突(NRE 中断 SceneLoaded 事件链)** | ✅ 已定位并修复归档(2026-08-27) | JNO `MultiPlayerUI.OnSceneLoaded` 对 null `inspectorPanel` 解引用抛 NRE → 事件链中断 → Volken 初始化被跳过;JNO 侧空值护栏(手动应用) |
+| [`archive/reflection-adaptation-2026-09-02.md`](archive/reflection-adaptation-2026-09-02.md) | **实时反射适配分析**(水面平面反射 / 机体探头) | ✅ 分析完成,方案 A 已落地归档(2026-09-02) | 云只渲染在主相机 OnRenderImage;方案 A(水面反射合入云)已落地,方案 B(机体 cubemap 探头)后置未做 |
+| [`archive/weather-rain-fog-postmortem-2026-09-27.md`](archive/weather-rain-fog-postmortem-2026-09-27.md) | **雨/雾移植失败复盘(根因 + 铁律 + 诊断方法)** | ✅ 已归档(原状态:移植失败并移除) | 直接原因 = **雨丝长度轴表达错了空间**(世界空间长度轴 + 任意宽度轴 → 视角相关的"横块");真正原因 = **诊断量错对象**(用世界空间夹角当屏幕倾角)。**4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线**;重做雨/雾**前必读** |
 
 > ✅ 归档文档头部「状态:」为最终结论;文档内勾选项标记实际落地情况,未勾选项 = 待复跑/未排期项,按需复跑,勿当作当前待办执行。
 
 ---
 
-## 三、决策速查(最新决策)
+## 四、决策速查(最新决策)
 
 | 决策 | 结论 | 出处 |
 |---|---|---|
 | 方案编号体系 | 方案 A/B/C 同一套:方案 B = 自带云分布接入;方案 A = 自带云区域内密度缩放(前置 B);方案 C = KSA 时序超采样移植 | 各方案文档 |
-| 自带云分布接入 | **✅ 方案 B 已实现**:游戏 Clouds cubemap 作全球分布形状,`stockMapStrength=0` 纯回退;缺层逐带回退 | [archive/Volken-方案B-…](archive/Volken-方案B-游戏自带云作为全球分布形状-2026-08-23.md) |
-| 自带云区域内密度 | **✅ 方案 A 已实现**:`stockDensityScale` 区域内密度缩放(默认 1 恒等);**翻案说明**:初版阈值重映射 `stockCoverage/stockSoft` 会收缩足迹边缘,弃用改为密度缩放(§9 历史,勿复用) | [archive/Volken-方案A-…](archive/Volken-方案A-stockDensityScale-自带云区域内密度缩放-2026-09-06.md) |
-| 时序超采样 | **✅ 方案 C 已实现**:低清每帧全量 raymarch + 全清时序上采样(Upscale),运动自适应 `tssBlend`;单 `historyTex`(无 flip/flop),TSS 关走运动残影路径 | [archive/Volken-方案C-…](archive/Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md) |
-| 重投影修复 | **✅ 已修复**:`prevViewProjMat` 用 `GL.GetGPUProjectionMatrix(cam.projectionMatrix, true)` 与射线重建 clip 约定对齐(修 fresh + 时序两路径) | [archive/Volken-割裂线排查记录-…](archive/Volken-割裂线排查记录-运动残影TSS关-2026-08-25.md) §4.5 |
-| 坐标原点重置 | **✅ 已修复**:订阅 `IGameView.ReferenceFrameRecentered`,清空时序历史 + `frameNumber=0` 冷启动 | [archive/Volken-方案C-…](archive/Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md) §12 |
-| 覆盖分解 | **✅ 已实现**:覆盖 = `cloudCoverage × F_biome × F_rotDist × F_tiledDetail`,三强度默认 0 | [archive/Volken-覆盖分解-…](archive/Volken-覆盖分解-biome静态图x旋转分布图xtiledDetail-2026-08-27.md) |
-| 轨道云 | **✅ 已实现**:海拔分派(低空体积云 / 高空 2D 壳着色)+ `orbitFade` 过渡带交叉淡入;2D 与体积云**同源密度采样**避免云形突变;夜晚侧晨昏线门控已修 | [archive/Volken-轨道云与过渡带交叉淡入-…](archive/Volken-轨道云与过渡带交叉淡入-可行性分析-2026-08-27.md) |
-| 实时反射 | **✅ 方案 A(水面反射合入云)已落地**,方案 B(机体 cubemap 探头)后置;反射场景关 TSS、粗步长、低光样本 | [archive/Volken-实时反射适配分析-…](archive/Volken-实时反射适配分析-2026-09-02.md) §4 |
-| JNO 冲突 | **✅ 根因定位**:JNO `OnSceneLoaded` NRE 中断事件链 → Volken 初始化被跳过;JNO 侧空值护栏(手动应用);Volken 侧自愈曾加后撤除,回纯事件驱动 | [archive/Volken-冲突排查-…](archive/Volken-冲突排查-JNOmultiplayerTest-SceneLoaded事件链NRE-2026-08-27.md) |
-| **跨界移植方法论** | **⚠️ 通用铁律(雨/雾移植失败的沉淀)**:①细长 billboard 的**长度轴必须在屏幕平面内表达**,长度轴只由物理量决定、宽度轴由视线决定;②诊断必须量**你关心的那个量所在的轴**(屏幕问题量屏幕空间),并输出**当前值 + 内部状态**;③**每帧路径里禁止重置动画进度**,守卫只能读状态、只能比较目标值;④先标定数量级(密度 / 域半径 / 停留时长)再调观感;⑤同一问题连续 3 轮无可信改善信号 → 换方案,不许原地修 | [Volken-天气雨雾移植失败教训-2026-09-27.md](Volken-天气雨雾移植失败教训-2026-09-27.md) §5 |
-| SP2 天气移植 | **🚧 实施中,范围已缩减为「只做雷电」**:雨(阶段 2)与雾(阶段 3)的实现**已整体移除**,准备重做;保留骨架 + 雷电 + 天气状态机。原生 BIRP,不引入 Enviro3;天气状态由 mod 持有(行星 `weather.xml`) | [Volken-SP2天气系统移植BIRP计划-2026-09-27.md](Volken-SP2天气系统移植BIRP计划-2026-09-27.md) §10.2e |
-| ~~雨/雾实现~~ | **❌ 已移除(2026-09-27)**:`Rain.cs`/`RainParticles.compute(.shader)`/`FogRenderer.cs`/`HeightFog.shader`/`enviro_rain_1~3.ogg` 已 stash 到 `%TEMP%\volken-rain-fog-stash`,可整体取回。移除原因:雨丝朝向多轮未收敛。**重做前必读复盘** | [教训](Volken-天气雨雾移植失败教训-2026-09-27.md) / 同计划 §10.2e |
+| 自带云分布接入 | **✅ 方案 B 已实现**:游戏 Clouds cubemap 作全球分布形状,`stockMapStrength=0` 纯回退;缺层逐带回退 | [archive/stock-cloud-distribution-2026-08-23.md](archive/stock-cloud-distribution-2026-08-23.md) |
+| 自带云区域内密度 | **✅ 方案 A 已实现**:`stockDensityScale` 区域内密度缩放(默认 1 恒等);**翻案说明**:初版阈值重映射 `stockCoverage/stockSoft` 会收缩足迹边缘,弃用改为密度缩放(§9 历史,勿复用) | [archive/stock-density-scale-2026-09-06.md](archive/stock-density-scale-2026-09-06.md) |
+| 时序超采样 | **✅ 方案 C 已实现**:低清每帧全量 raymarch + 全清时序上采样(Upscale),运动自适应 `tssBlend`;单 `historyTex`(无 flip/flop),TSS 关走运动残影路径 | [archive/ksa-temporal-upscale-port-2026-08-24.md](archive/ksa-temporal-upscale-port-2026-08-24.md) |
+| 重投影修复 | **✅ 已修复**:`prevViewProjMat` 用 `GL.GetGPUProjectionMatrix(cam.projectionMatrix, true)` 与射线重建 clip 约定对齐(修 fresh + 时序两路径) | [archive/seamline-reprojection-2026-08-25.md](archive/seamline-reprojection-2026-08-25.md) §4.5 |
+| 坐标原点重置 | **✅ 已修复**:订阅 `IGameView.ReferenceFrameRecentered`,清空时序历史 + `frameNumber=0` 冷启动 | [archive/ksa-temporal-upscale-port-2026-08-24.md](archive/ksa-temporal-upscale-port-2026-08-24.md) §12 |
+| 覆盖分解 | **✅ 已实现**:覆盖 = `cloudCoverage × F_biome × F_rotDist × F_tiledDetail`,三强度默认 0 | [archive/coverage-decomposition-2026-08-27.md](archive/coverage-decomposition-2026-08-27.md) |
+| 轨道云 | **✅ 已实现**:海拔分派(低空体积云 / 高空 2D 壳着色)+ `orbitFade` 过渡带交叉淡入;2D 与体积云**同源密度采样**避免云形突变;夜晚侧晨昏线门控已修 | [archive/orbit-clouds-crossfade-2026-08-27.md](archive/orbit-clouds-crossfade-2026-08-27.md) |
+| 实时反射 | **✅ 方案 A(水面反射合入云)已落地**,方案 B(机体 cubemap 探头)后置;反射场景关 TSS、粗步长、低光样本 | [archive/reflection-adaptation-2026-09-02.md](archive/reflection-adaptation-2026-09-02.md) §4 |
+| JNO 冲突 | **✅ 根因定位**:JNO `OnSceneLoaded` NRE 中断事件链 → Volken 初始化被跳过;JNO 侧空值护栏(手动应用);Volken 侧自愈曾加后撤除,回纯事件驱动 | [archive/jno-sceneloaded-nre-2026-08-27.md](archive/jno-sceneloaded-nre-2026-08-27.md) |
+| **跨界移植方法论** | **⚠️ 通用铁律(雨/雾移植失败的沉淀)**:①细长 billboard 的**长度轴必须在屏幕平面内表达**,长度轴只由物理量决定、宽度轴由视线决定;②诊断必须量**你关心的那个量所在的轴**(屏幕问题量屏幕空间),并输出**当前值 + 内部状态**;③**每帧路径里禁止重置动画进度**,守卫只能读状态、只能比较目标值;④先标定数量级(密度 / 域半径 / 停留时长)再调观感;⑤同一问题连续 3 轮无可信改善信号 → 换方案,不许原地修 | [archive/weather-rain-fog-postmortem-2026-09-27.md](archive/weather-rain-fog-postmortem-2026-09-27.md) §5 |
+| SP2 天气移植 | **⏸ 暂停 / 转参考(母计划)**:范围已缩减为「只做雷电」,雨与雾实现曾整体移除;现**雨按 8 阶段计划重做中**(见下条,唯一活跃项),母计划退为决策沿革与素材底账。原生 BIRP,不引入 Enviro3;天气状态由 mod 持有 | [proposals/sp2-weather-port-2026-09-27.md](proposals/sp2-weather-port-2026-09-27.md) §10.2e |
+| 雨重做(8 阶段) | **🚧 阶段 0/1/2 已落地并真机证实,阶段 3 已落地(四轮真机根因 + 一轮自查已修,2026-09-29)**:`RainAxisProbe.cs`(双算法对照)+ `RainParticles.compute/.shader/.cs`(最小 compute 管线:下标式 RWStructuredBuffer 原子加 + RenderMeshIndirect + SV_InstanceID);径向 `GravityNormal`;阶段 3 正式雨滴 shader(SP2 属性名 + 随速度拉伸 + 软粒子);"竖线贴相机"(§10.10)、"一团不动"(§10.11→§10.12 证伪:实为暂停)、"朝向随角速度摆"(§10.12);**第四轮(§10.13)按 `sp2d4` 第一手实锤整体重做**:废弃屏幕平面构轴 → **SP2 世界空间旋转矩阵** `_RotationMatrix`(朝向锁世界系)+ **粒子世界系下落**(去 camVel)+ **`TranslateFixed` 换帧重定位**(ModApi `IGameView.ReferenceFrameRecentered`)+ 去随机滚转角 + UV 亮头拖尾;**第五轮自查(§10.14)**:球内分布改体积均匀 `R*u^(1/3)`(修中心堆积)、加 `_DiagBuffer` 重生计数、加 `_ShaderVer` 部署哨兵与全量诊断日志(SELFCHECK/axis·fwd/dist[64]/time/RECENTER);**第六轮再挖 SP2(§10.15)**:拿到 SP2 雨**出厂参数表**(`R=50`/**`particleAmount=100000`**/`fallSpeed=15`/`streakLength=2.5`/`thickness=0.1`/`stretchAmount=0.045`/`limit=3.5`),**实锤 down 用哪个**(`GravityNormal`=`GravityFrameNormalized` 帧空间 + `ReferenceFrame` yaw-only + SR2 根本没有这套雨 → SR2 必须帧空间径向),并按 SP2 加**域边界淡出**(`volkenRainP2Edge`)+**程序化柔边雨丝贴图**(替代硬边四边形);**第七轮(§10.16)真机全绿 + UI 接入**:`shaderVer=3`/`TranslateFixed=2`/`down·camUp=-0.98`/`·fwd` 随视角变/`dist mean/R≈0.75` 全部达标,并修掉"换帧事件不触发 → 雨留原地 → respawn 2.2~5 万/s"(事件只记录不应用 + `ICraftScript.FramePosition` 跳变兜底判定);**天气面板的雨组已由禁用占位改为实时控制**(启用/实时状态行/立即切换/11 个滑块,含密度、域半径、下落速度、雨丝长宽、拉伸、边界淡出、软粒子、尾淡、亮度、朝向模式),`RainSection` 新增 6 字段(默认=SP2 出厂值),中/英/俄各 11 个新词条。**第八轮(§10.17)高度闸门**:SP2 最大缩放只到半个岛(不涉及太空)、JNO 能缩到整颗星球 → 用**雨自己的配置项**(`ceilingAltitude`,默认 12000m;0=关闭闸门,**不与云层联动**)+ 相机海拔算 `altFade` 乘进 `_FadeAmount`,超上限直接不 dispatch/不绘制(**太空零成本零雨**),面板加「海拔上限(0=自动)」「淡出带宽」;抑制期间同步换帧状态。**第九轮(§10.18)诊断"怪异感"**:主嫌疑 = 出域处置(球内随机 → 粒子在紧贴镜头处爆闪 = 跟随相机的"沸涌");证据 = SP2 的 Positioning `inBuffers: []`+`_Positions` stride 12 → **无每粒子随机数**、只能确定性处置 → 改为**穿过球心镜像重生**(`volkenRainP2Respawn` 可 A/B);次要:`volkenRainP2Soft 0`(软粒子是我加的,SP2 无深度纹理)、`volkenRainP2Edge 0`/拉远看"雨球"。**第十轮(§10.19)**:删除全部 9 条 `volkenRainP2*` 控制台指令(含静态 setter),功能 100% 集成到天气面板「雨」分组(22 项,含「把雨状态写入日志」与「开发:等距排自检」);**约定:以后可调项一律进面板**。**第十二轮(§10.21)修"集中一股脑下降"**:元凶 = §10.18 的**确定性镜像重生**(零混合 → 初始团块周期性一起落下,静止 6.7s/飞行 0.6s 周期)→ 默认改回**随机重生** + 壳层 [0.15R,R] 体积均匀(不紧贴镜头冒出);**第十一轮(§10.20)修"像面条"**:配置默认值对齐 SP2(宽度 0.1/数量 100000/新增拉伸上限 3.5)+ `UpgradeUneditedDefaults()` 只升级"仍是旧默认值"的存档字段(否则老 XML 永远停在旧值)+ 贴图改"满宽软板条 + 纵向快速收尾"。**第十三轮(§10.22)把雨搬进 Unity 编辑器**:新增 `Assets/Scripts/Volken/Debug/RainPreview.cs` 预览台(自动建相机/环境、右键拖拽+WASD 自由飞、IMGUI 面板与游戏内同批字段**即时生效**、标 ◈ 的容量/长丝宽松手才重建、`PlayerPrefs` 一键"下次 Play 自动启动"仅编辑器)+ `Mod.LoadVolkenAsset` **编辑器回退 AssetDatabase** + `RainParticles.DebugAltitudeOverride` → **观感迭代从"打包 5 分钟"变"按 Play 5 秒"**(跑的是同一份 compute/shader/驱动代码);预览测不到软粒子/换帧/真实海拔 → 定稿后仍需打包验收。**第十四轮(§10.23)测试脚本与正式代码解耦**:8 个测试/开发脚本(`RainPreview`/`RainAxisProbe`/噪声可视化/`Profiler`)统一收进 **`Assets/Scripts/VolkenTests/`**,正式代码对它们**零引用**(原 7 处引用改为由 `TestsBootstrap.cs` 自发注册)→ **删掉该文件夹 mod 仍能编译运行**;契约见该文件夹 `README.md`。**下一步:用户 SP2 实机对比 → 阶段 4 密度标定/自适应域半径/水下门控** | [sp2-rain-particledomain-port-2026-09-28.md](sp2-rain-particledomain-port-2026-09-28.md) §5 / §10.9~§10.22 |
+| ~~雨/雾实现~~ | **❌ 已移除(2026-09-27)**:`Rain.cs`/`RainParticles.compute(.shader)`/`FogRenderer.cs`/`HeightFog.shader`/`enviro_rain_1~3.ogg` 已 stash 到 `%TEMP%\volken-rain-fog-stash`,可整体取回。移除原因:雨丝朝向多轮未收敛。**重做前必读复盘** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) / 同计划 §10.2e |
 | 天气系统命名空间 | **✅ `VolkenMod.Weather`**(不能用 `Volken.Weather`:与全局类 `Volken` 冲突 → CS0101);新增天气文件必须沿用 | 计划 §10.2 ① |
 | mod 资源加载 | **✅ 统一用 `Mod.LoadVolkenAsset<T>(path, required)`**(内部 `IModResourceLoader.LoadAsset<T>`);`Load<T>`/`LoadAudio` 属游戏 `IResourceLoader`,读不到 mod bundle | 计划 §10.2 ⑦ |
-| 雾的深度来源 | **📦 历史结论(雾已删除)**:雾原本取 `CloudRenderer.combinedDepthTex`(经只读口 `LinearSceneDepth`,该属性**保留但已无消费者**);`DepthCapture.cs` 是死代码(其 `Hidden/DepthLinear` shader 在工程里不存在)。重做雾时这条仍成立 | 计划 §10.2 ② / §10.3 |
+| 雾/雨的深度来源 | **✅ `CloudRenderer.LinearSceneDepth` 已有消费者(2026-09-29)**:雨(阶段 3)软粒子采样它(`combinedDepthTex`,RFloat,LinearEyeDepth 米);雾重做时同样可用。`DepthCapture.cs` 仍是死代码(其 `Hidden/DepthLinear` shader 在工程里不存在) | 计划 §10.2 ② / §10.3 / 雨计划 §10.9 |
 | 天气 UI 与联动 | **✅ 天气面板挂在 Volken 检查器内**(`WeatherPanel.cs`,不另开浮动窗口);云层联动三项增益**默认全 0 = 不碰云配置**(与项目"新增特性默认不改变现有画面"约定一致) | 计划 §10.2b ⑯ |
 | 天气设置项 | **✅ Mod 设置里已无天气项** —— 两个「总闸」(`WeatherEnabled` / `ThunderEnabled`)已按用户要求移除,开关交给**逐行星的天气预设**(见下条) | 计划 §10.1 / §10.2e |
 | **天气配置序列化** | **✅ 按预设名独立存,与云层同构但互不干扰** —— `<PlanetConfig>` 分别记**云预设名**与**天气预设名**(`CloudConfigName` / `WeatherConfigName`);参数本体在各自文件:`UserData/VolkenConfig/{行星}/{预设}.xml`(云)、`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(天气)。天气面板可**独立新建 / 保存 / 读取**(「另存为新配置」+「加载配置」下拉),换天气预设不动云,反之亦然。类:`Assets/Scripts/Volken/Core/PlanetConfig.cs` + `Core/VolkenWeatherConfig.cs` | 计划 §10.2g ㊹(已被本次改动取代) |
@@ -69,12 +81,12 @@
 | **`AddConfig` 的隐藏 bug** | **✅ 已修**:原实现无条件 `configList.Add(new PlanetConfig(...))`,对已存在的行星会**追加第二条同行星记录**。云层调用点都被 `ExistsInConfig` 挡着所以没暴露;**天气内联进来之后这会让天气参数分叉成两份**(症状:"设置时不时自己变回去")。改为已有记录只更新层名 | 计划 §10.2g ㊽ |
 | **旧 `PlanetConfigList.xml` 兼容** | **✅ 有显式兜底,而且会自愈**:老记录的 `<PlanetConfig … />` 是**自闭合标签**(属性-only)没有 `<Weather>` 节点 → `LoadFromFile` 里补一份默认(全关)+ `EnsureSections` + `ClampAll`(**不依赖"字段初始化器不被反序列化器重置"这个行为细节**)。而且 `Volken.OnSceneLoaded` 会调 `AddConfig` → 结尾 `SaveToFile`,所以**进一次场景文件就被重写成带 `<Weather>` 的形态** | 计划 §10.2g ㊾ |
 | ~~天气独立配置目录~~ | **❌ 已废弃(仅存活一次改动)**:曾短暂改为 `UserData/VolkenWeatherConfig/` + `PlanetWeatherConfigList.xml` + 多预设。现**不创建、不读取**;若磁盘上有该目录可手删。**别再照 §10.2f ㊴ 实现** | 计划 §10.2g ㊺㊻ |
-| 淡变/重入守恒 | **⚠️ 通用教训(雨已删,结论留用)**:任何"每帧都会调到的路径"里禁止出现重置动画进度的副作用;重入守卫只能比较**目标值**,不能比较当前值 —— 否则淡入每帧被重置,值恒 0。**守卫只能读状态,不能挡在"改状态的逻辑"前面** | [教训](Volken-天气雨雾移植失败教训-2026-09-27.md) §5.2 / 计划 §10.2b ㉑㉖㉚ |
+| 淡变/重入守恒 | **⚠️ 通用教训(雨已删,结论留用)**:任何"每帧都会调到的路径"里禁止出现重置动画进度的副作用;重入守卫只能比较**目标值**,不能比较当前值 —— 否则淡入每帧被重置,值恒 0。**守卫只能读状态,不能挡在"改状态的逻辑"前面** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §5.2 / 计划 §10.2b ㉑㉖㉚ |
 | 天气与云的关系 | **✅ 【决策】天气系统不联动云层** —— 云厚度/覆盖度/浓度/颜色/风速全部由云自己的配置决定;曾有 `cloudCoverageGain` 等三个联动项,已连同 UI/本地化/配置字段一起移除 | 计划 §10.2b ㉔ |
 | JNO 无风系统 | **✅ 已确认**:`WindManager`/`WindVelocity` 在 jnoCode 全仓库**零命中**;`IPlanetAtmosphereData` 只有气压/温度/成分,**无气流速度接口** → 雨若重做,风只能来自 `CloudConfig.windSpeed/windDirection` | 计划 §10.2c A |
-| 雨重做的密度标定 | **📦 历史结论(雨已删除,重做时直接用)**:密度必须与域大小一起标定 —— EVE 的 `rain-Kerbin` 是 20 万粒子 / 半径 70m ≈ **0.139 个/m³**;域随相机速度自适应放大时必须补偿密度(指数 r^2.5)。"雨时有时无"的主因是**密度不足**,不是闪断。**密度与停留时长要一起算** | [教训](Volken-天气雨雾移植失败教训-2026-09-27.md) §5.1 / 计划 §10.2c2 |
-| 雨重做的方向铁律 | **📦 历史结论(雨已删除,重做时直接用)**:①细长 billboard 的**长度轴必须在屏幕平面内表达**(世界空间长度轴 + 任意宽度轴 → 视线接近长度轴时透视压成 0 → 屏幕上是"横块");②**长度轴只由物理量决定,宽度轴由视线决定**,混用必错;③沿视线的方向分量对屏幕方向**贡献恒为 0**(会造成径向爆散);④诊断必须量**屏幕空间**角度,世界空间夹角会误导多轮。**可行算法骨架见教训 §3.1 ㈢** | [教训](Volken-天气雨雾移植失败教训-2026-09-27.md) §3.1 / 计划 §10.2d F~I |
-| 两个速度不能混 | **📦 历史结论(雨已删除)**:雨丝朝向用"减玩家速度",粒子在域内平移用"减相机速度" —— 混成一个量是多次返工的根源;`Camera.velocity` 不可当玩家速度用 | [教训](Volken-天气雨雾移植失败教训-2026-09-27.md) §5.1 ⑥ / 计划 §10.2c D/I |
+| 雨重做的密度标定 | **📦 历史结论(雨已删除,重做时直接用)**:密度必须与域大小一起标定 —— EVE 的 `rain-Kerbin` 是 20 万粒子 / 半径 70m ≈ **0.139 个/m³**;域随相机速度自适应放大时必须补偿密度(指数 r^2.5)。"雨时有时无"的主因是**密度不足**,不是闪断。**密度与停留时长要一起算** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §5.1 / 计划 §10.2c2 |
+| 雨重做的方向铁律 | **📦 历史结论(雨已删除,重做时直接用)**:①细长 billboard 的**长度轴必须在屏幕平面内表达**(世界空间长度轴 + 任意宽度轴 → 视线接近长度轴时透视压成 0 → 屏幕上是"横块");②**长度轴只由物理量决定,宽度轴由视线决定**,混用必错;③沿视线的方向分量对屏幕方向**贡献恒为 0**(会造成径向爆散);④诊断必须量**屏幕空间**角度,世界空间夹角会误导多轮。**可行算法骨架见教训 §3.1 ㈢** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §3.1 / 计划 §10.2d F~I |
+| 两个速度不能混 | **📦 历史结论(雨已删除)**:雨丝朝向用"减玩家速度",粒子在域内平移用"减相机速度" —— 混成一个量是多次返工的根源;`Camera.velocity` 不可当玩家速度用 | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §5.1 ⑥ / 计划 §10.2c D/I |
 | 雨重做的域尺寸 | **📦 历史结论(雨已删除)**:相机速度必须 < 域半径,否则粒子每帧穿过全域 → 雨幕闪断;位移需硬钳到半域/帧 | 计划 §10.2c E |
 | 雨重做的坐标系 | **📦 历史结论(雨已删除)**:用**相机相对空间 + 手工构造视锥平面**;**不要**混用 `GeometryUtility.CalculateFrustumPlanes`(它给参考系空间 → 剔除整体错位) | 计划 §10.2b ⑨ |
 | GPU 绘制自检手段 | **✅ 用 GPU 回读日志判定"到底画没画"**(雨当年是 `VolkenRain:GPU`,每 10s 回读间接绘制参数 buffer 的 instanceCount),可把"剔除/参数环节"与"绘制/着色环节"一次分开,不必靠肉眼猜 | 计划 §10.4 ④ |
@@ -85,17 +97,21 @@
 | mod 打包清单 | **⚠️ 资产清单是 `Assets/ModData.asset` 的 `_otherAssets`(GUID 列表)**,ModTools 构建时据此写 `Temp\ModManifest.xml` 与 `ModAssetBundles\…\volken.manifest`;新资产不会自动入包,**删掉资产文件也不会让 GUID 自动消失**(实测删除后重建的 manifest 仍带旧路径)。**增删资产都要改 `_otherAssets` 并核对无悬空 GUID**。玩家侧看资源台账用 dev 命令 `volkenAssets` | 计划 §10.2e / §10.3 1 |
 | shader 验证手段 | **✅ `Editor.log` 里的 `Shader error in '<名>': … (on d3d11)`** 是唯一能离线抓到 shader 错误的途径;**Unity 的 HLSL 没有 `expm1`**(本轮实测踩到);未被场景引用的 shader 不会被编译(Rain 当年即如此,只能等游戏内验证)。**错误行按消息去重后再统计次数**,同一错误会 print 上千遍 | 计划 §10.2b ⑭ / §10.4 ② |
 
-> 上表「计划」= [`Volken-SP2天气系统移植BIRP计划-2026-09-27.md`](Volken-SP2天气系统移植BIRP计划-2026-09-27.md);「教训」= [`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md)。
+| **SP2 雨系统移植难点** | **🚧 已核实,阶段 0/1 已落地,核心结论已实测证实(2026-09-29)**:4 条真难点 —— ①SP2 的 `AlignStreaks` 是**世界空间长度轴 + 任意宽度轴**(正是本项目已判死刑的路线),会以**同源症状**复发(上次"横块";SP2 在 `fwd∥视线` 时同样"横块",另多一种 `side∥视线` → "细线")→ **不照抄**,改屏幕平面构轴(教训 §3.1㈢ 骨架)—— **实测:模式 2 退化视角下 A 竖条不退化、B 复现横块**;②URP 遮挡专有物在 BIRP 不存在 → **方案 A(无遮挡)起步**、方案 B 二期;③**6 kernel 的 HLSL 源码全安装不存在**(只有 DXBC)→ 必须手写 `.compute`;④数量级必须重标定(域半径随相机速度自适应 + 密度补偿 r^2.5)。**阶段 1 探针 `RainAxisProbe.cs` 已落地**(双算法对照,只量屏幕空间;dev 命令 `volkenRainAxis*`) | [计划](sp2-rain-particledomain-port-2026-09-28.md) §3 / §10 |
+| **禁用导入 sp2d4 的 `.asset`** | **⚠️ 【更正母计划 §8 第 2 条】**母计划曾写"SP2 与 Volken 同为 2022.3,`BillboardParticles.asset` 大概率直接可用"—— **错**:sp2d4 实测为 **Unity `6000.2.14f1`**,本工程 **`2022.3.62f3`** → 该 `.asset` 内联的 DXBC 是按 6000.2 目标编的,跨版本重编**大概率失败**,且它在工程里是「带 GUID 的资产引用」而非可读文本,导入失败 → `FindKernel` 拿不到 kernel → 全线崩。**结论:按已确定的接口手写 `.compute`**(6 kernel + `RWByteAddressBuffer` 语义 + 自加 `_time`);`Custom/DropletInstancing` 同样只有 DXBC 且 prefab 引用为 **null**,必须自写 | [计划](sp2-rain-particledomain-port-2026-09-28.md) §3.3 |
+| **雨重做的数量级基线** | **📋 不能照抄 SP2 的「50 m / 10 万」**:域半径必须**随相机速度自适应**(`needed = camSpeed × 0.6`,`radius = clamp(max(cfg, needed), cfg, 400)` —— 实测 348 m/s + 50 m → 停留仅 **0.29 s** → 闪断);密度补偿 **r^2.5**;参照密度取 EVE `rain-Kerbin` = **0.139 个/m³**(上次实测 0.0382,差 3.6 倍 → "时有时无"的真因是**密度不足**,不是闪断);**"2 万与 10 万实例肉眼几乎无差"**;上限 400000 × 12 顶点 = 480 万顶点/帧是本机可承受边界 | [计划](sp2-rain-particledomain-port-2026-09-28.md) §3.5 / 母计划 §10.2c0/10.2c2 |
+
+> 上表「计划」= [`proposals/sp2-weather-port-2026-09-27.md`](proposals/sp2-weather-port-2026-09-27.md)(母计划,已转 proposals);「教训」= [`archive/weather-rain-fog-postmortem-2026-09-27.md`](archive/weather-rain-fog-postmortem-2026-09-27.md)。
 
 **当前待定(尚未拍板/未调研)**:
-- **水体大修实施顺序**:评估完成(A/B 先行),未排期([Volken-水体系统大修可行性分析-2026-09-02.md](Volken-水体系统大修可行性分析-2026-09-02.md))。
-- **优化点剩余项**:Light Volume(#11,长期)、PlaceRays(#10,长期)、噪声 mipmap/密度 LUT(#4/#5)、HDR RT(#6)、MV 4 次膨胀(#9)等,见 [Volken-体积云优化点分析-…](Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md)。
+- **水体大修实施顺序**:评估完成(A/B 先行),未排期([proposals/water-system-overhaul-2026-09-02.md](proposals/water-system-overhaul-2026-09-02.md))。
+- **优化点剩余项**:Light Volume(#11,长期)、PlaceRays(#10,长期)、噪声 mipmap/密度 LUT(#4/#5)、HDR RT(#6)、MV 4 次膨胀(#9)等,见 [proposals/cloud-optimization-roadmap-2026-08-28.md](proposals/cloud-optimization-roadmap-2026-08-28.md)。
 - **方案 C 已知缺口**:N/S 风(非刚体 Y 旋转,云空间重投影近似未覆盖)、flip/flop 双缓冲(单缓冲当前可用)、TSS 开时 !isFresh 硬回退闪烁待用户实测确认。
 - **to-do 高优先**:切换至有大气星球时 config 卡住(未知原因,等复现和 log)。
 
 ---
 
-## 三之二、当前代码里的已知问题(复核)
+## 四之二、当前代码里的已知问题(复核)
 
 > 这一节记录**已核实、但还没动手修**的问题,供下次开工直接取用。
 
@@ -109,20 +125,22 @@
 
 ---
 
-## 四、文档写入规则(维护约定)
+## 五、文档写入规则(维护约定)
 
 > 适用:所有 `docs/**` 下的 `.md`;`README.md` / `AGENT_CONTEXT.md` 本身也遵守 0 命名与 8 编码规则。
 > 本规则仿照 JNO 联机 mod 的 `plans/` 目录约定(见 JNO `plans/README.md` §四)适配而来。
 
 ### 0. 命名规范
-- 方案/排查/分析文档:`<主题>-YYYY-MM-DD.md`(中文主题 + 日期后缀;日期 = 创建/事件日期,补零)。**禁止无日期名**(历史教训:早期文档无日期,游离在索引外)。
-- 索引/参考文档(`README.md`、`AGENT_CONTEXT.md`)不加日期;待办清单 `to-do.md` 作为活跃 backlog 也不加日期。
+- 方案/排查/分析文档:`<topic>-YYYY-MM-DD.md` —— **英文 kebab-case 主题 + 日期后缀**(全小写、`-` 分词;日期 = 创建/事件日期,补零),例:`ksa-temporal-upscale-port-2026-08-24.md`、`weather-rain-fog-postmortem-2026-09-27.md`。
+- **禁止中文文件名**(JNO 同规;历史教训:`Volken-冲突排查-…NRE.md` 这类中文名在工具链/终端里易乱码、易游离在索引外);**禁止无日期名**。
+- 索引/参考文档(`README.md`、`AGENT_CONTEXT.md`)不加日期;`to-do.md` 作为活跃 backlog 也不加日期。
 - 单一主题一个文件;已完成文档移入 `archive/` 子目录,文件名规则不变。
+- **文档正文仍用中文**(与 JNO 一致:文件名英文、内容中文)。
 
 ### 1. 状态与单一事实源
 - **文档头部 blockquote 的「状态:」是唯一事实源**;README 索引行、决策速查表、待定段、AGENT_CONTEXT 里的进度都只是它的镜像。
 - 状态词汇受控,禁止自造:📋 规划中 / 研究 / 评估中 → ✅ 已实现 / 已落地 → ✅ 已归档。同一主题同一时刻只能有一个状态。
-- **改文档头部状态时,必须同一次改动里同步更新**:README 索引行(§一↔§二 分区移动)、决策速查表、待定段,以及 AGENT_CONTEXT 相关行。
+- **改文档头部状态时,必须同一次改动里同步更新**:README 索引行(§一↔§二↔§三 三区分区移动)、决策速查表、待定段,以及 AGENT_CONTEXT 相关行。
 
 ### 2. 结构模板(新建文档建议)
 - 头部 blockquote:`状态:` / `日期:`(或 `创建日期:`) / `关联:`(相关文档链接 + 一句关系说明) / 一句话主题定位。
@@ -135,19 +153,24 @@
 
 ### 4. 交叉链接
 - 一律相对路径;同目录内互链用裸文件名 `x.md`。
-- root 引用归档:`archive/x.md`;归档引用 root:`../x.md`;**归档内互链:裸文件名(不要加 `../`)**。
-- **移动 / 归档一个文档后,必须全仓库 grep 修正所有指向它的链接**(含文档正文与 README),并跑一次死链校验。
+- **路径矩阵**(照 JNO 同规):
+  - 根 → `archive/x.md`、`proposals/x.md`
+  - `archive/` → `../x.md`(根)、`../proposals/x.md`
+  - `proposals/` → `../x.md`(根)、`../archive/x.md`
+  - **同区内互链:裸文件名(不要加 `../`)**
+- **移动文档后必须全仓库 grep 修正所有指向它的链接**(含文档正文、README、AGENT_CONTEXT),并跑一次死链校验。
 - 站内不写本机绝对路径(一律用令牌,见 §10「隐私红线」);源码引用用工程相对路径 `Assets/Scripts/...`。
 
-### 5. 归档流程(完成一个主题后)
-1. 头部状态改「✅ 已归档(原状态:…)」;
-2. 未排期剩余项 / 待复跑项:文档内写明,并同步进 README「当前待定」段;
-3. `git mv` 移入 `archive/`(保留历史)→ 按 §4 修正全部链接;
-4. 更新 README:从 §一 移到 §二,同步决策速查表出处列;
-5. 归档 ≠ 删除:仍被索引引用,按摘要可随时找回。
+### 5. 三区流转与归档流程
+> **三区**:根目录 = **活跃**(已动手);`proposals/` = **已论证可行 / 待拍板**(未在动手);`archive/` = **已完成 / 历史**。三者命名规则相同。
+1. **研究完成但未拍板 / 暂停** → `git mv` 进 `proposals/`(状态保持 📋,或标 ⏸ 暂停并注明原状态),README 从 §一 移到 §二;
+2. **拍板动手** → 移回根目录,进 README §一,状态改 🚧;
+3. **完成一个主题** → 头部状态改「✅ 已归档(原状态:…)」;未排期剩余项 / 待复跑项在文档内写明并同步 README「当前待定」段;`git mv` 进 `archive/`(保留历史);README 从 §一/§二 移到 §三,同步决策速查表出处列;
+4. 每一步都按 §4 修正全部链接;
+5. 归档/提案 ≠ 删除:仍被索引引用,按摘要可随时找回。
 
 ### 6. 已知问题与修复记录
-- 已核实未修的问题 → 登记进 README「三之二」表(问题 / 证据 / 影响;证据给 `文件:行号` + 反编译出处)。
+- 已核实未修的问题 → 登记进 README「四之二」表(问题 / 证据 / 影响;证据给 `文件:行号` + 反编译出处)。
 - 修复后 → 该行标记「✅ 已解决」并保留记录,不整行删除。
 
 ### 7. 与代码同改、同提交
@@ -169,9 +192,9 @@ $bom = $b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0x
 ### 9. 改后自检清单
 - [ ] 所有 `](...)` 站内链接可解析(相对路径无死链)
 - [ ] 无 BOM / 无 CRLF / 无 U+FFFD,行尾 LF
-- [ ] 头部「状态:」与 README 索引行一致(§一/§二 分区正确)
+- [ ] 头部「状态:」与 README 索引行一致(§一/§二/§三 三区分区正确)
 - [ ] 新决策已进 README「决策速查」表(出处带链接)
-- [ ] 归档文档已从 §一 移入 §二,且全仓库无指向旧位置的链接
+- [ ] 归档/提案文档已从 §一 移入 §二/§三,且全仓库无指向旧位置的链接
 - [ ] 涉及代码/文案的改动已与文档同批提交
 - [ ] 无本机绝对路径 / 用户名 / IP(一律令牌化,见 §10)
 
@@ -188,6 +211,10 @@ $bom = $b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0x
 | `<JNO_MP>` | JNO 联机 mod 工程(JNOmultiplayerTest) |
 | `<VOLRE_REF>` | VolRe(KSP 体积云)参考源码 |
 | `<KSA_REF>` | KSA 体积云参考源码 |
+| `<SP2_D4>` | SimplePlanes 2 解包工程(RAIN 研究用) |
+| `<SP2_CODE>` | SimplePlanes 2 反编译源码 / 分析产物 |
+| `<SP2_GAME>` | SimplePlanes 2 游戏安装目录 |
+| `<RVM_EA>` | RaymarchedVolumetrics 早期预览版(EVE 降水配置参照) |
 
 - 引用反编译源码时,保留「文件名 + 行号」(如 `` `CraftNode.cs:1235-1240` ``),**不要**写本机路径形式的站外链接。
 - **上传前**:把文档内 `<TOKEN>` 之外的本机路径全部替换为令牌;`LOCAL_PATHS.md` 已被 `.gitignore` 排除,不会误提交。

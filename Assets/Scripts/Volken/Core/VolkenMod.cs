@@ -277,6 +277,10 @@ namespace Volken.Core
             if (cloudRenderer != null && farCam != null)
                 cloudRenderer.farDepthSource = farCam;
             // 天气:雾通道已按用户要求整体移除(2026-09-27),此处不再挂任何天气组件。
+            // 注:Phase 1 的雨丝构轴探针(RainAxisProbe)不再由正式代码挂载 —— 它在 VolkenTests 文件夹里,
+            //     由 `volkenRainAxisOn 1` 自行挂载(见 VolkenTests/README.md)。
+            // Phase 2/3:雨 compute 管线(默认关,在天气面板「雨」里开启;资产缺失时静默降级)。
+            Volken.Weather.RainParticles.AttachToCurrentView();
             Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
                 planetNode.PlanetData.HasWater);
             }
@@ -377,6 +381,8 @@ namespace Volken.Core
                     // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
                     if (cloudRenderer != null && farCam != null)
                         cloudRenderer.farDepthSource = farCam;
+                    // Phase 2/3:雨 compute 管线(SOI 切换后相机可能重建,重新挂)
+                    Volken.Weather.RainParticles.AttachToCurrentView();
 
                     Mod.Instance.ForceSettingScriptLoadGameObject.SetActive(
                         craftNode.Parent.PlanetData.HasWater);

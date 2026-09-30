@@ -62,7 +62,7 @@ namespace Assets.Scripts
             ForceSettingScriptLoadGameObject.SetActive(false);
             Volken.Core.VolkenMod.Initialize();
             VolkenWeather.Initialize();
-            VolkenProfiler.ProfilerController.Create();
+            // 注:性能剖析器(VolkenProfiler)不再由正式代码启动 —— 见 VolkenTests/TestsBootstrap.cs 自发注册
             RegisterCommands();
 
             Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
@@ -85,6 +85,17 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<float>("volkenSetWeather",SetWeatherValue);
             DevConsoleApi.RegisterCommand("volkenBolt",TriggerLightning);
             DevConsoleApi.RegisterCommand("volkenAssets",LogVolkenAssets);
+
+            // === 测试/开发工具的命令注册已移出正式代码 ===
+            //   `volkenRainAxis*`(Phase 1 构轴探针)与 `VolkenProfiler*`(性能剖析)现在由
+            //   `Assets/Scripts/VolkenTests/TestsBootstrap.cs` **自发注册** —— 正式代码对测试文件夹
+            //   **零引用**,删掉整个 VolkenTests 文件夹 mod 仍能编译运行(见该文件夹 README.md)。
+
+            // === 雨(阶段 3):**没有控制台指令** —— 全部旋钮已集成到天气面板「雨」分组 ===
+            //   面板:启用雨 / 立即切换雨 / 实时状态行 / 把状态写入日志 / 粒子数量 / 域半径 / 下落速度 /
+            //   雨丝长宽 / 拉伸 / 域边界淡出 / 软粒子 / 尾淡 / 亮度 / 朝向模式 / 出域镜像重生 / 海拔上限与带宽 /
+            //   触发阈值 / 开发:等距排自检。
+            //   (2026-09-29 用户要求:删除 volkenRainP2* 系列指令,避免"调试靠敲控制台"。)
         }
 
         /// <summary>打印天气系统当前状态(行星/配置/天气值/雷电)。
@@ -268,24 +279,42 @@ namespace Assets.Scripts
         /// </remarks>
         public static T LoadVolkenAsset<T>(string path, bool required = true) where T : UnityEngine.Object
         {
+            // ① 编辑器(含 Play 预览):**先用 AssetDatabase** ——
+            //   ⚠️ 不要先碰 `Instance.ResourceLoader`:编辑器里访问 Mod.Instance 可能触发游戏侧半初始化,
+            //   刷出一堆无关报错(CelestialDatabase / SceneManager prefab 找不到之类)。
+            //   路径格式与游戏内一致(工程相对路径),所以两边共用同一个常量。
+#if UNITY_EDITOR
+            try
+            {
+                var editorAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+                if (editorAsset != null)
+                {
+                    _assetLedger[path] = "ok(editor)";
+                    return editorAsset;
+                }
+            }
+            catch
+            {
+            }
+#endif
+
+            // ② 游戏内:走 mod 资源加载器(sr2-mod 包里的 asset bundle)
             try
             {
                 var asset = Instance.ResourceLoader.LoadAsset<T>(path);
-                if (asset == null)
+                if (asset != null)
                 {
-                    if (required) Log($"LoadVolkenAsset: '{path}' not found (rebuild the asset bundle?)");
-                    _assetLedger[path] = required ? "MISSING(required)" : "missing(optional)";
-                    return null;
+                    _assetLedger[path] = "ok";
+                    return asset;
                 }
-                _assetLedger[path] = "ok";
-                return asset;
             }
-            catch (Exception ex)
+            catch
             {
-                if (required) Log($"LoadVolkenAsset '{path}' failed: {ex.Message}");
-                _assetLedger[path] = "ERROR: " + ex.GetType().Name;
-                return null;
             }
+
+            if (required) Log($"LoadVolkenAsset: '{path}' not found (rebuild the asset bundle?)");
+            _assetLedger[path] = required ? "MISSING(required)" : "missing(optional)";
+            return null;
         }
 
         #endregion

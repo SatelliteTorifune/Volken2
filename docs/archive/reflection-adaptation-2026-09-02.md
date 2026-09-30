@@ -3,7 +3,7 @@
 > 状态:✅ 已归档(原状态:分析完成,方案 A 已落地——水面反射云;方案 B 机体探头未做)
 > 分析日期:2026-09
 > 分析方式:读 Volken 云渲染源码 + 反编译游戏程序集(SimpleRockets2.dll / ModApi)核实游戏的实时反射实现。
-> 相关文档:[../Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md](../Volken-体积云优化点分析-VolRe与KSA借鉴-2026-08-28.md)(#7 反射探头处理)
+> 相关文档:[../proposals/cloud-optimization-roadmap-2026-08-28.md](../proposals/cloud-optimization-roadmap-2026-08-28.md)(#7 反射探头处理)
 
 ---
 

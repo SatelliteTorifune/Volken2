@@ -1,6 +1,6 @@
-# Volken-SP2天气系统移植BIRP计划-2026-09-27
+# Volken —— SP2 天气系统移植计划(原生 BIRP)
 
-> 状态:🚧 **实施中 —— 且已大幅缩减范围**(2026-09-27 末)
+> 状态:⏸ **已转 proposals(暂停 / 转参考)** —— 原状态:🚧 实施中且已大幅缩减范围(2026-09-27 末);**当前活跃工作已拆出**:雨重做见 [`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md),雷声收尾见 [`thunder-realism-2026-09-28.md`](thunder-realism-2026-09-28.md)。本文档继续作为**决策沿革 + 素材/反编译底账**使用。
 >
 > **⚠️ 当前实际范围:只做雷电。雨(阶段 2)与雾(阶段 3)的实现已整体移除,准备重做。**
 > 保留:阶段 0 骨架 + 阶段 1 雷电 + 天气状态机。移除详情与原因见 [§10.2e](#102e-重大变更雨与雾整体移除只保留雷电2026-09-27用户决定)。
@@ -33,12 +33,12 @@
 
 - Volken 当前 = SR2/Juno 的 **raymarch 体积云 mod**(自研 `CloudRenderer` + `Clouds.shader`,BIRP `[ImageEffectOpaque]` 合成链,Unity 2022.3.62f3)。
 - 需求:在有大气的行星上增加**雨、雾、雷电**,由逐行星天气配置驱动,与云层/大气联动。
-- 移植来源:SP2 反编译工程 `C:\renko\shitProgram\反编译的\sp2` + 游戏安装 DLL 反编译产物 `analysis\dll\` + 素材提取工程 `C:\renko\unityProjects\sp2d4`。
+- 移植来源:SP2 反编译工程 `<SP2_CODE>` + 游戏安装 DLL 反编译产物 `analysis\dll\` + 素材提取工程 `<SP2_D4>`。
 - 目标工程:本仓库 Volken2(Unity 2022.3.62f3, BIRP, SR2 mod)。
 
 ## 2. SP2 天气系统本质(反编译实证)
 
-> 全部结论来自对游戏安装目录 DLL 的反编译:`SimplePlanes 2_Data\Managed\Enviro3.Runtime.dll`、`Jundroo.Common.dll`。反编译源码见 `C:\renko\shitProgram\反编译的\sp2\analysis\dll\`。
+> 全部结论来自对游戏安装目录 DLL 的反编译:`SimplePlanes 2_Data\Managed\Enviro3.Runtime.dll`、`Jundroo.Common.dll`。反编译源码见 `<SP2_CODE>\analysis\dll\`。
 
 ### 2.1 雨 = Jundroo ParticleDomain(GPU 计算粒子域)+ Enviro 雨粒子(次要)
 
@@ -174,12 +174,12 @@ Weather/
 
 ## 9. 参考(反编译产物)
 
-- `C:\renko\shitProgram\反编译的\sp2\analysis\dll\Jundroo.Common.ParticleDomain.decompiled.cs`(698 行,雨域全源码)
-- `C:\renko\shitProgram\反编译的\sp2\analysis\dll\Jundroo.Common.RTCameraRendererFeature.decompiled.cs` + `RTCameraRenderPass.decompiled.cs`(遮挡 URP 实现,供 BIRP 改写参照)
-- `C:\renko\shitProgram\反编译的\sp2\analysis\dll\Enviro.EnviroLightningModule.decompiled.cs` + `Enviro.Lightning.decompiled.cs`(闪电全源码)
-- `C:\renko\shitProgram\反编译的\sp2\analysis\dll\Enviro.EnviroFogModule.decompiled.cs`(728 行,雾全源码)
-- `C:\renko\shitProgram\反编译的\sp2\analysis\dll\Enviro.EnviroAudioModule.decompiled.cs`(雷声播放)
-- 游戏侧:`C:\renko\shitProgram\反编译的\sp2\Game\Game\Assets\Scripts\Flight\ParticleHandler.cs`、`Assets\Scripts\Environment\VolumetricEnvironment.cs`、`Assets\Scripts\Environment\WeatherTypes.cs`
+- `<SP2_CODE>\analysis\dll\Jundroo.Common.ParticleDomain.decompiled.cs`(698 行,雨域全源码)
+- `<SP2_CODE>\analysis\dll\Jundroo.Common.RTCameraRendererFeature.decompiled.cs` + `RTCameraRenderPass.decompiled.cs`(遮挡 URP 实现,供 BIRP 改写参照)
+- `<SP2_CODE>\analysis\dll\Enviro.EnviroLightningModule.decompiled.cs` + `Enviro.Lightning.decompiled.cs`(闪电全源码)
+- `<SP2_CODE>\analysis\dll\Enviro.EnviroFogModule.decompiled.cs`(728 行,雾全源码)
+- `<SP2_CODE>\analysis\dll\Enviro.EnviroAudioModule.decompiled.cs`(雷声播放)
+- 游戏侧:`<SP2_CODE>\Game\Game\Assets\Scripts\Flight\ParticleHandler.cs`、`Assets\Scripts\Environment\VolumetricEnvironment.cs`、`Assets\Scripts\Environment\WeatherTypes.cs`
 
 ---
 
@@ -595,7 +595,7 @@ amount = BaseParticleAmount × quality × rainStrength × densityScale;
 
 ### 10.2c2 粒子密度标定:EVE(blackrack 体积云)的实测配置(2026-09-27)
 
-> 参照物:`C:\renko\RaymarchedVolumetricsEarlyAccess03_01_26 - 副本`
+> 参照物:`<RVM_EA>`
 > —— EVE 的体积云预览版(KSP mod,含**完整的降水系统**)。
 > 它的雨配置在 `GameData/StockVolumetricClouds/Clouds/particleFields.cfg`:
 
@@ -703,7 +703,7 @@ amount       = BaseParticleAmount × quality × rainStrength × densityScale;
 ### 10.2d JNO 坐标系研究结论(2026-09-27,针对"雨横向 + 间歇")
 
 > 起因:用户反馈"JNO 是航天游戏,导致雨滴间歇性 + 方向横向"。下面是读
-> `C:\renko\shitProgram\jnoCode` 得到的**事实**(不是推测),以及由此定下的修法。
+> `<JNO_CODE>` 得到的**事实**(不是推测),以及由此定下的修法。
 
 **A. JNO/SR2 没有任何风系统。**
 `WindManager` / `WindVelocity` 在整个 `jnoCode` 仓库**零命中**;
@@ -991,7 +991,7 @@ Rain:HB ... fade=0.765 ... pendingDraw=True draws/s=0 everDrew=False
 
 **这次的经验教训(供重做时参考)**
 
-> 📌 **完整复盘已独立成文:[`Volken-天气雨雾移植失败教训-2026-09-27.md`](Volken-天气雨雾移植失败教训-2026-09-27.md)**
+> 📌 **完整复盘已独立成文:[`../archive/weather-rain-fog-postmortem-2026-09-27.md`](../archive/weather-rain-fog-postmortem-2026-09-27.md)**
 > —— 4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线 / 重做起步清单。**重做雨/雾前必读。**
 > 下面只是提要。
 

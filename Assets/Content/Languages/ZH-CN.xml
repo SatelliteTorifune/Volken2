@@ -41,10 +41,27 @@
     <s id="Volken.UI.CloudLinkageDarken">天气 → 云色暗化</s>
     <s id="Volken.UI.CloudLinkageWind">天气 → 云风速</s>
 
-    <s id="Volken.UI.WeatherRain">雨(已移除,占位)</s>
+    <s id="Volken.UI.WeatherRain">雨(阶段 3,实时生效)</s>
+    <s id="Volken.UI.RainStats">状态(实时)</s>
+    <s id="Volken.UI.RainToggleNow">立即切换雨</s>
+    <s id="Volken.UI.RainOnMsg">雨已开启</s>
+    <s id="Volken.UI.RainOffMsg">雨已关闭</s>
+    <s id="Volken.UI.RainStreamMode">雨丝朝向沿相对速度(SP2 AlignStreaks;关=恒径向竖直)</s>
+    <s id="Volken.UI.RainStretch">随速度拉伸系数(SP2 0.045;0=不拉伸)</s>
+    <s id="Volken.UI.RainStretchLimit">拉伸上限(雨丝最长 = 长度 × 此值;嫌太长就调小)</s>
+    <s id="Volken.UI.RainEdgeFade">域边界淡出宽度(占半径;0=关,默认 0.2)</s>
+    <s id="Volken.UI.RainSoftParticles">软粒子强度(0=硬边,1=SP2 默认)</s>
+    <s id="Volken.UI.RainTailFalloff">雨丝尾淡(SP2 _falloff,0.9)</s>
+    <s id="Volken.UI.RainBrightness">亮度增益(0=原色)</s>
     <s id="Volken.UI.WeatherRainRemoved">雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>
     <s id="Volken.UI.RainEnabled">启用雨</s>
     <s id="Volken.UI.RainTriggerValue">触发天气值</s>
+    <s id="Volken.UI.RainCeilingAltitude">雨的海拔上限(米;0=关闭闸门,不限制)</s>
+    <s id="Volken.UI.RainCeilingBand">上限淡出带宽(占上限比例;0.4=顶部 40% 渐隐)</s>
+    <s id="Volken.UI.RainRespawnMirror">出域镜像重生(开=确定性传送带,会周期性团块;关=随机混合,推荐)</s>
+    <s id="Volken.UI.RainDumpLog">把雨状态写入日志(排查用)</s>
+    <s id="Volken.UI.RainDumped">雨状态已写入 Player.log</s>
+    <s id="Volken.UI.RainRowTest">开发:等距排自检(SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">粒子数量</s>
     <s id="Volken.UI.RainDomainRadius">粒子域半径(米)</s>
     <s id="Volken.UI.RainAdaptiveDomain">域半径随速度自适应</s>

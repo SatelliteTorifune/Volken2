@@ -1,7 +1,8 @@
 # Volken2 体积云优化点分析 —— 借鉴 VolRe(blackrack KSP EVE)与 KSAre(KSA)
 
-> 状态:📋 优化路线图(分析完成;T0 已部分落地,Light Volume/PlaceRays 为长期项)
+> 状态:📋 优化路线图(**已转 proposals,未排期**;分析完成,T0 已部分被方案 C / 轨道云消化,Light Volume/PlaceRays 为长期项)
 > 分析日期:2026-08-28
+> 关联:[`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md)(当前唯一活跃方案;#2 距离淡出、#8 层壳相交排序与其雨渲染同源)
 > 范围:
 > - 本项目:`Assets/Scripts/Volken/`(CloudRenderer / CloudLayer / CloudNoise / CloudConfig / Clouds.shader / CloudNoiseCompute.compute)
 > - 参考 A:`<VOLRE_REF>`(KSP 体积云,反编译 C#)

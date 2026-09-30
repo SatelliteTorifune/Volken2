@@ -173,8 +173,12 @@ namespace Volken.Weather
             /// </summary>
             public float triggerValue = 2.25f;
 
-            /// <summary>粒子数量上限。</summary>
-            public float amount = 20000f;
+            /// <summary>
+            /// 粒子数量上限。**默认 100000 = SP2 出厂值**(`_particleAmount`;R=50 时密度 0.191/m³)。
+            /// ⚠️ 密度是"不像面条"的关键:粒子太少时每根雨丝都被单独看清 → 细线感;
+            ///   SP2 用 10 万粒子把场填满,雨丝才读成"雨"。掉帧就在面板把这一项拉下来。
+            /// </summary>
+            public float amount = 100000f;
 
             /// <summary>粒子域半径(米)。</summary>
             public float domainRadius = 50f;
@@ -194,11 +198,68 @@ namespace Volken.Weather
             /// <summary>雨丝长度(米)。</summary>
             public float streakLength = 2.5f;
 
-            /// <summary>雨丝宽度(米)。</summary>
-            public float streakWidth = 0.05f;
+            /// <summary>
+            /// 雨丝宽度(米)。**默认 0.1 = SP2 出厂值**(`_streakThickness`)。
+            /// ⚠️ 曾误用 0.05(配置层旧值),比 SP2 细一半 → 雨丝变"细亮线"=面条观感。
+            /// </summary>
+            public float streakWidth = 0.1f;
 
             /// <summary>雨声音量。</summary>
             public float volume = 0.5f;
+
+            // ===== 阶段 3 正式雨滴(2026-09-29 接入 UI;SP2 出厂值见计划 §10.15)=====
+
+            /// <summary>
+            /// 雨丝朝向速度源:true = 沿相对速度(下落−飞行器速度,SP2 AlignStreaks 语义);
+            /// false = 恒径向"下"(雨丝永远竖直,不看速度)。两者都是世界系朝向,与相机无关。
+            /// </summary>
+            public bool streamMode = true;
+
+            /// <summary>雨丝随速度拉伸系数(SP2 _stretchAmount;0 = 不拉伸)。</summary>
+            public float stretchAmount = 0.045f;
+
+            /// <summary>
+            /// 拉伸上限(SP2 _stretchLimit = 3.5)。雨丝最长 = streakLength × 本值(默认 3.5 → 8.75m);
+            /// 嫌"太长像面条"就把这项或拉伸系数调小。
+            /// </summary>
+            public float stretchLimit = 3.5f;
+
+            /// <summary>
+            /// 域边界淡出宽度(占球域半径比例;SP2 把 _DomainPos/_DomainRadius 传给 material 即此用途)。
+            /// 0 = 关;默认 0.2 = 最外 20% 半径渐隐,隐藏球域边界与出域回收的突现。
+            /// </summary>
+            public float edgeFade = 0.2f;
+
+            /// <summary>软粒子因子(SP2 _InvFade;0 = 关(硬边),1 = SP2 默认)。</summary>
+            public float softParticles = 1f;
+
+            /// <summary>雨丝尾淡(SP2 _falloff;0 = 不淡,1 = 尾端全透明)。</summary>
+            public float tailFalloff = 0.9f;
+
+            /// <summary>雨丝亮度增益(= shader _Emission;SP2 用 _mainLightIntensity 1.2 做同量级提亮)。</summary>
+            public float brightness = 0f;
+
+            // ===== 海拔闸门(2026-09-29)=====
+            // 【为什么必需】SP2 最大缩放只到"半个岛",远低于云层 → 从不需要处理"相机在云层之上/太空";
+            // JNO 能把镜头缩到整颗星球 → 不加限制会在太空里下雨。
+            // SP2 的等价机制:CloudHeightFade = Environment.CameraCloudFadeVal + 只在地面以上才更新。
+            // ⚠️ 阈值是**雨自己的独立配置项**(用户 2026-09-29 决定):早期阶段**不与云层联动**,
+            //   不去读 CloudConfig.maxCloudHeight —— 少一层耦合、行为可预测。
+
+            /// <summary>雨的海拔上限(米;**0 = 关闭闸门(不限制)**)。超过上限不再下雨。</summary>
+            public float ceilingAltitude = 12000f;
+
+            /// <summary>上限处的淡出带宽(占上限比例 0.02~1;默认 0.4 = 上限顶部 40% 渐隐到 0)。</summary>
+            public float ceilingBand = 0.4f;
+
+            // ===== 出域处置(2026-09-29)=====
+            // 默认 **false = 域内随机重生**:随机化带来持续混合 → 连续雨帘、无周期团块。
+            // ⚠️ 曾经默认 true(确定性镜像,为消除近旁爆闪),但它让整片雨**零混合**:
+            //   同速下落 + 确定性处置 → 初始的每一簇粒子永远成团、周期性一起落下,
+            //   实测"雨像下面条一样集中一股脑下降"(静止周期 ≈ 6.7s,飞行 ≈ 0.6s)。
+
+            /// <summary>false = 域内随机重生(默认,持续混合、像真雨);true = 确定性镜像(会周期团块,仅对照用)。</summary>
+            public bool respawnMirror = false;
 
             public void CopyFrom(RainSection s)
             {
@@ -214,6 +275,16 @@ namespace Volken.Weather
                 streakLength = s.streakLength;
                 streakWidth = s.streakWidth;
                 volume = s.volume;
+                streamMode = s.streamMode;
+                stretchAmount = s.stretchAmount;
+                stretchLimit = s.stretchLimit;
+                edgeFade = s.edgeFade;
+                softParticles = s.softParticles;
+                tailFalloff = s.tailFalloff;
+                brightness = s.brightness;
+                ceilingAltitude = s.ceilingAltitude;
+                ceilingBand = s.ceilingBand;
+                respawnMirror = s.respawnMirror;
             }
         }
 
@@ -440,6 +511,31 @@ namespace Volken.Weather
         }
 
         /// <summary>
+        /// 默认值升级:**只重写"仍是旧默认值"的字段**(用户手动改过的一律不动)。
+        ///
+        /// 2026-09-29(雨重做):旧默认值在观感上被证实是错的 ——
+        ///   ① <c>rain.streakWidth</c> 0.05 → **0.1**(SP2 `_streakThickness`):0.05 只有 SP2 的一半宽,
+        ///      雨丝变成"细亮线",真机反馈"和下面条一个样";
+        ///   ② <c>rain.amount</c> 20000 → **100000**(SP2 `_particleAmount`):密度太低时每根雨丝都被单独看清,
+        ///      密度是"不像面条"的关键(SP2 用 10 万粒子铺满)。
+        /// ⚠️ XML 反序列化对**已存在的字段**用存档值,新默认值不会自动生效 → 必须有这一步,
+        ///   否则老配置永远停在旧值上。
+        /// </summary>
+        public void UpgradeUneditedDefaults()
+        {
+            EnsureSections();
+            int upgraded = 0;
+            if (Mathf.Abs(rain.streakWidth - 0.05f) < 1e-4f) { rain.streakWidth = 0.1f; upgraded++; }
+            if (Mathf.Abs(rain.amount - 20000f) < 1f) { rain.amount = 100000f; upgraded++; }
+            if (Mathf.Abs(rain.stretchLimit) < 1e-4f) { rain.stretchLimit = 3.5f; upgraded++; }   // 旧存档无此字段
+            if (upgraded > 0)
+            {
+                Mod.Diag("VolkenWeatherConfig: 默认值升级 {0} 项(雨丝宽度→0.1、粒子数量→100000、拉伸上限→3.5;" +
+                         "仅当字段仍是旧默认值时改写,手动改过的不动)", upgraded);
+            }
+        }
+
+        /// <summary>
         /// 把 XML 里可能出现的越界值收拢到安全区间(手改配置/旧文件都可能带脏值,
         /// 这些值会直接进 shader 与 compute,必须挡在门口)。
         /// </summary>
@@ -470,6 +566,14 @@ namespace Volken.Weather
             rain.streakLength = Mathf.Clamp(rain.streakLength, 0.05f, 50f);
             rain.streakWidth = Mathf.Clamp(rain.streakWidth, 0.001f, 2f);
             rain.volume = Mathf.Clamp01(rain.volume);
+            rain.stretchAmount = Mathf.Clamp(rain.stretchAmount, 0f, 1f);
+            rain.stretchLimit = Mathf.Clamp(rain.stretchLimit, 1f, 20f);
+            rain.edgeFade = Mathf.Clamp(rain.edgeFade, 0f, 0.5f);
+            rain.softParticles = Mathf.Clamp(rain.softParticles, 0f, 3f);
+            rain.tailFalloff = Mathf.Clamp01(rain.tailFalloff);
+            rain.brightness = Mathf.Clamp(rain.brightness, 0f, 3f);
+            rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);
+            rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
 
             // ---- ④ 雾(占位) ----
             fog.height = Mathf.Clamp(fog.height, 1f, 20000f);
@@ -622,6 +726,7 @@ namespace Volken.Weather
                     VolkenWeatherConfig config = serializer.Deserialize(stream) as VolkenWeatherConfig;
                     if (config == null) return CreateDefault();
                     config.EnsureSections();
+                    config.UpgradeUneditedDefaults();
                     config.ClampAll();
                     Mod.Log($"Weather config '{configName}' loaded from: {filePath}");
                     return config;

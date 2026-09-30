@@ -41,10 +41,27 @@
     <s id="Volken.UI.CloudLinkageDarken">Weather to Cloud Darkening</s>
     <s id="Volken.UI.CloudLinkageWind">Weather to Cloud Wind</s>
 
-    <s id="Volken.UI.WeatherRain">Rain (removed, placeholder)</s>
+    <s id="Volken.UI.WeatherRain">Rain (stage 3, live)</s>
+    <s id="Volken.UI.RainStats">Status (live)</s>
+    <s id="Volken.UI.RainToggleNow">Toggle rain now</s>
+    <s id="Volken.UI.RainOnMsg">Rain enabled</s>
+    <s id="Volken.UI.RainOffMsg">Rain disabled</s>
+    <s id="Volken.UI.RainStreamMode">Streaks along relative velocity (SP2 AlignStreaks; off = always radial down)</s>
+    <s id="Volken.UI.RainStretch">Stretch vs speed (SP2 0.045; 0 = none)</s>
+    <s id="Volken.UI.RainStretchLimit">Stretch limit (max streak length = length x this; lower if too long)</s>
+    <s id="Volken.UI.RainEdgeFade">Domain edge fade width (fraction of radius; 0 = off, default 0.2)</s>
+    <s id="Volken.UI.RainSoftParticles">Soft particles (0 = hard edge, 1 = SP2 default)</s>
+    <s id="Volken.UI.RainTailFalloff">Streak tail falloff (SP2 _falloff, 0.9)</s>
+    <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
     <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>
     <s id="Volken.UI.RainEnabled">Rain Enabled</s>
     <s id="Volken.UI.RainTriggerValue">Trigger Weather Value</s>
+    <s id="Volken.UI.RainCeilingAltitude">Rain ceiling altitude (m; 0 = no limit (gate off))</s>
+    <s id="Volken.UI.RainCeilingBand">Ceiling fade band (fraction of ceiling; 0.4 = top 40% fades)</s>
+    <s id="Volken.UI.RainRespawnMirror">Mirror respawn (on = deterministic conveyor, periodic clumps; off = randomized mixing, recommended)</s>
+    <s id="Volken.UI.RainDumpLog">Dump rain status to the log (for troubleshooting)</s>
+    <s id="Volken.UI.RainDumped">Rain status written to Player.log</s>
+    <s id="Volken.UI.RainRowTest">Dev: evenly spaced test row (SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">Particle Amount</s>
     <s id="Volken.UI.RainDomainRadius">Domain Radius (m)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Adaptive Domain Radius</s>

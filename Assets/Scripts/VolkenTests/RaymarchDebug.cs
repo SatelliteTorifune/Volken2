@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Volken.Debug
+namespace Volken.Tests
 {
     using Volken.Clouds;
 

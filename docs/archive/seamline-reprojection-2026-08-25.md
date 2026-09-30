@@ -1,7 +1,7 @@
-# Volken-割裂线排查记录 · 运动残影(TSS 关闭)
+# Volken —— 割裂线排查记录 · 运动残影(TSS 关闭)
 
 > 状态:✅ 已归档(原状态:已修复 2026-08-25;根因 = 重投影 Y 约定镜像,GPU 投影修复)
-> 关联方案:[Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md](Volken-方案C-KSA体积云技术移植BIRP-2026-08-24.md)
+> 关联方案:[ksa-temporal-upscale-port-2026-08-24.md](ksa-temporal-upscale-port-2026-08-24.md)
 > 创建:2026-08-25(凌晨,用户睡前整理)
 
 ---

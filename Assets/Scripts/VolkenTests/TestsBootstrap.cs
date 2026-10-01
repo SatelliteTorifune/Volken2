@@ -70,6 +70,10 @@ namespace Volken.Tests
                 DevConsoleApi.RegisterCommand<int>("volkenRainAxisMode", RainAxisProbe.SetMode);
                 DevConsoleApi.RegisterCommand<float, float, float>("volkenRainAxisVec", RainAxisProbe.SetAirDir);
                 DevConsoleApi.RegisterCommand<int>("volkenRainAxisCount", RainAxisProbe.SetCount);
+                // 雨声状态(素材是否进包 / 门控 / 混音)
+                DevConsoleApi.RegisterCommand("volkenRainAudio", Volken.Weather.RainAudio.DiagStatus);
+                DevConsoleApi.RegisterCommand<int>("volkenRainAudioOn", Volken.Weather.RainAudio.SetEnabled);
+                DevConsoleApi.RegisterCommand<float>("volkenRainAudioVol", Volken.Weather.RainAudio.SetVolume);
             }
             catch
             {
@@ -78,7 +82,8 @@ namespace Volken.Tests
 
             _registered = true;
             UnityEngine.Debug.Log("[VolkenTests] 测试命令已注册: volkenRainAxis / volkenRainAxisOn / volkenRainAxisMode / " +
-                                  "volkenRainAxisVec / volkenRainAxisCount(+ VolkenProfiler*)");
+                                  "volkenRainAxisVec / volkenRainAxisCount / volkenRainAudio / volkenRainAudioOn / " +
+                                  "volkenRainAudioVol(+ VolkenProfiler*)");
             return true;
         }
     }

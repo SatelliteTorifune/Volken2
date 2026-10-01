@@ -8,7 +8,8 @@ namespace Volken.Weather
 {
     /// 一道闪电的视觉表现:主干 LineRenderer 逐段"生长" + 分叉 + 落点闪光球/点光源。播完自毁,不池化(雷击间隔秒级)。
     /// 必须由 <see cref="Update"/> 驱动、**不能用协程**:层级 inactive 时 Unity 会静默拒绝启动协程(只打一行警告),
-    /// 销毁就再没有别的触发路径 → 闪电永久残留;分叉必须各自持有自己的材质实例,否则主干 <c>Destroy(_boltMat)</c> 后渲染成品红/淡紫。
+    /// 销毁就再没有别的触发路径 → 闪电永久残留;分叉用整道雷共享的一份材质拷贝(<see cref="SplitMaterial"/>),
+    /// **不能**直接用主干材质 —— 主干收尾的 <c>Destroy(_boltMat)</c> 会让还在渲染的分叉变成品红/淡紫。
     /// 残留/紫红根因与打包清单见 docs/proposals/thunder-realism-2026-09-28.md §7 §8。
     public class LightningBolt : MonoBehaviour
     {
@@ -38,6 +39,7 @@ namespace Volken.Weather
 
         // 两个时间量不可混用:_lastActiveTime = 最近一次还在 Update 的时刻(随时间前移),_bornTime = 出生时刻(固定)。
         // 混用会让"僵死判定"退化成"活满 N 秒就杀",正常雷都会被误杀(见 Update)。
+        // 两者都用 GamePause.Now(排除暂停时长):否则游戏暂停超过 HardLifetime 就会把这道雷掐掉,而它的雷声恢复后还会响 —— 空响一声雷。
         private const float HardLifetime = 3.5f;       // 秒,自**出生**起算,超过无条件销毁(正常一道雷 <2s 播完)
         private const int FlashCount = 4;              // 亮 25~35ms → 灭 25~35ms 交替;最后一次闪完直接淡出
         private const float MaxHiddenSeconds = 1.5f;   // 连续不可见(自上次 Update 起算)超过它 → 认定不会再恢复 → 销毁;正常切视角远达不到
@@ -70,12 +72,16 @@ namespace Volken.Weather
             Done,
         }
 
+        // 程序化资源全闪电共用:每道雷重建 = 每次多一个网格,每分叉一个渐变。
+        private static Mesh _sharedFlashMesh;
+        private static Gradient _sharedGradient;
+
         private LineRenderer _line;
         private Light _light;
         private Transform _flashPlane;
         private Material _boltMat;
         private Material _flashMat;
-        private Mesh _flashMesh;
+        private Material _splitMat;   // 全部分叉共用;各分叉独占 = 每次落雷多造 (splits+1)×(arcs-2) 份材质
 
         // 本道闪电生出的全部分叉,收尾时与主干**同步**销毁(见 Finish)。
         private readonly System.Collections.Generic.List<GameObject> _splits =
@@ -110,7 +116,7 @@ namespace Volken.Weather
             var bolt = go.AddComponent<LightningBolt>();
             bolt.targetCamera = cam;
             bolt.Build(boltShader, flashShader);
-            bolt._bornTime = Time.realtimeSinceStartup;
+            bolt._bornTime = GamePause.Now;
             ActiveBolts.Add(bolt);
             return bolt;
         }
@@ -154,15 +160,14 @@ namespace Volken.Weather
             _line.receiveShadows = false;
             _line.lightProbeUsage = LightProbeUsage.Off;
             _line.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            _line.colorGradient = BuildBoltGradient();   // 两端渐隐(shader 会把顶点色乘进颜色)
+            _line.colorGradient = SharedGradient;   // 两端渐隐(shader 会把顶点色乘进颜色)
 
             // 落点闪光球
             var flashGo = new GameObject("FlashPlane");
             flashGo.transform.SetParent(transform, false);
             _flashPlane = flashGo.transform;
             var mf = flashGo.AddComponent<MeshFilter>();
-            _flashMesh = BuildSphereMesh(8, 12);
-            mf.sharedMesh = _flashMesh;
+            mf.sharedMesh = SharedFlashMesh;
             var mr = flashGo.AddComponent<MeshRenderer>();
             mr.sharedMaterial = _flashMat;
             mr.shadowCastingMode = ShadowCastingMode.Off;
@@ -181,6 +186,40 @@ namespace Volken.Weather
             _light.color = new Color(0.85f, 0.9f, 1f, 1f);
             _light.shadows = LightShadows.None;
             _light.enabled = false;
+        }
+
+        /// <summary>落点闪光球网格:全闪电共用的静态资源(每道雷重建一份纯属浪费)。</summary>
+        private static Mesh SharedFlashMesh
+        {
+            get
+            {
+                if (_sharedFlashMesh == null)
+                {
+                    _sharedFlashMesh = BuildSphereMesh(8, 12);
+                    _sharedFlashMesh.hideFlags = HideFlags.HideAndDontSave;   // 不在场景切换时被回收
+                }
+                return _sharedFlashMesh;
+            }
+        }
+
+        /// <summary>主干与分叉共用的颜色渐变(<c>LineRenderer.colorGradient</c> 是拷贝语义,可共享同一份)。</summary>
+        private static Gradient SharedGradient
+        {
+            get
+            {
+                if (_sharedGradient == null) _sharedGradient = BuildBoltGradient();
+                return _sharedGradient;
+            }
+        }
+
+        /// <summary>主干材质的一次拷贝,供本道闪电的全部分叉共用;统一在 <see cref="DestroySplits"/> 回收。</summary>
+        private Material SplitMaterial
+        {
+            get
+            {
+                if (_splitMat == null) _splitMat = new Material(_boltMat);
+                return _splitMat;
+            }
         }
 
         private static Gradient BuildBoltGradient()
@@ -441,16 +480,16 @@ namespace Volken.Weather
         {
             for (int i = 0; i < _splits.Count; i++)
             {
-                var go = _splits[i];
-                if (go == null) continue;
-
-                // 材质是每个分叉独占的实例,可以就地销毁;不销毁则每次落雷都漏几份永不回收的材质。
-                var sr = go.GetComponent<LineRenderer>();
-                if (sr != null && sr.sharedMaterial != null) Destroy(sr.sharedMaterial);
-
-                Destroy(go);
+                if (_splits[i] != null) Destroy(_splits[i]);
             }
             _splits.Clear();
+
+            // 分叉共用的那**一份**材质在最后回收;漏掉则每次落雷都留下一份永不回收的材质。
+            if (_splitMat != null)
+            {
+                Destroy(_splitMat);
+                _splitMat = null;
+            }
         }
 
         private void Release()
@@ -461,20 +500,17 @@ namespace Volken.Weather
         }
 
         /// 一条分叉:8 点、朝"目标方向 + 球内随机 ×500"飞,存活 0.2~0.5s。
-        /// **必须各自持有自己的材质实例**(<c>new Material(_boltMat)</c>):共享主干材质时,主干收尾的 <c>Destroy(_boltMat)</c> 会让分叉渲染成品红/淡紫。
+        /// 材质**不能**直接用主干那份(主干收尾会 <c>Destroy(_boltMat)</c> → 分叉渲染成品红/淡紫),改用 <see cref="SplitMaterial"/> 的整道雷共享拷贝。
         private void SpawnSplit(Vector3 from)
         {
             var splitGo = new GameObject("Split");
             splitGo.transform.position = from;
             var sr = splitGo.AddComponent<LineRenderer>();
-            sr.material = new Material(_boltMat);   // 独占实例,不可共享(见上)
+            sr.material = SplitMaterial;
             sr.widthMultiplier = width * 0.5f;
             sr.useWorldSpace = true;
             sr.alignment = LineAlignment.View;
-            sr.positionCount = 2;
-            sr.SetPosition(0, from);
-            sr.SetPosition(1, from);
-            sr.colorGradient = BuildBoltGradient();
+            sr.colorGradient = SharedGradient;
             sr.shadowCastingMode = ShadowCastingMode.Off;
             sr.receiveShadows = false;
             sr.lightProbeUsage = LightProbeUsage.Off;
@@ -526,7 +562,8 @@ namespace Volken.Weather
         {
             // 连续不可见时长 = 现在 − **最近一次还在 Update 的时刻**(该时刻随时间前移)。
             // 不要用 _bornTime:那是"总年龄",用它会把"活满 1.5s 就杀"当成僵死判定。
-            float hiddenFor = Time.realtimeSinceStartup - _lastActiveTime;
+            float now = GamePause.Now;
+            float hiddenFor = now - _lastActiveTime;
 
             if (_phase != Phase.Done)
             {
@@ -537,23 +574,26 @@ namespace Volken.Weather
                     return;
                 }
 
-                switch (_phase)
+                if (!GamePause.IsPaused)   // 暂停时冻住动画,与同样冻住的雷声保持同步
                 {
-                    case Phase.Grow:
-                        if (!_begun) BeginAnimation();
-                        StepGrow(Time.deltaTime);
-                        break;
-                    case Phase.Flash:
-                        StepFlash(Time.deltaTime);
-                        break;
-                    case Phase.Fade:
-                        StepFade(Time.deltaTime);
-                        break;
+                    switch (_phase)
+                    {
+                        case Phase.Grow:
+                            if (!_begun) BeginAnimation();
+                            StepGrow(Time.deltaTime);
+                            break;
+                        case Phase.Flash:
+                            StepFlash(Time.deltaTime);
+                            break;
+                        case Phase.Fade:
+                            StepFade(Time.deltaTime);
+                            break;
+                    }
                 }
             }
 
             if (_phase == Phase.Done) return;
-            if (Time.realtimeSinceStartup - _bornTime > HardLifetime)
+            if (now - _bornTime > HardLifetime)
             {
                 Mod.Log($"Volken:LightningBolt hard lifetime {HardLifetime:F1}s exceeded (phase={_phase}) — cleaning up");
                 Finish();
@@ -566,12 +606,12 @@ namespace Volken.Weather
         private void LateUpdate()
         {
             // 放 LateUpdate:Update 里若已 Finish,这里就不会再刷新时间戳
-            if (_phase != Phase.Done) _lastActiveTime = Time.realtimeSinceStartup;
+            if (_phase != Phase.Done) _lastActiveTime = GamePause.Now;
         }
 
         private void OnEnable()
         {
-            _lastActiveTime = Time.realtimeSinceStartup;
+            _lastActiveTime = GamePause.Now;
         }
 
         private void OnDestroy()
@@ -580,13 +620,13 @@ namespace Volken.Weather
             DestroySplits();   // 防漏:DestroyAll / 异常路径下也要把分叉带走(幂等)
             if (_boltMat != null) Destroy(_boltMat);
             if (_flashMat != null) Destroy(_flashMat);
-            if (_flashMesh != null) Destroy(_flashMesh);
+            // _sharedFlashMesh 是全闪电共用的静态资源,不在这里销毁
         }
     }
 
     /// 极简自毁组件:存活 <see cref="lifetime"/> 秒后销毁自己的 GameObject(用途 = 闪电分叉线)。
     /// **刻意不用协程**:协程在 <c>activeInHierarchy == false</c> 时会静默启动失败;Update 天然只在可见时跑,恢复可见后继续计时。
-    /// **计时用 <c>Time.unscaledTime</c> 而非 <c>realtimeSinceStartup</c>**:后者在失焦/暂停时仍前进 —— 分叉是余晖,暂停时不该继续自毁。
+    /// **计时用 <c>GamePause.Now</c>**:分叉是余晖,暂停时不该继续自毁 —— 注意 <c>realtimeSinceStartup</c> 与 <c>unscaledTime</c> 在**游戏暂停**时都照走,都不能用。
     public class SelfDestruct : MonoBehaviour
     {
         public float lifetime = 0.5f;   // 秒
@@ -595,22 +635,17 @@ namespace Volken.Weather
 
         private void Awake()
         {
-            _spawnTime = Time.unscaledTime;
+            _spawnTime = GamePause.Now;
         }
 
         private void Update()
         {
-            if (Time.unscaledTime - _spawnTime >= lifetime)
+            if (GamePause.Now - _spawnTime >= lifetime)
             {
                 Destroy(gameObject);
             }
         }
 
-        private void OnDestroy()
-        {
-            // 分叉的材质是它独占的实例(见 LightningBolt.SpawnSplit),要跟着一起回收,否则每次落雷都留下几份材质。
-            var sr = GetComponent<LineRenderer>();
-            if (sr != null && sr.sharedMaterial != null) Destroy(sr.sharedMaterial);
-        }
+        // 刻意没有 OnDestroy:分叉材质由 LightningBolt 统一回收(全部分叉共用一份,按分叉销毁会连累同伴)
     }
 }

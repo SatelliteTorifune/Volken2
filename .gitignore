@@ -123,3 +123,5 @@ InitTestScene*.unity*
 /.dsh-vision-router
 *.jpg
 *.png
+/tools
+*.ps1

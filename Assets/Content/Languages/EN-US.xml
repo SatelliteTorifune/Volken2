@@ -52,6 +52,7 @@
     <s id="Volken.UI.RainRespawnMirror">Mirror respawn (on = deterministic conveyor, periodic clumps; off = randomized mixing, recommended)</s>
     <s id="Volken.UI.RainDumpLog">Dump rain status to the log (for troubleshooting)</s>
     <s id="Volken.UI.RainDumped">Rain status written to Player.log</s>
+    <s id="Volken.UI.RainAudioStats">Rain Audio</s>
     <s id="Volken.UI.RainRowTest">Dev: evenly spaced test row (SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">Particle Amount</s>
     <s id="Volken.UI.RainDomainRadius">Domain Radius (m)</s>

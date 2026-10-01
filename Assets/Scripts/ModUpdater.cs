@@ -159,7 +159,7 @@ namespace Assets.Scripts
 
         /// 解析版本号:兼容纯文本("0.7" / "v0.7.1")、Releases JSON 的 "tag_name" 与 {"version":"0.7"}。
         private static bool TryParseLatestVersion(string text, out Version version)
-        {
+        { 
             version = null;
             if (string.IsNullOrWhiteSpace(text)) return false;
 

@@ -51,6 +51,10 @@ namespace Volken.Tests
         public bool respawnMirror = false;
         public float ceilingAltitude = 12000f;
         public float ceilingBand = 0.4f;
+        public float rainStrength = 1f;      // 雨强度(与粒子数一起决定小雨/暴雨音效混合)
+        public float rainVolume = 0.5f;      // 雨声音量
+        public int rainRepeats = 3;          // 每条素材连播几遍再换下一条
+        public float rainCrossfade = 2f;     // 换素材的交叉淡化时长(秒)
 
         [Header("预览专用")]
         [Tooltip("手动喂给海拔闸门的相机海拔(编辑器里拿不到真实海拔)")]
@@ -108,6 +112,8 @@ namespace Volken.Tests
                 EnsureRain();
                 _autoStart = PlayerPrefs.GetInt(AutoStartPref, 0) == 1;
                 LoadParams();      // 有记忆参数就先恢复(自动启动也能接着上次调)
+                // 雨声(游戏里没有天气系统也能听;已存在则复用)
+                RainAudio.Ensure(gameObject);
                 PushHeavy();       // 首次:走 ApplyConfig(会建 buffer/网格)
             }
             catch (Exception ex)
@@ -257,6 +263,10 @@ namespace Volken.Tests
             RainParticles.RespawnMirror = respawnMirror;
             RainParticles.CeilingAltitude = Mathf.Max(0f, ceilingAltitude);
             RainParticles.CeilingBand = Mathf.Clamp(ceilingBand, 0.02f, 1f);
+            RainParticles.Strength = Mathf.Clamp(rainStrength, 0f, 4f);
+            RainParticles.Volume = Mathf.Clamp01(rainVolume);
+            RainAudio.RepeatsPerClip = Mathf.Max(1, rainRepeats);
+            RainAudio.CrossfadeTime = Mathf.Clamp(rainCrossfade, 0.05f, 10f);
             RainParticles.DebugAltitudeOverride = overrideAltitude ? altitudeOverrideValue : float.NaN;
             RainParticles.Enabled = rainEnabled;
         }
@@ -287,6 +297,8 @@ namespace Volken.Tests
                     respawnMirror = respawnMirror,
                     ceilingAltitude = ceilingAltitude,
                     ceilingBand = ceilingBand,
+                    strength = rainStrength,
+                    volume = rainVolume,
                 };
                 RainParticles.ApplyConfig(cfg);
                 RainParticles.Enabled = rainEnabled;
@@ -431,8 +443,19 @@ namespace Volken.Tests
             ceilingBand = Slider("上限淡出带宽(比例)", ceilingBand, 0.05f, 1f, false);
             GUILayout.Label("     把海拔拉过上限:雨应渐隐并在超过上限后完全不画");
 
+            GUILayout.Label("── 雨声(light / heavy 按雨量交叉淡化 + 淡入淡出)──");
+            bool audioOn = GUILayout.Toggle(RainAudio.Enabled, " 雨声总开关(关掉只是不响,雨照下)");
+            if (audioOn != RainAudio.Enabled) RainAudio.Enabled = audioOn;
+            rainStrength = Slider("雨强度(与粒子数一起决定选哪组音效)", rainStrength, 0f, 4f, false);
+            rainVolume = Slider("雨声音量", rainVolume, 0f, 1f, false);
+            rainRepeats = Mathf.RoundToInt(Slider("每条素材连播遍数(再换下一条)", rainRepeats, 1f, 10f, false));
+            rainCrossfade = Slider("换素材交叉淡化时长(秒)", rainCrossfade, 0.1f, 8f, false);
+            GUILayout.Label(string.Format("     → 目标混合 {0:F2}(0 = 全小雨,1 = 全暴雨;与粒子数一起算)",
+                RainAudio.ComputeIntensity()));
+
             GUILayout.Label("── 实时状态 ──");
             GUILayout.Label(RainParticles.StatsLine(), WrapLabel());
+            GUILayout.Label("雨声:" + RainAudio.StatsLine(), WrapLabel());
             GUILayout.Label(string.Format("alt {0:F0}m  ceil {1}  altFade {2:F2}  stretch {3:F2}  axis ({4:F2},{5:F2},{6:F2})",
                 RainParticles.LastAltitude,
                 RainParticles.LastCeiling > 0f ? RainParticles.LastCeiling.ToString("F0") : "off",
@@ -450,7 +473,7 @@ namespace Volken.Tests
 
             if (GUILayout.Button("▸ 复制参数为 weather.xml 的 <Rain> 段(调好一次粘进游戏)")) CopyRainXmlToClipboard();
             if (GUILayout.Button("重置为 SP2 出厂参数")) ResetToSp2Defaults();
-            if (GUILayout.Button("把状态写入 Console(排查用)")) RainParticles.DiagStatus();
+            if (GUILayout.Button("把状态写入 Console(排查用)")) { RainParticles.DiagStatus(); RainAudio.DiagStatus(); }
             GUILayout.Label("参数会自动记住(下次 Play 接着调);预览测不到:软粒子(需云的深度图)、换帧重定位、真实海拔。", WrapLabel());
             if (!string.IsNullOrEmpty(_toast) && Time.realtimeSinceStartup < _toastUntil)
                 GUILayout.Label("✓ " + _toast, WrapLabel());
@@ -494,6 +517,10 @@ namespace Volken.Tests
             respawnMirror = false;
             ceilingAltitude = 12000f;
             ceilingBand = 0.4f;
+            rainStrength = 1f;
+            rainVolume = 0.5f;
+            rainRepeats = 3;
+            rainCrossfade = 2f;
             PushHeavy();
             Toast("已重置为 SP2 出厂参数");
         }
@@ -508,7 +535,7 @@ namespace Volken.Tests
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var parts = new[]
                 {
-                    "v1",
+                    "v3",
                     rainEnabled ? "1" : "0",
                     amount.ToString("R", inv), domainRadius.ToString("R", inv), fallSpeed.ToString("R", inv),
                     streakLength.ToString("R", inv), streakWidth.ToString("R", inv),
@@ -517,6 +544,8 @@ namespace Volken.Tests
                     tailFalloff.ToString("R", inv), brightness.ToString("R", inv),
                     streamMode ? "1" : "0", respawnMirror ? "1" : "0",
                     ceilingAltitude.ToString("R", inv), ceilingBand.ToString("R", inv),
+                    rainStrength.ToString("R", inv), rainVolume.ToString("R", inv),
+                    rainRepeats.ToString(inv), rainCrossfade.ToString("R", inv),
                 };
                 PlayerPrefs.SetString(ParamsPref, string.Join(";", parts));
                 PlayerPrefs.Save();
@@ -532,7 +561,10 @@ namespace Volken.Tests
                 string s = PlayerPrefs.GetString(ParamsPref, "");
                 if (string.IsNullOrEmpty(s)) return false;
                 var p = s.Split(';');
-                if (p.Length < 17 || p[0] != "v1") return false;
+                // v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
+                bool hasLoop = p.Length >= 21 && p[0] == "v3";
+                bool hasAudio = hasLoop || (p.Length >= 19 && p[0] == "v2");
+                if (!hasAudio && (p.Length < 17 || p[0] != "v1")) return false;
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 float F(int i) { float v; float.TryParse(p[i], System.Globalization.NumberStyles.Float, inv, out v); return v; }
                 rainEnabled = p[1] == "1";
@@ -543,6 +575,8 @@ namespace Volken.Tests
                 tailFalloff = F(11); brightness = F(12);
                 streamMode = p[13] == "1"; respawnMirror = p[14] == "1";
                 ceilingAltitude = F(15); ceilingBand = F(16);
+                if (hasAudio) { rainStrength = F(17); rainVolume = F(18); }
+                if (hasLoop) { rainRepeats = Mathf.RoundToInt(F(19)); rainCrossfade = F(20); }
                 UnityEngine.Debug.Log("[Volken] RainPreview: 已恢复上次记忆的参数(想从出厂值开始就点「重置为 SP2 出厂参数」)");
                 return true;
             }
@@ -566,11 +600,11 @@ namespace Volken.Tests
                 sb.AppendLine("    <domainRadius>" + N(domainRadius) + "</domainRadius>");
                 sb.AppendLine("    <adaptiveDomain>true</adaptiveDomain>");
                 sb.AppendLine("    <fallSpeed>" + N(fallSpeed) + "</fallSpeed>");
-                sb.AppendLine("    <strength>1</strength>");
+                sb.AppendLine("    <strength>" + N(rainStrength) + "</strength>");
                 sb.AppendLine("    <windInfluence>1</windInfluence>");
                 sb.AppendLine("    <streakLength>" + N(streakLength) + "</streakLength>");
                 sb.AppendLine("    <streakWidth>" + N(streakWidth) + "</streakWidth>");
-                sb.AppendLine("    <volume>0.5</volume>");
+                sb.AppendLine("    <volume>" + N(rainVolume) + "</volume>");
                 sb.AppendLine("    <streamMode>" + B(streamMode) + "</streamMode>");
                 sb.AppendLine("    <stretchAmount>" + N(stretchAmount) + "</stretchAmount>");
                 sb.AppendLine("    <stretchLimit>" + N(stretchLimit) + "</stretchLimit>");
@@ -583,7 +617,7 @@ namespace Volken.Tests
                 sb.AppendLine("    <respawnMirror>" + B(respawnMirror) + "</respawnMirror>");
                 sb.AppendLine("  </Rain>");
                 GUIUtility.systemCopyBuffer = sb.ToString();
-                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(strength/windInfluence/volume 未调,按原值改回)");
+                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(windInfluence/adaptiveDomain 未调,按原值改回)");
                 UnityEngine.Debug.Log("[Volken] RainPreview 已复制参数 XML:\n" + sb);
             }
             catch (Exception ex)

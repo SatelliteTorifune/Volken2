@@ -190,6 +190,10 @@ namespace Volken.Weather
             group.Add(new TextModel(Locale.GetString("Volken.UI.RainStats"),
                 () => RainParticles.StatsLine()));
 
+            // 雨声状态(素材是否进包 / 淡变包络 / 小雨↔暴雨混音)
+            group.Add(new TextModel(Locale.GetString("Volken.UI.RainAudioStats"),
+                () => RainAudio.StatsLine()));
+
             // 立即开关(调试用:不用等天气值到阈值)
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainToggleNow"), _ =>
             {
@@ -205,6 +209,14 @@ namespace Volken.Weather
             AddSlider(group, "Volken.UI.RainAmount",
                 () => weather.Config?.rain?.amount ?? 20000f,
                 v => ApplyRain(c => c.rain.amount = v), 1000f, 200000f, 0, true);
+
+            // 雨声:强度(与粒子数一起决定选哪组音效)+ 雨声音量
+            AddSlider(group, "Volken.UI.RainStrength",
+                () => weather.Config?.rain?.strength ?? 1f,
+                v => ApplyRain(c => c.rain.strength = v), 0f, 4f, 2);
+            AddSlider(group, "Volken.UI.RainVolume",
+                () => weather.Config?.rain?.volume ?? 0.5f,
+                v => ApplyRain(c => c.rain.volume = v), 0f, 1f, 2);
 
             AddSlider(group, "Volken.UI.RainDomainRadius",
                 () => weather.Config?.rain?.domainRadius ?? 50f,
@@ -271,6 +283,7 @@ namespace Volken.Weather
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainDumpLog"), _ =>
             {
                 RainParticles.DiagStatus();   // 完整状态写进 Player.log(方便发日志排查)
+                RainAudio.DiagStatus();       // 雨声状态
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.RainDumped"));
             }));
 

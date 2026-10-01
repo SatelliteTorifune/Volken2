@@ -1,17 +1,10 @@
 # Volken 雷声真实化可行性分析(2026-09-28)
 
 > 状态:⏸ **已转 proposals(暂停)** —— 代码 / 配置 / UI / 文案已落地(C# 0 错误),**Unity 侧打包与真机验收未做**(未做完雷声仍静音);暂不排期。**母计划**:[`sp2-weather-port-2026-09-27.md`](sp2-weather-port-2026-09-27.md)。
-> 需求(用户原话拆成三条):
-> 1. 确定"雷声来源"与 **craft** 之间的距离;
-> 2. 根据 craft 当前处的**声速**确定延迟;
-> 3. 根据某个**阈值**去 `Assets/Scripts/Volken/Weather/Audio` 里选 near 或 far 播放。
->
-> 结论:**三条都可行,且游戏 API 已经现成提供声速。**
-> 但**在动手之前必须先修一条已有的致命故障** —— 当前雷声资源在 bundle 里指向的是**已被删除的 5 个 .ogg**。
->
-> **实施状态(2026-09-28)**:§5.2 的代码 / 配置 / UI / 文案**已全部落地**,`dotnet build Volken.csproj` = **0 错误**(仅仓库原有 5 条既有警告)。
-> **§5.3 的 Unity 侧打包(导入 WAV + 设导入设置 + 改 `_otherAssets` + 重建)尚未做** —— 在它完成之前,雷声仍然是**静音**的。
-> 素材已由用户补齐为 **9 条**(`near-1~4` / `far-1~5`),`far-1` 与 `far-2` 的重复问题已解决(§3.1 的提醒作废)。
+
+需求(用户原话拆成三条):①确定"雷声来源"与 **craft** 之间的距离;②根据 craft 当前处的**声速**确定延迟;③根据某个**阈值**去 `Assets/Scripts/Volken/Weather/Audio` 里选 near 或 far 播放。
+结论:**三条都可行,游戏 API 已现成提供声速。**但**动手前必须先修一条已有的致命故障** —— 雷声资源在 bundle 里指向的是**已被删除的 5 个 .ogg**。
+**实施状态(2026-09-28)**:§5.2 的代码 / 配置 / UI / 文案**已全部落地**,`dotnet build Volken.csproj` = **0 错误**(仅仓库原有 5 条既有警告)。**§5.3 的 Unity 侧打包(导入 WAV + 设导入设置 + 改 `_otherAssets` + 重建)尚未做** —— 完成前雷声仍是**静音**的。素材已由用户补齐为 **9 条**(`near-1~4` / `far-1~5`),`far-1` 与 `far-2` 的重复问题已解决(§3.1 的提醒作废)。
 
 ---
 
@@ -21,13 +14,12 @@
 |---|---|
 | 代码读的是旧 OGG 路径 | `LightningModule.cs:35` `ThunderPathFormat = ".../enviro_thunder_{0}.ogg"`,`ThunderClipCount = 5` |
 | 那 5 个 OGG **已被删除** | `git status` 显示 ` D Assets/Scripts/Volken/Weather/Audio/enviro_thunder_1~5.ogg`(含 `.meta`) |
-| 新素材是 8 个 WAV,**从未被导入过 Unity** | 目录里只有裸 `.wav`,**没有任何 `.meta`** → Unity 还没为它们生成 GUID |
+| 新素材是 8 个 WAV(当时),**从未被导入过 Unity** | 目录里只有裸 `.wav`,**没有任何 `.meta`** → Unity 还没为它们生成 GUID |
 | 打包清单里仍是 5 个已删的 OGG | `ModAssetBundles/StandaloneWindows64/volken.manifest` 的 `Assets:` 段含 `enviro_thunder_1~5.ogg` |
 | 权威清单 `_otherAssets` 里那 5 个 GUID **全部悬空** | `Assets/ModData.asset` 的 `f84ba73f…`/`28e67960…`/`b294e2e8…`/`26002a38…`/`fe540ed2…` 在 `Assets/` 下**已无任何 `.meta` 引用**(逐条验过) |
 
 **后果**:`Mod.LoadVolkenAsset<AudioClip>(..., required:false)` 必然返回 null → `_thunderClips.Count == 0` → `PlayThunder` 直接 return。日志里只会有一句 `loaded 0/5 thunder clips (silent …)`。
-
-**所以"真实化"的**第一步不是改延迟,而是把音频真正打进包**:导入 8 个 WAV → 生成 `.meta`/GUID → 把新 GUID 加进 `Assets/ModData.asset` 的 `_otherAssets`、**删掉**那 5 条悬空 GUID → 重新构建 mod → 用 dev 命令 `volkenAssets` 复核台账全是 `ok`。
+**所以"真实化"的第一步不是改延迟,而是把音频真正打进包**:导入 WAV → 生成 `.meta`/GUID → 把新 GUID 加进 `Assets/ModData.asset` 的 `_otherAssets`、**删掉**那 5 条悬空 GUID → 重新构建 mod → 用 dev 命令 `volkenAssets` 复核台账全是 `ok`。
 
 ---
 
@@ -41,19 +33,19 @@
 bolt.OnBoltLanded = distance => { ... PlayThunder(landing, volume, delay); };
 ```
 
-而 `LightningBolt.cs:323` 给回来的是:
+`LightningBolt.cs:323` 给回来的是:
 
 ```csharp
 OnBoltLanded?.Invoke(Vector3.Distance(transform.position, Target));
 ```
 
-`transform.position` = **bolt 的起点(云里)**,`Target` = 落点。所以现在传出去的是 **bolt 自身长度(云底到地面的那几公里)**,**不是到玩家的距离**!闪电落在离你 300 m 还是 3 km,这个数几乎一样(取决于你对 `spawnRange` 的调参)。
+`transform.position` = **bolt 的起点(云里)**,`Target` = 落点。传出去的是 **bolt 自身长度(云底到地面的那几公里)**,**不是到玩家的距离**!闪电落在离你 300 m 还是 3 km,这个数几乎一样(取决于 `spawnRange` 调参)。
 
 ### 1.2 正确来源
 
-`CastBolt(Vector3 from, Vector3 to, ...)` 里 `landing` 就是落点,是**局部变量现成的**。距离直接算:
+`CastBolt(Vector3 from, Vector3 to, ...)` 里 `landing` 就是落点,是**局部变量现成的**:
 
-```
+```text
 observerPos = craft 位置(ReferenceFrame.PlanetToFramePosition(craftNode.Position))
             ≈ 相机位置(相机挂在 NearCamera 上,与飞船同参考系)
 strikeDist  = Vector3.Distance(observerPos, landing)
@@ -64,11 +56,7 @@ strikeDist  = Vector3.Distance(observerPos, landing)
 
 ### 1.3 一个会影响真实感的细节:远雷的"声源"不在落点
 
-物理上,雷声是**整条放电通道**(云底↔地面)同时发声,你听到的是各路到达时间不同的一串隆隆声。用"到落点的直线距离"当声源距离,对**近雷正确**,对**远雷偏大**:
-
-- 3 km 外一道 2 km 长的闪电:到落点 3 km(≈8.7 s),但到通道最近端可能只有 1.3 km(≈3.8 s)。真实感知更接近后者(先到的是近端)。
-- 同理,2.6 MB 的 far 素材时长达 13~14 s,本身就"自带"了这种扩散感。
-
+物理上,雷声是**整条放电通道**(云底↔地面)同时发声,听到的是各路到达时间不同的一串隆隆声。用"到落点的直线距离"当声源距离,对**近雷正确**,对**远雷偏大**:3 km 外一道 2 km 长的闪电,到落点 3 km(≈8.7 s),到通道最近端可能只有 1.3 km(≈3.8 s),真实感知更接近后者(先到的是近端);同理 2.6 MB 的 far 素材时长 13~14 s,本身就"自带"这种扩散感。
 **建议**:加一个 `thunderSourceBlend`(0=只用落点距离,1=用 min(落点距离, 云底水平距离)),默认 ~0.5。属于锦上添花,不影响①②③的成立。
 
 ---
@@ -92,14 +80,11 @@ var flightData = Game.Instance?.FlightScene?.CraftNode?.CraftScript?.FlightData;
 float c = flightData != null ? flightData.AtmosphereSample.SpeedOfSound : 0f;   // 无大气/超大气顶 → 0
 ```
 
-**`SpeedOfSound` 是按"行星大气成分 + 平均表面温度"算的,不随飞行高度变化**(`CalculateTemperature` 那条高度剖面**没有**参与声速,游戏自己算 Mach 数用的就是它 —— `DragPhysics.cs:184` `MachNumber = |v| / speedOfSound`)。所以:
-
-- 这不是"craft 处的声速"的严格值,而是**游戏口径的声速**,与机身阻力/马赫表完全一致。**建议就用它** —— 出现任何不一致(比如你算 340、HUD 显示 330)都会显得是 bug。
-- 若要更严格,可以自己用 `PlanetAtmosphereData.CalculateSpeedOfSound(sample.Temperature, data.MeanGamma, data.MeanMassPerMolecule)` 把温度换成**当前高度的温度**。**不建议**:会与游戏 Mach 数打架,收益只有几 %。
+**`SpeedOfSound` 是按"行星大气成分 + 平均表面温度"算的,不随飞行高度变化**(`CalculateTemperature` 的高度剖面**没有**参与声速;游戏自己算 Mach 数用的就是它 —— `DragPhysics.cs:184` `MachNumber = |v| / speedOfSound`)。所以:这不是"craft 处的声速"的严格值,而是**游戏口径的声速**,与机身阻力/马赫表完全一致,**建议就用它**(出现不一致,如你算 340、HUD 显示 330,会显得是 bug)。若要更严格,可自己用 `PlanetAtmosphereData.CalculateSpeedOfSound(sample.Temperature, data.MeanGamma, data.MeanMassPerMolecule)` 把温度换成**当前高度的温度**,但**不建议**:会与游戏 Mach 数打架,收益只有几 %。
 
 ### 2.2 各行星实算(用 `StreamingAssets/CelestialDatabase` 的 XML 参数)
 
-| 行星 | T_surf(K) | meanMassPerMolecule | γ | **声速 m/s** | 3 km 水平距离的延迟(见下) |
+| 行星 | T_surf(K) | meanMassPerMolecule | γ | **声速 m/s** | 3 km 水平距离的延迟 |
 |---|---|---|---|---|---|
 | **Droo** | (283+293)/2 = 288 | 28.97 | 1.4 | **340** | 地面 8.8 s → 云底高度 9.7 s |
 | Cylero | (184+242)/2 = 213 | 43.34 | 1.28 | **233** | 12.9 s → 14.2 s |
@@ -115,32 +100,26 @@ float c = flightData != null ? flightData.AtmosphereSample.SpeedOfSound : 0f;   
 | 2000 m(≈云底) | 3.61 km | 3.00 km | **3.30 km** | 9.7 s |
 | 3000 m(云内) | 4.24 km | 3.16 km | 3.70 km | 10.9 s |
 
-结论:云底混合对**地面观测者不缩短**(云底比落点更远),对**云层高度附近的观测者缩短约 0.3 s(8%)**。
-修正幅度不大但方向正确(远雷该"先到"),且零额外代价 —— 所以保留,不是关键项。
+结论:云底混合对**地面观测者不缩短**(云底比落点更远),对**云层高度附近的观测者缩短约 0.3 s(8%)**。修正幅度不大但方向正确(远雷该"先到"),且零额外代价 —— 保留,不是关键项。
 
-> ⚠️ 量的**水平/垂直分解必须沿地表法线**(`GetRadialUp`),不能拿 world Y/Z 当"水平" ——
-> 参考系可能被旋转(行星坐标系里 Y 才是"上")。这是本题里最容易踩的一个坑。
+> ⚠️ 量的**水平/垂直分解必须沿地表法线**(`GetRadialUp`),不能拿 world Y/Z 当"水平" —— 参考系可能被旋转(行星坐标系里 Y 才是"上")。这是本题里最容易踩的一个坑。
 
 → **303/343 这种硬编码是错的**(Tydos 上差 2.7 倍)。现在的 `SpeedOfSound = 343f`(`LightningModule.cs:37`)要删掉,换成运行时取样 + **`c <= 1 m/s` 时回退 343(或配置值)**。
 
 ### 2.3 延迟公式与"过 0"策略
 
-```
+```text
 delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现有形状可保留
 ```
 
-问题:现在 `thunderDistanceAttenuation = 0.6` 默认值会让延迟**只有真实值的 60%**(3 km 处 ≈5.3 s 而非 8.8 s),这正是"不够真实"的一个来源。**真实化 → 默认改成 1.0**,并把该字段在 UI 上说明是"0 = 原版 0.05 s 固定延迟"。
-
-再加一个 `thunderMaxDelay`(秒,默认 20)封顶:远处的雷可以很晚,但不该等到"玩家都忘了刚才闪过光"。声速低的行星(Cylero 233 m/s)尤其需要。
+现在 `thunderDistanceAttenuation = 0.6` 默认值会让延迟**只有真实值的 60%**(3 km 处 ≈5.3 s 而非 8.8 s),这正是"不够真实"的一个来源。**真实化 → 默认改成 1.0**,并把该字段在 UI 上说明是"0 = 原版 0.05 s 固定延迟"。曾考虑再加 `thunderMaxDelay`(秒,默认 20)封顶,实测不需要(见 §5.1),故未实现。
 
 ### 2.4 ⚠️ 时间加速:唯一的解释器性风险
 
 `LightningModule` 的协程用 `Time.deltaTime` + `WaitForSeconds`,而 `PlayScheduled` 用的是 **`AudioSettings.dspTime`(真实时间,不受 `Time.timeScale`/游戏倍速影响)**。
 
 - 游戏自带的**快进/慢动作**(`TimeManager._fastForward/_slowMotion`)只改 `TimeManager.DeltaTime`(见 `VolkenWeather.cs:613` 的注释),**不改 Unity 的 `Time.timeScale`** → 对协程和音频都**无影响**,可以不管。
-- 但闪电在**真实飞行时间**里播完后,如果飞船本身很快,等雷声到达时飞船已经跑远,声源方向会很怪。
-  **缓解手段**:远雷 `spread = 160°`(见 §4)—— 声源张角大,方位就不那么"指着一个点"。
-  曾考虑再加一个 `thunderMaxDelay` 封顶,实测不需要(见 §5.1),故未实现。
+- 但闪电在**真实飞行时间**里播完后,若飞船本身很快,等雷声到达时飞船已跑远,声源方向会很怪。**缓解手段**:远雷 `spread = 160°`(见 §4)—— 声源张角大,方位就不那么"指着一个点"。
 
 ---
 
@@ -162,12 +141,9 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 | `volkenThrunder-far-5.wav` | 3.84 s | 0.04 s | 0.259 | 0.000 |
 
 **当时的两条素材问题(现状)**:
-1. ~~`far-1` 与 `far-2` 是同一份素材~~ → **✅ 用户已修正**:`far-2` 已换成新素材,并补入了 `far-3`,现为
-   `near-1~4` + `far-1~5` **共 9 条、MD5 互不相同**。代码按 `near 1..4` / `far 1..5` 直读,与现状一致。
-2. **分类不完全干净(仍需真机试听)**:`far-5` 只有 3.84 s 且起始就是峰值(更像近雷),
-   `near-3` 有 16.29 s 的持续隆隆(更像远雷),`far-4` 峰值在 0.45 s 也很靠前。
-   包络只能给线索、不能定论 —— **按文件名分类是可用的默认,但要在游戏里听**;
-   若发现反了,改文件名或调 `thunderNearDistance` 即可,不用改代码。
+
+1. ~~`far-1` 与 `far-2` 是同一份素材~~ → **✅ 用户已修正**:`far-2` 已换成新素材,并补入了 `far-3`,现为 `near-1~4` + `far-1~5` **共 9 条、MD5 互不相同**。代码按 `near 1..4` / `far 1..5` 直读,与现状一致。
+2. **分类不完全干净(仍需真机试听)**:`far-5` 只有 3.84 s 且起始就是峰值(更像近雷),`near-3` 有 16.29 s 的持续隆隆(更像远雷),`far-4` 峰值在 0.45 s 也很靠前。包络只能给线索、不能定论 —— **按文件名分类是可用的默认,但要在游戏里听**;若发现反了,改文件名或调 `thunderNearDistance` 即可,不用改代码。
 
 ### 3.2 阈值参数(已定为配置项)
 
@@ -207,7 +183,7 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 | `thunderSourceBlend` | **0.5** ✅ | 落点距离 vs 云底声程混合(§1.3) | **新增** |
 | ~~`thunderMaxDelay`~~ | — | ❌ **实测不需要**:落点在 ≤3.6 km、最慢声速(Cylero 233 m/s)下延迟也只有 ~15 s,加封顶只会引入一个多余的旋钮 | 不新增 |
 
-⚠️ 按本仓库的兼容约定:新字段初始值必须 = 关闭/恒等,**否则会改变老玩家现有的听感**。上表里 `thunderDistanceAttenuation` 的默认值变更**会**改变老玩家行为 —— 这是有意的(需求就是"更真实")。新增字段已同步补 `CopyFrom` + `ClampAll`。
+⚠️ 按仓库兼容约定:新字段初始值必须 = 关闭/恒等,**否则会改变老玩家现有的听感**。上表 `thunderDistanceAttenuation` 的默认值变更**会**改变老玩家行为 —— 这是有意的(需求就是"更真实")。新增字段已同步补 `CopyFrom` + `ClampAll`。
 
 ### 5.2 代码改动点(全部已完成 ✅)
 
@@ -220,8 +196,7 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 7. `WeatherPanel`:新增 3 个滑块(`ThunderNearDistance` / `ThunderFallbackSpeedOfSound` / `ThunderSourceBlend`),并把 `ThunderDistanceAttenuation` 的默认值同步为 1.0;
 8. 三语言 `EN-US` / `RU-RU` / `ZH-CN.xml`:改 2 条已有文案 + 新增 3 条(各 5 行)。
 
-**这次**没有**改 `DistanceVolume` 的距离尺度为"完全删除"**:保留了它作为"远雷额外软化"(以阈值为尺度),把公式从 `near/d` 换成 `sqrt(near/d)` —— 原因是 AudioSource 的对数 rolloff 已经压了一轮,再用 `near/d` 会把远雷压到听不见,阈值切换就听不出差别了。若实听仍觉得远雷太轻/太重,调 `thunderVolume` 即可。
-
+**这次**没有**改 `DistanceVolume` 的距离尺度为"完全删除"**:保留它作为"远雷额外软化"(以阈值为尺度),把公式从 `near/d` 换成 `sqrt(near/d)` —— 原因是 AudioSource 的对数 rolloff 已经压了一轮,再用 `near/d` 会把远雷压到听不见,阈值切换就听不出差别了。若实听仍觉得远雷太轻/太重,调 `thunderVolume` 即可。
 
 ### 5.3 打包(必须在 Unity 里做,且分两轮)—— ⏳ 待做
 
@@ -229,24 +204,16 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 
 1. 焦点切回 Unity → 让它导入 9 个 WAV(此时才生成 `.meta`/GUID);
 2. 逐条设导入设置:`forceToMono=1`、`loadType=CompressedInMemory`、`compressionFormat=Vorbis`、`quality≈70`、`preloadAudioData=1`、`3D=1`;
-   > **实测现状(2026-09-28,Unity 导入后自动生成的 `.meta`)**:9 条 WAV 都已经是
-   > `loadType: 1`(CompressedInMemory)、`compressionFormat: 1`(**PCM**)、`forceToMono: 1` ✅、
-   > `3D: 1` ✅、`preloadAudioData: 0`。
-   > 需要手工改的是两处:**`compressionFormat` 1 → 0(Vorbis)** 与 **`quality` 1 → 70**、
-   > `preloadAudioData` 0 → 1。只改前者即可把 16.1 MB 压到 2~3 MB。
-   > (注意 `compressionFormat` 是位标志枚举:0=PCM、1=Vorbis、2=ADPCM;旧 OGG 素材的 `.meta` 里写的就是 1 = Vorbis。)
-3. 把 9 个新 GUID 加进 `Assets/ModData.asset` 的 `_otherAssets`,**删掉 5 条悬空的旧 OGG GUID**
-   (`fe540ed2…` / `28e67960…` / `f84ba73f…` / `b294e2e8…` / `26002a38…`,已逐条验过全部悬空);
+   > **实测现状(2026-09-28,Unity 导入后自动生成的 `.meta`)**:9 条 WAV 都已经是 `loadType: 1`(CompressedInMemory)、`compressionFormat: 1`(**PCM**)、`forceToMono: 1` ✅、`3D: 1` ✅、`preloadAudioData: 0`。需要手工改的是两处:**`compressionFormat` 1 → 0(Vorbis)** 与 **`quality` 1 → 70**、`preloadAudioData` 0 → 1。只改前者即可把 16.1 MB 压到 2~3 MB。(注意 `compressionFormat` 是位标志枚举:0=PCM、1=Vorbis、2=ADPCM;旧 OGG 素材的 `.meta` 里写的就是 1 = Vorbis。)
+3. 把 9 个新 GUID 加进 `Assets/ModData.asset` 的 `_otherAssets`,**删掉 5 条悬空的旧 OGG GUID**(`fe540ed2…` / `28e67960…` / `f84ba73f…` / `b294e2e8…` / `26002a38…`,已逐条验过全部悬空);
 4. 重新构建 mod;复核 `Temp/ModManifest.xml` 与 `ModAssetBundles/StandaloneWindows64/volken.manifest` 含 9 条新 `volkenThrunder-*.wav` 路径、不含 OGG;
-5. 进游戏用 dev 命令 `volkenAssets` 看台账全 `ok`,日志里应出现
-   `loaded thunder clips: near=4/4 far=5/5 voices=4`(不再是 `SILENT`)。
+5. 进游戏用 dev 命令 `volkenAssets` 看台账全 `ok`,日志里应出现 `loaded thunder clips: near=4/4 far=5/5 voices=4`(不再是 `SILENT`)。
 
 **包体预估**:9 条裸 PCM ≈ 17 MB(48 kHz/16bit/立体声),当前整包才 5.8 MB。按 Vorbis(q≈70)+ `forceToMono` 导入,预计 → 2~3 MB;若误用 PCM / `DecompressOnLoad`,运行时会就地解成 ~34 MB 内存。**必须显式定导入设置,不能吃默认值**。
 
 ### 5.4 验证判据
 
-- 每次雷击的日志应打印
-  `thunder [near|far] dist=…m path=…m c=…m/s delay=…s vol=… clip=…` —— 一眼能看出①②③都生效;
+- 每次雷击的日志应打印 `thunder [near|far] dist=…m path=…m c=…m/s delay=…s vol=… clip=…` —— 一眼能看出①②③都生效;
 - 把 `thunderDistanceAttenuation` 拉到 0 → 听感应回到原版 0.05 s(延迟)与恒音量;
 - 在 Droo / Tydos 各劈一道:同样的落点距离,**延迟应差约 2.7 倍**(340 vs 931 m/s)—— 这是"按声速"最硬的证据;
 - 手动触发多次(间隔 < 素材时长)→ 雷声**不互相打断**;
@@ -278,20 +245,13 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 
 ### 7.1 根因(两层,叠在一起才致命)—— 有 Player.log 实证
 
-```
+```text
 Coroutine couldn't be started because the the game object 'VolkenLightningBolt' is inactive!
 ```
 
-**① 协程启动会静默失败。** 旧实现把 bolt 挂在 `NearCamera` 下,并且在**bolt 自己身上**
-`StartCoroutine` 跑主协程与 `CreateSplit` 分叉协程。Unity 在 `activeInHierarchy == false` 时
-**不启动协程、只打一行警告**(上面那行),而 `CastBolt()` 里 `_playing = true` 已经置上了 ——
-于是主协程从未运行。
+**① 协程启动会静默失败。** 旧实现把 bolt 挂在 `NearCamera` 下,并且在**bolt 自己身上** `StartCoroutine` 跑主协程与 `CreateSplit` 分叉协程。Unity 在 `activeInHierarchy == false` 时**不启动协程、只打一行警告**(上面那行),而 `CastBolt()` 里 `_playing = true` 已经置上了 —— 于是主协程从未运行。
 
-**② 自毁链是单点故障。** `Update()` 的第一行是 `if (!_fadeOut) return;`,而 `_fadeOut = true`
-只在**主协程跑完最后一句**时才赋值。协程因①(或任何其他原因:场景卸载、相机被换掉/销毁、
-父物体被置非激活)没跑到最后,**就再没有任何代码路径能销毁这个对象** ——
-`Update()` 在 inactive 时也不运行,所以连"兜底"都没有。相机恢复激活后,
-残留物永远停在全亮状态;分叉线更明显:主干没了、几根叉还挂在天上。
+**② 自毁链是单点故障。** `Update()` 的第一行是 `if (!_fadeOut) return;`,而 `_fadeOut = true` 只在**主协程跑完最后一句**时才赋值。协程因①(或任何其他原因:场景卸载、相机被换掉/销毁、父物体被置非激活)没跑到最后,**就再没有任何代码路径能销毁这个对象** —— `Update()` 在 inactive 时也不运行,连"兜底"都没有。相机恢复激活后,残留物永远停在全亮状态;分叉线更明显:主干没了、几根叉还挂在天上。
 
 ### 7.2 修法(结构性,不是打补丁)
 
@@ -304,23 +264,18 @@ Coroutine couldn't be started because the the game object 'VolkenLightningBolt' 
 | **`LightningBolt.DestroyAll()` 整批清理** | `LightningModule.SetActive(false)`(含离开飞行场景)时调用,不留任何一道雷到下一个场景 |
 | **闪烁用"时刻表重算"而非"翻面"** | 每帧推进必须能容忍 `dt` 跨过多个时间点(帧率抖动),按 `_phaseElapsed` 重算当前该亮还是该灭 |
 
-**两个时间量必须分清楚**(这是最容易改错的地方):
-`_lastActiveTime` = 最近一次还在 `Update` 的时刻,随时间**前移**(用于僵死判定);
-`_bornTime` = 出生时刻,固定不变(用于硬性寿命)。混用会让僵死判定退化成"活满 1.5s 就杀",正常雷全被误杀。
+**两个时间量必须分清楚**(最容易改错的地方):`_lastActiveTime` = 最近一次还在 `Update` 的时刻,随时间**前移**(用于僵死判定);`_bornTime` = 出生时刻,固定不变(用于硬性寿命)。混用会让僵死判定退化成"活满 1.5s 就杀",正常雷全被误杀。
 
 ### 7.3 副作用 / 与雷声的关系
 
-- **雷声不受影响**:雷声是 `PlayScheduled` + `dspTime` 独立定时的,即使 bolt 被提前清掉,
-  已经排好队的雷声照样在预定时刻响 —— 两者的生命周期本来就是解耦的。
-- 僵死判定取 1.5s 是**有意的取舍**:误杀(视角切换时那道雷消失)的代价 ≈ 0
-  (它本来就看不见了),漏杀的代价 = 天上挂一道永远不灭的雷。
+- **雷声不受影响**:雷声是 `PlayScheduled` + `dspTime` 独立定时的,即使 bolt 被提前清掉,已排好队的雷声照样在预定时刻响 —— 两者生命周期本来就是解耦的。
+- 僵死判定取 1.5s 是**有意的取舍**:误杀(视角切换时那道雷消失)的代价 ≈ 0(它本来就看不见了),漏杀的代价 = 天上挂一道永远不灭的雷。
 - 正常一道雷的总时长没变(生长 → 4 次闪烁 → 淡出),观感与原版一致。
 
 ### 7.4 真机验证要点
 
 - 反复进出飞行场景 / 切换相机视角,**不应**再看到任何残留闪电;
-- 日志若出现 `LightningBolt hidden for …s (phase=…) — cleaning up` 或
-  `hard lifetime 3.5s exceeded` → 说明兜底路径真的被触发过(正常时应很少见);
+- 日志若出现 `LightningBolt hidden for …s (phase=…) — cleaning up` 或 `hard lifetime 3.5s exceeded` → 说明兜底路径真的被触发过(正常时应很少见);
 - `storm loop stopped (cleared N in-flight bolt(s))` 的 N 一般应为 0~1;
 - Player.log 里**不应再出现** `Coroutine couldn't be started … 'VolkenLightningBolt' is inactive`。
 
@@ -342,7 +297,7 @@ Coroutine couldn't be started because the the game object 'VolkenLightningBolt' 
 ### 8.2 成因链
 
 1. 分叉线**共享**主干的材质实例:`sr.material = _boltMat`;
-2. 主干收尾 <c>OnDestroy</c> 里 `Destroy(_boltMat)`;
+2. 主干收尾 `OnDestroy` 里 `Destroy(_boltMat)`;
 3. 分叉的存活计时原来用 `Time.realtimeSinceStartup`(**失焦/暂停时仍前进**),但 `Update` 在分叉被隐藏时**不运行** —— 于是分叉完全可以比主干活得久;
 4. 渲染那条线时材质已销毁 → 紫红。
 
@@ -358,41 +313,24 @@ Coroutine couldn't be started because the the game object 'VolkenLightningBolt' 
 
 **① 主干与落点闪光拆成两个单 Pass shader —— 这里藏着一个真 bug。**
 
-原先两者共用一个双 Pass shader(`Bolt` / `Flash`),靠 Pass 名区分。但 Unity 的规则是
-**一个 Material 只用 Shader 的第一个匹配 Pass**,而这两个 Pass **都没有 `LightMode` 标签** ——
-它们对"Pass 选择"而言是不可区分的。后果:
+原先两者共用一个双 Pass shader(`Bolt` / `Flash`),靠 Pass 名区分。但 Unity 的规则是**一个 Material 只用 Shader 的第一个匹配 Pass**,而这两个 Pass **都没有 `LightMode` 标签** —— 它们对"Pass 选择"而言是不可区分的。后果:
 
 - 落点闪光球其实**一直在跑主干那套画法**(`_CoreWidth` 与 halo 计算从来没生效过);
-- C# 里试图"按名字启用某个 Pass"(`SetShaderPassEnabled`)在无 `LightMode` 时并不可靠 ——
-  这条路走不通,所以本轮改为**拆成两个各含单一 Pass 的 shader**:
-  `LightningBolt.shader`(`Hidden/Volken/LightningBolt`,主干/分叉)+
-  `LightningFlash.shader`(`Hidden/Volken/LightningFlash`,落点闪光)。
-- 顺带删掉了主干 shader 里那对没有对应 `#pragma multi_compile_instancing` 的
-  instancing/stereo 宏,并显式加了 `#pragma target 3.0`(顶点色 `COLOR` 需要 ≥3.0,不写会落到默认 2.5)。
+- C# 里试图"按名字启用某个 Pass"(`SetShaderPassEnabled`)在无 `LightMode` 时并不可靠 —— 这条路走不通,所以本轮改为**拆成两个各含单一 Pass 的 shader**:`LightningBolt.shader`(`Hidden/Volken/LightningBolt`,主干/分叉)+ `LightningFlash.shader`(`Hidden/Volken/LightningFlash`,落点闪光)。
+- 顺带删掉了主干 shader 里那对没有对应 `#pragma multi_compile_instancing` 的 instancing/stereo 宏,并显式加了 `#pragma target 3.0`(顶点色 `COLOR` 需要 ≥3.0,不写会落到默认 2.5)。
 
 **② `Fallback Off` → `Fallback "Hidden/Internal-Colored"`。**
 
-`Fallback Off` 的含义是"没有任何后备 shader",所以 shader 一旦不可用就直接是 Error shader(紫红),
-**既难看又掩盖真因**。换成 Unity 内置、任何构建里都存在的最简着色器后,
-最坏情况是"画得不对但能看出是什么",便于定位。
+`Fallback Off` 的含义是"没有任何后备 shader",所以 shader 一旦不可用就直接是 Error shader(紫红),**既难看又掩盖真因**。换成 Unity 内置、任何构建里都存在的最简着色器后,最坏情况是"画得不对但能看出是什么",便于定位。
 
 ### 8.5 ⏳ 打包影响(重要)
 
-新增了 `Assets/Scripts/Volken/Weather/LightningFlash.shader` —— **它也必须加进
-`Assets/ModData.asset` 的 `_otherAssets`**,否则打进 bundle 的只有主干 shader。
-没加也不会崩:`LoadFlashShader()` 载入失败时会让闪光球退化用主干 shader(画法不对但可见),
-日志里会有一行 `flash shader NOT FOUND — strike flash will fall back to the bolt shader`。
+新增了 `Assets/Scripts/Volken/Weather/LightningFlash.shader` —— **它也必须加进 `Assets/ModData.asset` 的 `_otherAssets`**,否则打进 bundle 的只有主干 shader。没加也不会崩:`LoadFlashShader()` 载入失败时会让闪光球退化用主干 shader(画法不对但可见),日志里会有一行 `flash shader NOT FOUND — strike flash will fall back to the bolt shader`。
 
-> 与 §5.3 合并后的完整打包清单:`LightningBolt.shader` + **`LightningFlash.shader`** +
-> **9 条 `volkenThrunder-*.wav`**,并删掉 5 条悬空的旧 OGG GUID。
+> 与 §5.3 合并后的完整打包清单:`LightningBolt.shader` + **`LightningFlash.shader`** + **9 条 `volkenThrunder-*.wav`**,并删掉 5 条悬空的旧 OGG GUID。
 
 ### 8.6 真机验证要点
 
 - 反复劈雷,闪电不应出现紫红/淡紫;
-- Player.log 不应出现 `Shader error in 'Hidden/Volken/LightningBolt'` 或
-  `Shader error in 'Hidden/Volken/LightningFlash'`;
-- 落点闪光球的观感应与之前不同(现在它才真正跑 halo 那套逻辑)—— 如果感觉过亮/过弱,
-  调 `VolkenWeatherConfig.LightningSection.flashIntensity`(代码里 flash 用的是 `flashIntensity * 0.4`)。
-
-
-
+- Player.log 不应出现 `Shader error in 'Hidden/Volken/LightningBolt'` 或 `Shader error in 'Hidden/Volken/LightningFlash'`;
+- 落点闪光球的观感应与之前不同(现在它才真正跑 halo 那套逻辑)—— 如果感觉过亮/过弱,调 `VolkenWeatherConfig.LightningSection.flashIntensity`(代码里 flash 用的是 `flashIntensity * 0.4`)。

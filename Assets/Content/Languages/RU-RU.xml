@@ -52,6 +52,7 @@
     <s id="Volken.UI.RainRespawnMirror">Зеркальное перерождение (вкл = конвейер с периодическими сгустками; выкл = случайное смешивание, рекомендуется)</s>
     <s id="Volken.UI.RainDumpLog">Записать состояние дождя в лог (для диагностики)</s>
     <s id="Volken.UI.RainDumped">Состояние дождя записано в Player.log</s>
+    <s id="Volken.UI.RainAudioStats">Звук дождя</s>
     <s id="Volken.UI.RainRowTest">Отладка: тестовый ряд (SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">Количество частиц</s>
     <s id="Volken.UI.RainDomainRadius">Радиус области (м)</s>

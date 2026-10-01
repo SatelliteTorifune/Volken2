@@ -33,6 +33,11 @@ namespace Volken.Weather
         private int _nextVoice;
         private float _lastThunderTime = -999f;
 
+        private readonly double[] _voiceStartDsp = new double[ThunderVoices];   // 各通道的排程起点(0 = 空闲)
+        private readonly float[] _voicePending = new float[ThunderVoices];      // 暂停时未到点的剩余延迟
+        private readonly bool[] _voicePaused = new bool[ThunderVoices];
+        private bool _paused;
+
         private bool _assetsLoaded;
 
         private Coroutine _stormRoutine;
@@ -167,6 +172,63 @@ namespace Volken.Weather
             }
         }
 
+        /// <summary>暂停状态每帧检查一次:暂停时冻住雷声(在播的 Pause、未到点的停掉记剩余延迟),恢复时接着播/按剩余延迟重排。</summary>
+        private void Update()
+        {
+            bool paused = GamePause.IsPaused;
+            if (paused == _paused) return;
+            _paused = paused;
+            if (paused) SuspendThunder();
+            else ResumeThunder();
+        }
+
+        private void SuspendThunder()
+        {
+            if (_thunderVoices == null) return;
+            double now = AudioSettings.dspTime;
+            for (int i = 0; i < _thunderVoices.Length; i++)
+            {
+                var src = _thunderVoices[i];
+                if (src == null) continue;
+
+                if (_voiceStartDsp[i] > now)   // 已排程、还没响 → 绝对 dsp 排程会在暂停期间抢跑,只能停掉
+                {
+                    _voicePending[i] = (float)(_voiceStartDsp[i] - now);
+                    src.Stop();
+                }
+                else if (src.isPlaying)        // 正在响 → 原地暂停(无爆音)
+                {
+                    src.Pause();
+                    _voicePaused[i] = true;
+                }
+            }
+            Mod.Log("Volken:LightningModule thunder suspended (game paused)");
+        }
+
+        private void ResumeThunder()
+        {
+            if (_thunderVoices == null) return;
+            double now = AudioSettings.dspTime;
+            for (int i = 0; i < _thunderVoices.Length; i++)
+            {
+                var src = _thunderVoices[i];
+                if (src == null) continue;
+
+                if (_voicePaused[i])
+                {
+                    _voicePaused[i] = false;
+                    src.UnPause();
+                }
+                else if (_voicePending[i] > 0f)   // 按"暂停前还剩多久"重排,不吞掉已经发生的落雷
+                {
+                    _voiceStartDsp[i] = now + _voicePending[i];
+                    src.PlayScheduled(_voiceStartDsp[i]);
+                    _voicePending[i] = 0f;
+                }
+            }
+            Mod.Log("Volken:LightningModule thunder resumed (game unpaused)");
+        }
+
         private IEnumerator StormLoop()
         {
             while (true)
@@ -181,8 +243,11 @@ namespace Volken.Weather
                 float t = 0f;
                 while (t < wait)
                 {
-                    t += Time.deltaTime;
-                    TimeToNextStrike = Mathf.Max(0f, wait - t);
+                    if (!GamePause.IsPaused)   // 暂停期间不倒数(否则菜单里也会继续落雷)
+                    {
+                        t += Time.deltaTime;
+                        TimeToNextStrike = Mathf.Max(0f, wait - t);
+                    }
                     yield return null;
                 }
                 TimeToNextStrike = 0f;
@@ -372,6 +437,12 @@ namespace Volken.Weather
             int farCount = _farClips.Count;
             if (nearCount + farCount == 0 || _thunderVoices == null || _thunderVoices.Length == 0) return;
 
+            if (GamePause.IsPaused)   // 暂停期间不新起雷声(手动触发/暂停中落雷都挡在这里)
+            {
+                Mod.Log($"Volken:LightningModule thunder skipped (game paused, dist={strikeDist:F0}m)");
+                return;
+            }
+
             if (near && nearCount == 0) near = false;
             else if (!near && farCount == 0) near = true;
             var clips = near ? _nearClips : _farClips;
@@ -388,7 +459,8 @@ namespace Volken.Weather
             try
             {
                 if (_nextVoice < 0 || _nextVoice >= _thunderVoices.Length) _nextVoice = 0;
-                var src = _thunderVoices[_nextVoice];
+                int voice = _nextVoice;
+                var src = _thunderVoices[voice];
                 _nextVoice = (_nextVoice + 1) % _thunderVoices.Length;
 
                 float nearDistance = VolkenWeather.Instance?.Config?.lightning?.thunderNearDistance ?? 2000f;
@@ -400,6 +472,9 @@ namespace Volken.Weather
                 // PlayScheduled 用 dspTime:真实时间,不受 Time.timeScale / 游戏倍速影响(声音按真实秒到达)。
                 double startTime = AudioSettings.dspTime + Mathf.Max(0f, delay);
                 src.PlayScheduled(startTime);
+                _voiceStartDsp[voice] = startTime;   // 供暂停时判断"这条还没响"
+                _voicePending[voice] = 0f;
+                _voicePaused[voice] = false;
 
                 Mod.Log($"Volken:LightningModule thunder [{(near ? "near" : "far")}] " +
                         $"dist={strikeDist:F0}m path={pathDist:F0}m c={speedOfSound:F0}m/s " +

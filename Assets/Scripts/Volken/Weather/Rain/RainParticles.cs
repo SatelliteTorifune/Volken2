@@ -45,6 +45,10 @@ namespace Volken.Weather
         public static float CeilingAltitude = 12000f;   // 米;0 = 关闭闸门(不限制)
         public static float CeilingBand = 0.4f;         // 上限处的淡出带宽(占上限比例;0.4 = 顶部 40% 渐隐到 0)
 
+        // 音频侧参数(消费者 = RainAudio;粒子渲染不读):放这里是为了让天气面板与编辑器预览台共用同一份参数。
+        public static float Strength = 1f;              // 强度倍率(与 Capacity 一起决定小雨/暴雨音效混合)
+        public static float Volume = 0.5f;              // 雨声音量(0 = 静音)
+
         // ★ 默认 false = **域内随机重生**(体积均匀、避开镜头近旁 0.15R);随机化 = 持续混合 = 连续雨帘。
         // ⚠️ true = 确定性镜像重生会让整片雨**零混合**:每簇粒子同速下落 → 周期性团块("像下面条一样集中一股脑下降"),只用于对照实验。
         public static bool RespawnMirror = false;
@@ -99,7 +103,7 @@ namespace Volken.Weather
         private Texture2D _streakTex;       // 程序化柔边雨丝贴图
         private GraphicsBuffer _args;       // 5×uint 间接参数(RenderMeshIndirect 要 GraphicsBuffer)
 
-        private static readonly uint[] ArgsReset = { 0, 0, 0, 0, 0 };
+        private static readonly uint[] ArgsReset = { 12, 0, 0, 0, 0 };   // [0] = indexCount(十字四边形 12);建 buffer 时写入一次
         private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // 诊断计数(回读后清零重启累计)
         private const float ReadbackInterval = 10f;                  // GPU 回读周期(秒)
         private const float ShaderBuild = 3f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
@@ -113,6 +117,8 @@ namespace Volken.Weather
         private float _lastReadbackTime = -999f;
         private float _lastAliveLogTime = -999f;
         private bool _loggedFirstDraw;
+        private CloudRenderer _cloudRenderer;      // 缓存本相机的云渲染器(每帧 GetComponent 是原生查找)
+        private float _cloudProbeTime = -999f;     // 缓存未命中时的重探时间点
         private Vector3 _lastCamPos;
         private bool _hasLastCamPos;
         private Vector3 _lastCamVel;              // 锁存:暂停(dt≈0)时保持最近测得的速度,流线轴不跳回竖直
@@ -244,6 +250,7 @@ namespace Volken.Weather
             _randomData = new ComputeBuffer(cap, 16);                         // float4
             _diag = new ComputeBuffer(4, sizeof(uint));                       // 诊断计数
             _args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, sizeof(uint));
+            _args.SetData(ArgsReset);   // 置 indexCount = 12(Tick 里每帧只复位 instanceCount)
             // ⚠️ 关键绑定:shader 顶点着色器按 SV_InstanceID 读 _Positions —— 必须绑到**材质**上;
             // RenderMeshIndirect 不会自动把 compute 的 buffer 带给材质(不绑 → 全部画在原点)。
             _mat.SetBuffer("_Positions", _positions);
@@ -434,23 +441,43 @@ namespace Volken.Weather
             Mod.Diag(sb.ToString());
         }
 
-        /// <summary>相机海拔(ASL,米)= |camPos − 行星中心| − 行星半径(帧空间);取不到返回 −1(闸门按"不限制"处理)。</summary>
-        private static float ComputeCameraAltitude(Camera cam)
+        /// <summary>一帧一次的 craft 属性链采样:径向"下" / 本体速度 / 参考帧位置 / 相机海拔都取自同一条链。</summary>
+        private struct CraftSample
         {
-            if (StandaloneMode) return -1f;   // 独立模式:不碰 craftNode/PlanetData
+            public bool HasScript;        // CraftScript 取到 → Down / FrameVelocity 有效
+            public Vector3 Down;          // 径向"下";零 = 取不到
+            public Vector3 FrameVelocity;
+            public bool HasFramePos;
+            public Vector3 FramePos;
+            public float Altitude;        // ASL 米;−1 = 取不到(闸门按"不限制"处理)
+        }
+
+        /// <summary>取一次 craft 链(**独立模式不要调用**:在编辑器里访问游戏单例可能触发游戏侧半初始化)。</summary>
+        private static CraftSample SampleCraft(Vector3 camPos)
+        {
+            var sample = new CraftSample { Altitude = -1f };
             try
             {
                 var craftNode = Game.Instance?.FlightScene?.CraftNode;
-                if (cam == null || craftNode == null || craftNode.ReferenceFrame == null || craftNode.Parent == null)
-                    return -1f;
-                Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
-                float surfaceRadius = (float)craftNode.Parent.PlanetData.Radius;
-                return (cam.transform.position - planetCenter).magnitude - surfaceRadius;
+                if (craftNode == null) return sample;
+
+                var cs = craftNode.CraftScript;
+                if (cs != null)
+                {
+                    sample.HasScript = true;
+                    sample.Down = cs.GravityNormal;
+                    sample.FrameVelocity = cs.FrameVelocity;
+                    sample.FramePos = cs.FramePosition;
+                    sample.HasFramePos = true;
+                }
+                if (craftNode.ReferenceFrame != null && craftNode.Parent?.PlanetData != null)
+                {
+                    Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+                    sample.Altitude = (camPos - planetCenter).magnitude - (float)craftNode.Parent.PlanetData.Radius;
+                }
             }
-            catch
-            {
-                return -1f;
-            }
+            catch { }
+            return sample;
         }
 
         /// <summary>本行星适用的雨海拔上限(米;0 = 闸门关闭)。</summary>
@@ -485,13 +512,15 @@ namespace Volken.Weather
             Capacity = newCap;
             DomainRadius = Mathf.Clamp(cfg.domainRadius, 10f, 400f);
             FallSpeed = Mathf.Clamp(cfg.fallSpeed, 0.1f, 200f);
-            StretchAmount = Mathf.Max(0f, cfg.streakLength);
+            StretchAmount = Mathf.Clamp(cfg.stretchAmount, 0f, 1f);   // ⚠️ 不要改回 cfg.streakLength —— 会把雨丝长度当拉伸系数(拉伸恒撞上限、该滑块失效)
             StretchLimit = Mathf.Clamp(cfg.stretchLimit, 1f, 20f);
             InvFade = Mathf.Max(0f, cfg.softParticles);
             EdgeFade = Mathf.Clamp(cfg.edgeFade, 0f, 0.5f);
             StreamMode = cfg.streamMode;
             Falloff = Mathf.Clamp01(cfg.tailFalloff);
             Brightness = Mathf.Max(0f, cfg.brightness);
+            Strength = Mathf.Clamp(cfg.strength, 0f, 4f);             // 音频(见 RainAudio)
+            Volume = Mathf.Clamp01(cfg.volume);
             CeilingAltitude = Mathf.Max(0f, cfg.ceilingAltitude);   // 0 = 关闭闸门(不限制)
             CeilingBand = Mathf.Clamp(cfg.ceilingBand, 0.02f, 1f);
             RespawnMirror = cfg.respawnMirror;
@@ -506,12 +535,12 @@ namespace Volken.Weather
                 if (capChanged) inst.RebuildBuffers();
                 inst.EnsureBuffers();   // 资产晚到时补建(幂等;不调 AttachToCurrentView,避免与本方法互相递归)
             }
-            Mod.Diag("RainParticles ApplyConfig: enabled={0} cap={1}{2} R={3:F0} fall={4:F1} len={5:F2}{6} w={7:F3} stretch={8:F3} edge={9:F2} soft={10:F2} stream={11} ceil={12} density={13:F4}/m³",
+            Mod.Diag("RainParticles ApplyConfig: enabled={0} cap={1}{2} R={3:F0} fall={4:F1} len={5:F2}{6} w={7:F3} stretch={8:F3} edge={9:F2} soft={10:F2} stream={11} ceil={12} density={13:F4}/m³ strength={14:F2} rainVol={15:F2}",
                 Enabled, Capacity, capChanged ? "(重建)" : "",
                 DomainRadius, FallSpeed, StreakLength, meshChanged ? "(重建)" : "", StreakThickness,
                 StretchAmount, EdgeFade, InvFade, StreamMode,
                 CeilingAltitude > 1f ? CeilingAltitude.ToString("F0") + "m(独立配置)" : "off(不限制)",
-                DensityPerM3());
+                DensityPerM3(), Strength, Volume);
         }
 
         /// <summary>当前密度(粒子/m³;SP2 出厂 100000@R50 = 0.191,EVE 参考 0.139)。</summary>
@@ -712,7 +741,6 @@ namespace Volken.Weather
         private void Tick()
         {
             Vector3 camPos = _cam.transform.position;
-            Vector3 camRight = _cam.transform.right;
             Vector3 camUp = _cam.transform.up;
             Vector3 camFwd = _cam.transform.forward;
             float dt = Mathf.Max(0f, Time.deltaTime);
@@ -730,55 +758,29 @@ namespace Volken.Weather
             _lastCamPos = camPos;
             _hasLastCamPos = true;
 
+            // craft 链一帧只取一次:径向"下"、本体速度、参考帧位置、相机海拔都从这份采样里出(旧写法每帧穿透 4 次属性链)
+            CraftSample craft = StandaloneMode ? default(CraftSample) : SampleCraft(camPos);
+
             // 径向"下" = 指向行星中心(帧空间)= craft.GravityNormal。
             // ⚠️ 世界(帧)空间是浮点原点 + 绕行星 Y 轴旋转 → 球面赤道处径向"下"≈世界水平,写死世界 (0,-1,0) 会下错方向。
-            Vector3 down = Vector3.down;
-            if (!StandaloneMode)
-            {
-                try
-                {
-                    var node = Game.Instance?.FlightScene?.CraftNode;
-                    if (node != null && node.CraftScript != null) down = node.CraftScript.GravityNormal;
-                }
-                catch { }
-            }
-            if (down.sqrMagnitude < 1e-6f) down = Vector3.down;   // 深空/无重力兜底(避免 NaN)
+            Vector3 down = (craft.HasScript && craft.Down.sqrMagnitude > 1e-6f) ? craft.Down : Vector3.down;
             down.Normalize();
             _lastDown = down;
 
             // 流线轴/拉伸的速度源用飞行器本体速度(craft.FrameVelocity)**不用 camVel** —— camVel 在视角旋转(绕飞/转头)时混入切向分量,雨丝朝向会随相机角速度摆动;无飞行器回退 camVel。
-            Vector3 axisVel = camVel;
-            if (!StandaloneMode)
-            {
-                try
-                {
-                    var cs = Game.Instance?.FlightScene?.CraftNode?.CraftScript;
-                    if (cs != null) axisVel = cs.FrameVelocity;
-                }
-                catch { }
-            }
-            if (!IsFinite(axisVel)) axisVel = camVel;
+            Vector3 axisVel = (craft.HasScript && IsFinite(craft.FrameVelocity)) ? craft.FrameVelocity : camVel;
             _lastAxisVel = axisVel;
 
             // 换帧原点重定位:每次 Tick 开头**统一应用一次**(事件 delta 优先 → 兜底用飞行器帧位置跳变)——
             // 位置存在帧空间里,不跟着平移就全被留在原地 → 整批出域重生。
-            Vector3 craftFramePos = Vector3.zero;
-            bool hasCraftFramePos = false;
-            if (!StandaloneMode)
-            {
-                try
-                {
-                    var cs2 = Game.Instance?.FlightScene?.CraftNode?.CraftScript;
-                    if (cs2 != null) { craftFramePos = cs2.FramePosition; hasCraftFramePos = true; }
-                }
-                catch { }
-            }
+            Vector3 craftFramePos = craft.FramePos;
+            bool hasCraftFramePos = craft.HasFramePos;
 
             // 海拔闸门(不做限制就会"在太空里下雨")
             //   上限 = **雨自己的配置项** CeilingAltitude(米;0 = 关闭闸门,**不读 CloudConfig**);在 [上限×(1−带宽), 上限] 内线性淡出。
-            float camAlt = float.IsNaN(DebugAltitudeOverride)
-                ? (StandaloneMode ? -1f : ComputeCameraAltitude(_cam))
-                : DebugAltitudeOverride;
+            float camAlt = !float.IsNaN(DebugAltitudeOverride)
+                ? DebugAltitudeOverride
+                : (StandaloneMode ? -1f : craft.Altitude);
             float ceiling = ResolveCeiling();
             float band = Mathf.Clamp(CeilingBand, 0.02f, 1f);
             bool gateOn = ceiling > 1f;
@@ -807,7 +809,15 @@ namespace Volken.Weather
                 }
                 return;
             }
-            if (_hasPendingRecenter)
+            bool paused = GamePause.IsPaused;
+            if (paused)
+            {
+                // 暂停:不做换帧判定,但要把换帧基准同步掉 —— 否则恢复时会被误判成一次换帧(同高度闸门那条的理由)
+                if (hasCraftFramePos) { _lastCraftFramePos = craftFramePos; _hasLastCraftFramePos = true; }
+                _hasPendingRecenter = false;
+                _pendingRecenterDelta = Vector3.zero;
+            }
+            else if (_hasPendingRecenter)
             {
                 _hasPendingRecenter = false;
                 ApplyRecenter(_pendingRecenterDelta);
@@ -821,9 +831,9 @@ namespace Volken.Weather
             int cap = Mathf.Max(1, Capacity);
             int amount = TestRow ? 20 : cap;   // 等距排只画一小排(20 粒,30m 外 3m 间距)
 
-            // 1) 复位间接参数(indexCountPerInstance = 12,instanceCount = 0)
-            ArgsReset[0] = 12;
-            _args.SetData(ArgsReset);
+            // 1) 复位实例数(只写 args[1];args[0] = indexCount 建 buffer 时已置好,不必每帧上传整条)
+            // ⚠️ 暂停时三个 Dispatch/SetData 全部跳过:位置与实例数都保持上一帧的样子,于是**冻住的那片雨照画**(不是消失)。
+            if (!paused) _args.SetData(ArgsReset, 1, 1, 1);
             // 注:诊断计数 _diag 不在这里清零 —— 累计到下一次回读(得到精确的"这 10s 重生多少次"),回读回调里再清零。
 
             // 2) Positioning:积分 + 域环绕(TestRow 时覆盖为等距排)
@@ -839,17 +849,21 @@ namespace Volken.Weather
             _compute.SetInt("_capacity", cap);
             _compute.SetInt("_amount", amount);
             _compute.SetInt("_testRow", TestRow ? 1 : 0);
-            _compute.SetFloat("_testRowSpacing", TestRowSpacing);
             _compute.SetInt("_respawnMode", RespawnMirror ? 1 : 0);
-            _compute.SetVector("_camRight", camRight);
-            _compute.SetVector("_camUp", camUp);
-            _compute.SetVector("_camFwd", camFwd);
-            _compute.Dispatch(_kernelPositioning, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
+            // 相机基与间距只在 Positioning 的 _testRow 分支里被读 → 正式运行时不必每帧上传
+            if (TestRow)
+            {
+                _compute.SetFloat("_testRowSpacing", TestRowSpacing);
+                _compute.SetVector("_camRight", _cam.transform.right);
+                _compute.SetVector("_camUp", camUp);
+                _compute.SetVector("_camFwd", camFwd);
+            }
+            if (!paused) _compute.Dispatch(_kernelPositioning, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
 
             // 3) FillArgs:原子统计活跃数(复位已在 1)做完)。⚠️ 原子加只能用**带下标的** RWStructuredBuffer 2/3 参形式,见类注释。
             _compute.SetBuffer(_kernelFillArgs, "_ArgsBuffer", _args);
             _compute.SetInt("_amount", amount);
-            _compute.Dispatch(_kernelFillArgs, Mathf.CeilToInt(amount / (float)ThreadGroupSize), 1, 1);
+            if (!paused) _compute.Dispatch(_kernelFillArgs, Mathf.CeilToInt(amount / (float)ThreadGroupSize), 1, 1);
 
             // 4) 间接绘制:十字四边形 × instanceCount,实例化 shader 按 SV_InstanceID 读位置
             if (_mat != null)
@@ -871,14 +885,16 @@ namespace Volken.Weather
                 LastAxisDotDown = Vector3.Dot(LastAxisDir, down);
                 LastDownDotCamUp = Vector3.Dot(down, camUp);   // ≈ -1 = down 确实指向画面下方(验证空间正确)
 
-                // 软粒子:用本相机云渲染器的线性场景深度(RFloat,LinearEyeDepth 米);没有云渲染器(或无云)→ 退化为普通透明雨丝
-                RenderTexture depthTex = null;
-                try
+                // 软粒子:用本相机云渲染器的线性场景深度(RFloat,LinearEyeDepth 米);没有云渲染器(或无云)→ 退化为普通透明雨丝。
+                // 组件缓存 + 每秒重探:云渲染器是后装配的,缓存空/深度图未建时还得能自己恢复,但不该每帧 GetComponent。
+                RenderTexture depthTex = _cloudRenderer != null ? _cloudRenderer.LinearSceneDepth : null;
+                if (depthTex == null && now >= _cloudProbeTime)
                 {
-                    var cr = _cam.GetComponent<CloudRenderer>();
-                    if (cr != null) depthTex = cr.LinearSceneDepth;
+                    _cloudProbeTime = now + 1f;
+                    try { _cloudRenderer = _cam.GetComponent<CloudRenderer>(); }
+                    catch { _cloudRenderer = null; }
+                    depthTex = _cloudRenderer != null ? _cloudRenderer.LinearSceneDepth : null;
                 }
-                catch { }
                 SoftDepthReady = depthTex != null && depthTex.IsCreated();
                 _mat.SetFloat("_InvFade", SoftDepthReady ? InvFade : 0f);
                 if (SoftDepthReady) _mat.SetTexture("_LinearSceneDepth", depthTex);

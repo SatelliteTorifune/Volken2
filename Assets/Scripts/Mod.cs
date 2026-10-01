@@ -108,14 +108,6 @@ namespace Assets.Scripts
             LogVolkenAssets();
         }
         
-        /// <summary>手动劈一道雷(需要该行星配置里 lightning.enabled = true)。</summary>
-        private void TriggerLightning()
-        {
-            var w = VolkenWeather.Instance;
-            if (w == null) { Log("VolkenWeather: not initialized"); return; }
-            w.TriggerLightning();
-            Log("VolkenWeather: manual bolt requested");
-        }
         
         /// <summary>开发命令 <c>VolkenForceRefresh</c>:强制重跑一次行星解析。</summary>
         private void ForceRefresh()

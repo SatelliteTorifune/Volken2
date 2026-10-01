@@ -52,6 +52,7 @@
     <s id="Volken.UI.RainRespawnMirror">出域镜像重生(开=确定性传送带,会周期性团块;关=随机混合,推荐)</s>
     <s id="Volken.UI.RainDumpLog">把雨状态写入日志(排查用)</s>
     <s id="Volken.UI.RainDumped">雨状态已写入 Player.log</s>
+    <s id="Volken.UI.RainAudioStats">雨声</s>
     <s id="Volken.UI.RainRowTest">开发:等距排自检(SV_InstanceID)</s>
     <s id="Volken.UI.RainAmount">粒子数量</s>
     <s id="Volken.UI.RainDomainRadius">粒子域半径(米)</s>

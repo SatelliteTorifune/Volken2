@@ -84,6 +84,7 @@ namespace Volken.Weather
                 _host = new GameObject("VolkenWeather");
                 UnityEngine.Object.DontDestroyOnLoad(_host);
                 _host.AddComponent<WeatherTicker>();
+                RainAudio.Ensure(_host);   // 雨声:挂常驻 host(全局唯一,不随相机切换重建);它自己读 RainParticles 做门控
                 _host.SetActive(true);
             }
             catch (Exception ex)

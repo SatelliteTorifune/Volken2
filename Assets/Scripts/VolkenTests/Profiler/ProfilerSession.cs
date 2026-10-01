@@ -44,9 +44,7 @@ namespace VolkenProfiler
     }
 
     /// <summary>
-    /// 帧数据采集器(GPU 焦点,独立命名空间 <c>VolkenProfiler</c>)。
-    /// 每帧采集:帧率/帧耗时(EMA)、GPU 帧时间、渲染线程耗时、Present 等待、瓶颈判断;
-    /// 可录制一段帧数据并导出 CSV。不采集 CPU 细节与内存。
+    /// 帧数据采集器(GPU 焦点):帧率/帧耗时、GPU 帧时间、渲染线程耗时、Present 等待与瓶颈判断;可导出 CSV。
     /// </summary>
     public sealed class ProfilerSession
     {
@@ -109,7 +107,6 @@ namespace VolkenProfiler
             }
         }
 
-        /// <summary>开始录制帧数据。</summary>
         public void BeginCapture()
         {
             _capture.Clear();
@@ -155,7 +152,6 @@ namespace VolkenProfiler
             return path;
         }
 
-        /// <summary>构建 GPU 焦点快照。</summary>
         public ProfilerSnapshot BuildSnapshot()
         {
             float refreshHz = 0f;
@@ -189,15 +185,12 @@ namespace VolkenProfiler
             };
         }
 
-        /// <summary>
-        /// 读取当前云的 GPU 开销相关配置(分辨率 / TSS / 采样格网)。
-        /// 非飞行或 Volken 尚未初始化时返回 null。
-        /// </summary>
+        /// <summary>读取当前云的 GPU 开销相关配置(分辨率 / TSS / 采样格网);非飞行或 Volken 未初始化时返回 null。</summary>
         private static string BuildCloudRenderInfo()
         {
             try
             {
-                var volken = Volken.Core.VolkenMod.Instance;
+                var volken = Volken.Clouds.VolkenClouds.Instance;
                 if (volken == null)
                 {
                     return null;
@@ -234,10 +227,7 @@ namespace VolkenProfiler
             _captureActive = false;
         }
 
-        /// <summary>
-        /// 粗略判断瓶颈:比较 GPU 帧时间 / 渲染线程 / 主线程与整帧耗时的占比。
-        /// 玩家构建里 Unity 不公开 draw call 等细节,这是能拿到的最接近的 GPU 占用判断。
-        /// </summary>
+        /// <summary>瓶颈判断:某项占整帧耗时 ≥85% 才判定为该瓶颈。</summary>
         private string ComputeBottleneck(float frameMs)
         {
             if (!_hasFrameTiming || frameMs <= 0f)

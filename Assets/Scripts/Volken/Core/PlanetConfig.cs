@@ -22,23 +22,11 @@ namespace Volken.Core
         [XmlAttribute]
         public string ExtraCloudConfigName;  // Layer 1 (Extra) 的配置名
 
-        /// <summary>
-        /// 这颗行星用哪套**天气预设**。与 <see cref="CloudConfigName"/> **完全独立** ——
-        /// 云与天气各选各的名字、各自新建保存,互不干扰(就像两个云层各自的预设)。
-        /// 文件:<c>UserData/VolkenWeatherConfig/{行星}/{WeatherConfigName}.xml</c>。
-        /// 空 = 用 <see cref="VolkenWeatherConfig.DefaultConfigName"/>。
-        /// </summary>
+        /// <summary>本行星的天气预设名(与 <see cref="CloudConfigName"/> 完全独立)。空 = Default。</summary>
         [XmlAttribute]
         public string WeatherConfigName;
 
-        /// <summary>
-        /// 【旧格式,仅供迁移】天气参数曾经内联在这条记录里。
-        /// 现在天气按预设名存成独立文件(<c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c>,
-        /// 预设名与云层同一个),见 <see cref="VolkenWeatherConfig.SaveToFile"/>。
-        ///
-        /// 这个字段**故意不给初始值**:XmlSerializer 不会为 null 元素写节点,
-        /// 所以迁移完把它置 null 之后,新存档里不会再冒出 <c>&lt;Weather&gt;</c> 节点。
-        /// </summary>
+        /// <summary>【仅用于迁移旧内联格式】故意不给初始值 —— XmlSerializer 不为 null 写节点,置 null 后新存档不再冒出 &lt;Weather&gt;。</summary>
         [XmlElement("Weather")]
         public VolkenWeatherConfig LegacyWeather;
 
@@ -53,9 +41,7 @@ namespace Volken.Core
         {
         }
 
-        /// <summary>
-        /// 根据层索引获取或设置配置名。layerIndex 0=Main, 1=Extra1, ...
-        /// </summary>
+        /// <summary>按层索引取/设配置名;0 = Main,1 = Extra1。</summary>
         public string GetConfigName(int layerIndex)
         {
             return layerIndex == 0 ? CloudConfigName : ExtraCloudConfigName;
@@ -73,6 +59,9 @@ namespace Volken.Core
     {
         /// <summary>配置文件夹(相对 persistentDataPath)。云预设与天气共用这一份清单。</summary>
         public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
+
+        /// <summary>清单文件名(不带扩展名)。持有与读写它的是 <see cref="Volken.Clouds.VolkenClouds"/>。</summary>
+        public const string DefaultListName = "PlanetConfigList";
 
         [XmlArray("Configs")]
         public List<PlanetConfig> configList = new List<PlanetConfig>();
@@ -135,9 +124,7 @@ namespace Volken.Core
                     if (config == null) return CreateDefault();
                     if (config.configList == null) config.configList = new List<PlanetConfig>();
 
-                    // 迁移:旧格式把天气内联在记录里(<Weather> 节点)。新格式按**天气预设名**存独立文件,
-                    // 所以把旧内联天气写到"{行星}/{天气预设}.xml" —— 只在目标文件还不存在时写
-                    // (不覆盖更新的内容),然后丢掉内联节点(XmlSerializer 不写 null,不会再冒出来)。
+                    // 迁移旧内联 <Weather> 节点:写成独立预设文件(不覆盖已存在的),然后置 null。
                     foreach (var pc in config.configList)
                     {
                         if (pc?.LegacyWeather == null) continue;
@@ -169,7 +156,7 @@ namespace Volken.Core
         public static PlanetConfigList CreateDefault()
         {
             PlanetConfigList newP = new PlanetConfigList();
-            newP.SaveToFile(Volken.Core.VolkenMod.CloudConfigListName);
+            newP.SaveToFile(DefaultListName);
             return newP;
         }
 
@@ -208,7 +195,7 @@ namespace Volken.Core
                 configList.Add(pc);
             }
             pc.WeatherConfigName = configName;
-            this.SaveToFile(Volken.Core.VolkenMod.CloudConfigListName);
+            this.SaveToFile(DefaultListName);
         }
 
         public bool ExistsInConfig(string planetName)
@@ -248,7 +235,7 @@ namespace Volken.Core
             {
                 configList.Add(new PlanetConfig(planetName, ConfigName, extraConfigName));
             }
-            this.SaveToFile(Volken.Core.VolkenMod.CloudConfigListName);
+            this.SaveToFile(DefaultListName);
         }
 
         public void SetConfig(string planetName, string ConfigName, int layerIndex = 0)
@@ -260,7 +247,7 @@ namespace Volken.Core
                     cfg.SetConfigName(layerIndex, ConfigName);
                 }
             }
-            this.SaveToFile(Volken.Core.VolkenMod.CloudConfigListName);
+            this.SaveToFile(DefaultListName);
         }
     }
 }

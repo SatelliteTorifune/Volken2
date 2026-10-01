@@ -260,7 +260,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 ### 阶段 5:接入天气状态机与相机相对坐标
 
-- [ ] **5.1** 复用现有 `Weather/VolkenWeather.cs`(阈值读**自己的配置字段** `rain.triggerValue`,**不要**引入全局天气档位 —— `WeatherTypes` 已删除,见 README 决策速查「不要 SP2 的全局天气预设」)。
+- [ ] **5.1** 复用现有 `Weather/VolkenWeather.cs`(**不要**引入全局天气档位,也**不要**引入"天气值"标量 —— `WeatherTypes` 与天气值状态机均已删除,见 [weather-cloud-decoupling](weather-cloud-decoupling-2026-10-01.md) §8「移除天气值」;雨只按 `rain.enabled` + 自己的参数跑)。
 - [ ] **5.2** 相机相对坐标系 + **手工构造视锥平面**(§3.4c)。
 - [ ] **5.3** 实例 `OnPreCull` 渲染回调(§3.4b);每次绘制前按当前相机重设 uniform(§3.4d)。
 - [ ] **5.4** `_frameVel` 保持恒 0 并**写注释说明是刻意的**(§3.4c)。

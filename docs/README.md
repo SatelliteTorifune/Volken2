@@ -3,7 +3,7 @@
 > 项目:Volken(SimpleRockets 2 / JNO 体积云 mod,Unity BIRP)
 > **新会话先读:[`AGENT_CONTEXT.md`](AGENT_CONTEXT.md)**(项目路径 / 关键文件 / 已定技术事实 / 开发约定,可直接作为提示词)。
 > 说明:本文档是 `docs/` 的导航页。**三区**:根目录 = 活跃(已动手) → [`proposals/`](proposals/) = 已论证 / 待拍板(未在动手) → [`archive/`](archive/) = 已完成 / 历史。
-> **当前活跃只有一件:[`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md)(SP2 雨系统移植)**;另有 [`to-do.md`](to-do.md)(待办台账)。其余全部在 [`proposals/`](proposals/)(天气母计划 / 雷声真实化 / 体积云优化路线图 / 水体大修)与 [`archive/`](archive/)。
+> **当前活跃两件:[`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md)(SP2 雨系统移植)、[`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md)(天气↔云解耦重构,主体已落地、A2/D/F 未排期)**;另有 [`to-do.md`](to-do.md)(待办台账)。其余全部在 [`proposals/`](proposals/)(天气母计划 / 雷声真实化 / 体积云优化路线图 / 水体大修)与 [`archive/`](archive/)。
 > 约定:方案/排查/分析单一主题一个文件,写清「状态 + 决策记录」,未拍板移入 `proposals/`、完成移入 `archive/`,并在此更新索引;**完整文档写入规则见 [§五](#五文档写入规则维护约定)**。
 > **调试日志路径**:`<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log`(Unity 运行时日志)。
 
@@ -14,7 +14,8 @@
 | 文档 | 主题 | 状态 | 一句话摘要 |
 |---|---|---|---|
 | [`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md) | **SP2 雨系统 `ParticleDomain` 移植难点 + 分步计划** | 🚧 **实施中(唯一在动手的方案)** | 雨重做的执行细案 + **动手前必读**。**4 条真难点**:①SP2 的 `AlignStreaks` 是**世界空间长度轴**(正是本项目已判死刑的路线),会以**同源症状**复发(上次是"横块",SP2 在 `fwd∥视线` 时同样"横块"、另多一种"细线")→ 必须改用屏幕平面构轴;②URP 遮挡专有物在 BIRP 不存在 → 方案 A(无遮挡起步)/B(二期),并带**空深度图会让雨整体消失且无报错**的护栏;③**6 个 kernel 的 HLSL 源码全安装不存在**(只有 DXBC),且 **sp2d4 是 Unity 6000.2 而本工程 2022.3** → **必须手写 `.compute`**;④数量级必须重标定(域半径随相机速度自适应 + 密度补偿 r^2.5)。**8 阶段**各带准出判据与停止条件;**§10 为实施记录**(详见文档) |
-| [`to-do.md`](to-do.md) | **待办清单**(高/低优先度 + 已修复台账) | 📋 活跃 backlog | config 卡住(高)、星环渲染顺序/Craft 高轨道云 scale(低);已修复项附根因简述(水面覆盖云、TSS 拖影、原点重置偏移、JNO 冲突、闪电残留/紫红) |
+| [`to-do.md`](to-do.md) | **待办清单**(高/低优先度 + 已修复台账) | 📋 活跃 backlog | config 卡住(**已修,见 §四之二 #1**)、星环渲染顺序/Craft 高轨道云 scale(低);已修复项附根因简述(水面覆盖云、TSS 拖影、原点重置偏移、JNO 冲突、闪电残留/紫红) |
+| [`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md) | **天气 ↔ 云 解耦审计与重构** | 🚧 部分落地(2026-10-01:改名 + 拆生命周期 + `Weather/` 分子目录;**抽象层已按用户要求回撤**;A2 / D / F 未排期) | **反直觉结论:云对天气是零依赖**(`Clouds/` grep `weather` 零命中),问题在**依赖方向反了** —— 天气经 `VolkenMod.Instance.MainLayer.config.layerHeights` 四级穿透进云的内部对象图,且该契约被 `VolkenWeather`/`LightningModule` **复制两份无人拥有**(C1/C2);另有相机海拔公式三份(C4)、共享可变清单双写者(C5)、两份 `SceneLoaded` 编排器 + UI 里第四份(C8)、**该耦的没耦**:`IsRaining` 无消费者(C9)。**已落地**:`VolkenMod`→`Clouds/VolkenClouds`、`VolkenWeatherConfig`→`Weather/VolkenWeatherSettings`、**行星生命周期并入 `VolkenClouds`**(删掉 UI 里 ~50 行重复行星逻辑)、`Weather/` 按 Rain/Lightning 分子目录、`CloudConfig.TryGetBand` 成为云层带的唯一实现;顺带修掉 README §四之二 #1(`config.enabled` 被当环境开关回写 → 改 `CloudLayer.EnvironmentSuppressed`)。**已回撤**:`SceneOrchestrator`/`ICloudBandSource`/`CloudBandRegistry`/`CloudBand`/`SceneDepthRegistry` —— 判定为过度抽象,**两边需要对方数据时直接读对方的 config / 直接 `GetComponent`**,行星解析由 `VolkenClouds` 自己承担。**剩余**:A2(相机海拔 3 份)、D(清单双写者)、F(天气值→降水通道,需玩家提出)、Unity 侧真机验收。**分支现状(`origin/main`=`7690fd7`)**:main 上**完全没有天气系统**,全部天气代码只在 dev 的未合并提交里 |
 
 ---
 
@@ -70,19 +71,27 @@
 | 天气系统命名空间 | **✅ `VolkenMod.Weather`**(不能用 `Volken.Weather`:与全局类 `Volken` 冲突 → CS0101);新增天气文件必须沿用 | 计划 §10.2 ① |
 | mod 资源加载 | **✅ 统一用 `Mod.LoadVolkenAsset<T>(path, required)`**(内部 `IModResourceLoader.LoadAsset<T>`);`Load<T>`/`LoadAudio` 属游戏 `IResourceLoader`,读不到 mod bundle | 计划 §10.2 ⑦ |
 | 雾/雨的深度来源 | **✅ `CloudRenderer.LinearSceneDepth` 已有消费者(2026-09-29)**:雨(阶段 3)软粒子采样它(`combinedDepthTex`,RFloat,LinearEyeDepth 米);雾重做时同样可用。`DepthCapture.cs` 仍是死代码(其 `Hidden/DepthLinear` shader 在工程里不存在) | 计划 §10.2 ② / §10.3 / 雨计划 §10.9 |
-| 天气 UI 与联动 | **✅ 天气面板挂在 Volken 检查器内**(`WeatherPanel.cs`,不另开浮动窗口);云层联动三项增益**默认全 0 = 不碰云配置**(与项目"新增特性默认不改变现有画面"约定一致) | 计划 §10.2b ⑯ |
-| 天气设置项 | **✅ Mod 设置里已无天气项** —— 两个「总闸」(`WeatherEnabled` / `ThunderEnabled`)已按用户要求移除,开关交给**逐行星的天气预设**(见下条) | 计划 §10.1 / §10.2e |
-| **天气配置序列化** | **✅ 按预设名独立存,与云层同构但互不干扰** —— `<PlanetConfig>` 分别记**云预设名**与**天气预设名**(`CloudConfigName` / `WeatherConfigName`);参数本体在各自文件:`UserData/VolkenConfig/{行星}/{预设}.xml`(云)、`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(天气)。天气面板可**独立新建 / 保存 / 读取**(「另存为新配置」+「加载配置」下拉),换天气预设不动云,反之亦然。类:`Assets/Scripts/Volken/Core/PlanetConfig.cs` + `Core/VolkenWeatherConfig.cs` | 计划 §10.2g ㊹(已被本次改动取代) |
-| **【路线】不要 SP2 的全局天气预设** | **✅ 【决策】`WeatherTypes` 已删除** —— SP2 的 `WeatherTypes`(Clear/Few/Broken/Overcast/Rainy/Stormy/Heavy)是个**全局中间层**,由它统一决定云/雨/雾的预设与阈值。**Volken 刻意不要这一层**:云、雨、雾、雷的参数**全部由玩家逐项设置并序列化**,面板上就是直接的数值滑块。"天气值"仍存在(驱动随机/淡变与各子系统自己的触发阈值),但**不映射到任何档位**。阈值变成配置字段:`rain.triggerValue`(2.25)/ `lightning.stormValue`(2.5)/ `overall.maxWeatherValue`(3) | 计划 §10.2h |
-| **档位标签可以留,但只能是显示** | **⚠️ `VolkenWeather.DescribeWeatherValue(float)`** 把连续值切成 `Clear/Few/Rainy/Stormy…` **纯用于日志/UI 文字**。**不要在它上面加任何逻辑**(`if (name == …)`)—— 那等于把 SP2 的中间层又建回来 | 计划 §10.2h ㊿ |
-| **天气配置结构** | **✅ 按「5 个 Section」组织,XML 节点 = 面板分组 = 数据块,三者同名同序**:`Overall`(总体)/ `CloudLinkage`(云层联动)/ `Rain`(雨,占位)/ `Fog`(雾,占位)/ `Lightning`(雷)。每块是嵌套 `[Serializable]` 类 + 自带 `CopyFrom`;`CopyFrom` **逐块委派**而不是浅拷贝(嵌套实例是引用,浅拷贝会让两份配置共享同一个 Section 对象) | 计划 §10.2f ㊵ |
-| **占位参数的处理** | **✅ 雨/雾/云层联动保留"完整占位"**:字段 + XML 节点 + 面板分组都在,但**面板整组 `ItemModel.Enabled = false` 禁用** + 灰字说明"已移除待重做"。**为什么禁用而不是隐藏**:结构完整可读,且玩家不会以为功能丢了。**改这些字段不会有任何效果**(没有消费者) | 计划 §10.2f ㊶ |
+| **【决策:2026-10-01】移除"天气值"整套** | **JNO 的天气是整颗行星尺度的,单个连续标量状态机不匹配** —— 删掉 `WeatherValue`/`TargetWeatherValue`/`WeatherName`/`DescribeWeatherValue`/`IsRaining`/`ForceWeatherValue`/`SetTargetWeatherValue`/`PickRandomWeather`/`WeatherValueChanged` 事件与 `Tick` 里的随机/淡变;删掉 `overall` 的 `dynamicWeather`/`fixedWeatherValue`/`initialWeatherValue`/`maxWeatherValue`/`minDuration`/`maxDuration`/`fadeSpeed`/`updateInterval`/`timeScaleFollow`/`foggyDawn`;删掉 `rain.triggerValue`(与面板滑块 + `Volken.UI.RainTriggerValue`)、`lightning.stormValue`(与滑块 + `Volken.UI.LightningStormValue`);**删掉整个 `CloudLinkage` Section**(它按定义是"天气值 → 云"的联动,已无意义)。**触发方式改为:雷电 = `lightning.enabled` 开着就按 `minDelay/maxDelay` 持续落雷;雨 = `rain.enabled` 开着就下。** `LocalSolarHour` / `CameraCloudFade` 保留(不依赖天气值);**黎明起雾挪进 `fog.dawnFog`**(不再是总体天气的一部分)。旧的 weather.xml 里那些节点由 `XmlSerializer` 静默忽略(已验证不会失败) | [weather-cloud-decoupling-2026-10-01.md](weather-cloud-decoupling-2026-10-01.md) §8 |
+| **【决策:2026-10-01】天气面板挂检查器内** | **✅ 不另开浮动窗口**(`WeatherPanel.cs`):与云在同一处调才是"一套观感参数",也避免两个面板互相遮挡 | 计划 §10.2b ⑯ |
+| **天气设置项** | **✅ Mod 设置里已无天气项** —— 两个「总闸」(`WeatherEnabled` / `ThunderEnabled`)已按用户要求移除,开关交给**逐行星的天气预设**(见下条) | 计划 §10.1 / §10.2e |
+| **天气配置序列化** | **✅ 按预设名独立存,与云层同构但互不干扰** —— `<PlanetConfig>` 分别记**云预设名**与**天气预设名**(`CloudConfigName` / `WeatherConfigName`);参数本体在各自文件:`UserData/VolkenConfig/{行星}/{预设}.xml`(云)、`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(天气)。天气面板可**独立新建 / 保存 / 读取**,换天气预设不动云,反之亦然。类:`Core/PlanetConfig.cs` + `Weather/VolkenWeatherConfig.cs` | 计划 §10.2g ㊹ |
+| ~~不要 SP2 的全局天气预设~~ → **连带天气值一起删除** | **✅ 【决策】`WeatherTypes` 早已删除;2026-10-01 进一步删掉"天气值"本身** —— 不映射档位、也不再有连续标度。各子系统只看自己的 `enabled` + 参数 | 计划 §10.2h → 本次取代 |
+| ~~档位标签 `DescribeWeatherValue`~~ | **❌ 已随天气值删除** —— 没有标度就没有标签 | 本次 |
+| **天气配置结构** | **✅ 按「4 个 Section」组织,XML 节点 = 面板分组 = 数据块,三者同名同序**:`Overall`(总体:仅 `enabled`)/ `Rain`(雨,占位)/ `Fog`(雾,占位,含 `dawnFog`)/ `Lightning`(雷)。每块是嵌套 `[Serializable]` 类 + 自带 `CopyFrom`;`CopyFrom` **逐块委派**而不是浅拷贝(嵌套实例是引用,浅拷贝会让两份配置共享同一个 Section 对象) | 计划 §10.2f ㊵ → 本次缩为 4 块 |
+| **占位参数的处理** | **✅ 雨/雾保留"完整占位"**:字段 + XML 节点 + 面板分组都在,但**面板整组禁用** + 灰字说明"已移除待重做"。**为什么禁用而不是隐藏**:结构完整可读,且玩家不会以为功能丢了。**改这些字段不会有任何效果** | 计划 §10.2f ㊶ |
 | **`VolkenWeather.Config` 的语义** | **⚠️ 它是清单里那条记录上的实例本身(引用,不是副本)** —— 面板一改就立刻改了清单内存对象,所以「重置为默认」必须显式实现(`CopyFrom(CreateDefault())` 就地写而**不是换引用**,换引用会让 `Config` 与清单脱钩)。落盘只发生在"点保存"或云层 `AddConfig/SetConfig` 时 | 计划 §10.2g ㊼ |
 | **`AddConfig` 的隐藏 bug** | **✅ 已修**:原实现无条件 `configList.Add(new PlanetConfig(...))`,对已存在的行星会**追加第二条同行星记录**。云层调用点都被 `ExistsInConfig` 挡着所以没暴露;**天气内联进来之后这会让天气参数分叉成两份**(症状:"设置时不时自己变回去")。改为已有记录只更新层名 | 计划 §10.2g ㊽ |
 | **旧 `PlanetConfigList.xml` 兼容** | **✅ 有显式兜底,而且会自愈**:老记录的 `<PlanetConfig … />` 是**自闭合标签**(属性-only)没有 `<Weather>` 节点 → `LoadFromFile` 里补一份默认(全关)+ `EnsureSections` + `ClampAll`(**不依赖"字段初始化器不被反序列化器重置"这个行为细节**)。而且 `Volken.OnSceneLoaded` 会调 `AddConfig` → 结尾 `SaveToFile`,所以**进一次场景文件就被重写成带 `<Weather>` 的形态** | 计划 §10.2g ㊾ |
 | ~~天气独立配置目录~~ | **❌ 已废弃(仅存活一次改动)**:曾短暂改为 `UserData/VolkenWeatherConfig/` + `PlanetWeatherConfigList.xml` + 多预设。现**不创建、不读取**;若磁盘上有该目录可手删。**别再照 §10.2f ㊴ 实现** | 计划 §10.2g ㊺㊻ |
 | 淡变/重入守恒 | **⚠️ 通用教训(雨已删,结论留用)**:任何"每帧都会调到的路径"里禁止出现重置动画进度的副作用;重入守卫只能比较**目标值**,不能比较当前值 —— 否则淡入每帧被重置,值恒 0。**守卫只能读状态,不能挡在"改状态的逻辑"前面** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §5.2 / 计划 §10.2b ㉑㉖㉚ |
 | 天气与云的关系 | **✅ 【决策】天气系统不联动云层** —— 云厚度/覆盖度/浓度/颜色/风速全部由云自己的配置决定;曾有 `cloudCoverageGain` 等三个联动项,已连同 UI/本地化/配置字段一起移除 | 计划 §10.2b ㉔ |
+| **【决策:2026-10-01】模块命名与职责** | **`VolkenMod` → `Volken.Clouds.VolkenClouds`**(移入 `Clouds/`;它一直是"云系统",不是 mod 入口 —— 入口是 `Mod.cs`)、**`VolkenWeatherConfig` → `Volken.Weather.VolkenWeatherSettings`**(移入 `Weather/`)、`VolkenWeather` **名字不变**。规则:**命名空间表明域,类名不再制造"这是不是整个 mod"的歧义** | [weather-cloud-decoupling-2026-10-01.md](weather-cloud-decoupling-2026-10-01.md) §8 |
+| **【决策:2026-10-01】行星生命周期归属于 `VolkenClouds`** | **行星环境只有 `VolkenClouds` 解析**(它本来就按行星装云预设、挂渲染器),`SceneLoaded` / `PlayerChangedSoi` 由它订阅,解析出 `PlanetEnvironment` 后广播 `PlanetChanged` 给天气。初始化顺序:`VolkenClouds` → `VolkenWeather`。UI 里那份重复的行星解析(~50 行)已删除(UI 仍订阅 `SceneLoaded`,但只为建面板)。另:`CloudRenderer` 原先订阅了 `PlayerChangedSoi` 却从不退订 → 改为订阅 `PlanetChanged` 并在 `OnDestroy` 退订 | 同上 §8 |
+| **【决策:2026-10-01】不要额外的编排器类** | 曾抽出的 `Core.SceneOrchestrator`(+ `PlanetEnvironment` 在 Core)**当日撤销** —— 行星解析搬回 `VolkenClouds`,`PlanetEnvironment` 落在 `Volken.Clouds`。少一个类、少一跳;代价是天气与 UI 通过 `VolkenClouds` 拿行星信息(接受) | 同上 §8 |
+| **【决策:2026-10-01】云层高度带的所有权** | 遍历逻辑**只剩 `CloudConfig.TryGetBand(out bottom, out top)` 一处**;天气**直接读云的 config**(`VolkenClouds.Instance?.MainLayer?.config?.TryGetBand(...)`),云要天气参数就直接读 `VolkenWeather.Instance.Config`。**读 ≠ 联动**:天气不修改云的任何参数 | 同上 §8 |
+| **【决策:2026-10-01】不搞过度抽象** | 撤掉的全部间接层:`ICloudBandSource` + `CloudBandRegistry` + `CloudBand`(云层带接口)、`Core.SceneDepthRegistry`(相机深度注册表)、`Core.SceneOrchestrator`(编排器类)。现在:**两边需要对方数据就直接读对方的 config / 直接 `GetComponent`**;**行星生命周期由 `VolkenClouds` 自己承担**(它本来就需要)。保留的只有两条 —— **实现去重**(一份 `TryGetBand`)、**不重复解析行星**(原先四处),它们消除的是重复而非加间接 | [weather-cloud-decoupling-2026-10-01.md](weather-cloud-decoupling-2026-10-01.md) §8 |
+| **【决策:2026-10-01】目录按子系统分,shader 进 `Shader/`** | 代码:`Weather/Rain/`、`Weather/Lightning/`(+ `Audio/`)、`Weather/Fog/`(待实现);域级文件(`VolkenWeather` / `VolkenWeatherSettings` / `WeatherPanel`)留在 `Weather/` 根。**资产:每个子系统的 shader/compute 放自己的 `Shader/`** —— `Clouds/Shader/`、`Weather/Rain/Shader/`、`Weather/Lightning/Shader/`。⚠️ **移动资产必须同步改路径字符串**(`LoadVolkenAsset<T>` 按工程路径读,不是 GUID;共 6 处) | 同上 §8 |
+| **【决策:2026-10-01】雨与云零行为联动** | 雨**不读** `WeatherValue`/`IsRaining`/`CameraCloudFade`;软粒子深度直接 `_cam.GetComponent<CloudRenderer>().LinearSceneDepth`,没有云渲染器就自动降级。**数据上可互相读取,行为上互不驱动** | 同上 §8 |
 | JNO 无风系统 | **✅ 已确认**:`WindManager`/`WindVelocity` 在 jnoCode 全仓库**零命中**;`IPlanetAtmosphereData` 只有气压/温度/成分,**无气流速度接口** → 雨若重做,风只能来自 `CloudConfig.windSpeed/windDirection` | 计划 §10.2c A |
 | 雨重做的密度标定 | **📦 历史结论(雨已删除,重做时直接用)**:密度必须与域大小一起标定 —— EVE 的 `rain-Kerbin` 是 20 万粒子 / 半径 70m ≈ **0.139 个/m³**;域随相机速度自适应放大时必须补偿密度(指数 r^2.5)。"雨时有时无"的主因是**密度不足**,不是闪断。**密度与停留时长要一起算** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §5.1 / 计划 §10.2c2 |
 | 雨重做的方向铁律 | **📦 历史结论(雨已删除,重做时直接用)**:①细长 billboard 的**长度轴必须在屏幕平面内表达**(世界空间长度轴 + 任意宽度轴 → 视线接近长度轴时透视压成 0 → 屏幕上是"横块");②**长度轴只由物理量决定,宽度轴由视线决定**,混用必错;③沿视线的方向分量对屏幕方向**贡献恒为 0**(会造成径向爆散);④诊断必须量**屏幕空间**角度,世界空间夹角会误导多轮。**可行算法骨架见教训 §3.1 ㈢** | [教训](archive/weather-rain-fog-postmortem-2026-09-27.md) §3.1 / 计划 §10.2d F~I |
@@ -107,7 +116,8 @@
 - **水体大修实施顺序**:评估完成(A/B 先行),未排期([proposals/water-system-overhaul-2026-09-02.md](proposals/water-system-overhaul-2026-09-02.md))。
 - **优化点剩余项**:Light Volume(#11,长期)、PlaceRays(#10,长期)、噪声 mipmap/密度 LUT(#4/#5)、HDR RT(#6)、MV 4 次膨胀(#9)等,见 [proposals/cloud-optimization-roadmap-2026-08-28.md](proposals/cloud-optimization-roadmap-2026-08-28.md)。
 - **方案 C 已知缺口**:N/S 风(非刚体 Y 旋转,云空间重投影近似未覆盖)、flip/flop 双缓冲(单缓冲当前可用)、TSS 开时 !isFresh 硬回退闪烁待用户实测确认。
-- **to-do 高优先**:切换至有大气星球时 config 卡住(未知原因,等复现和 log)。
+- ~~**to-do 高优先**:切换至有大气星球时 config 卡住~~ → **✅ 已解决(2026-10-01)**,见 §四之二 #1。
+- **天气↔云解耦剩余项**:A2(相机海拔公式仍 3 份)、D(`PlanetConfigList.xml` 双写者)、F(天气值→降水/云量通道,需玩家先提出需求);以及 Unity 侧真机验收 —— 见 [weather-cloud-decoupling-2026-10-01.md](weather-cloud-decoupling-2026-10-01.md) §8「剩余」。
 
 ---
 
@@ -117,11 +127,11 @@
 
 | # | 问题 | 证据 | 影响 |
 |---|---|---|---|
-| 1 | **切换至有大气星球时 config 卡住**(高优先) | `to-do.md`;未知原因,等待更多复现和 log | 进有大气 SOI 时配置卡死,需复现后定位 |
+| 1 | ~~**切换至有大气星球时 config 卡住**(高优先)~~ **✅ 已解决(2026-10-01)** | 根因:`config.enabled` 被当成"环境开关"在**三处**回写(`VolkenClouds` / `CloudRenderer` / `VolkenUserInterface`),而它是**玩家预设本体里的字段** → 绕无大气天体时把该行星预设静默写成"关闭",回来后 `hasAtmo && enabled` 恒 false。改法:新增 `CloudLayer.EnvironmentSuppressed`(运行时,不落盘),渲染只认 `enabled && !EnvironmentSuppressed` | [`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md) §8;待 Unity 真机确认 |
 | 2 | **星环渲染顺序错误**(低优先) | `to-do.md` | 星环相对云/水体层级错误 |
 | 3 | **Craft 在高轨道时云层 scale 错误**(低优先) | `to-do.md` | 高轨道下云的缩放不符合预期 |
 | 4 | **N/S 风重投影缺口**:云空间重投影只覆盖绕 Y 自转 + 东西风平移 | 方案 C §5 已知局限 / 割裂线 §7 遗留 | 强南北风时历史重投影失效 → 残影/鬼影;需完整 worldToCloud 矩阵 |
-| 5 | **`CloudConfig.low/mid/highAltitudeThreshold` 死配置**(只定义+序列化,零消费) | 轨道云文档 §2/§4.3 | 与 KSA 的 start/end 一对设计不对应;**不可删除**(旧 XML 含节点,删除会导致 XmlSerializer 反序列化失败回退默认配置),仅弃用 |
+| 5 | ~~**`CloudConfig.low/mid/highAltitudeThreshold` 死配置**~~ **✅ 已解决(2026-10-01 复核)** | 这三个字段**早已在 `fe87e59` 随"deprecated distance/sample fields removed"删除**,全仓库已 0 命中。**并且并没有发生"反序列化失败回退默认配置"** —— `XmlSerializer` 对未知 XML 节点默认是**忽略**,不抛异常。原文那句"不可删除"的告警是**错的**(源自当时的推测,未被验证) | 无需处理;归档文档里的旧结论保留作决策记录,勿再引用为"必须保留死字段"的依据 |
 
 ---
 

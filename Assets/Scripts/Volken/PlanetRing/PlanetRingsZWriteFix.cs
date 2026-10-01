@@ -72,9 +72,6 @@ namespace Volken.PlanetRing
             // 强制队列
             mat.renderQueue = Mod.Instance.backRenderQueue;
 
-            //mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            //mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-
              mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
              mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
 

@@ -21,7 +21,6 @@
     <s id="Volken.UI.Weather">天气</s>
     <s id="Volken.UI.WeatherUnavailable">天气系统未初始化(请重载飞行场景)。</s>
     <s id="Volken.UI.WeatherPlanet">行星</s>
-    <s id="Volken.UI.WeatherValue">天气值</s>
     <s id="Volken.UI.WeatherActive">运行中</s>
     <s id="Volken.UI.WeatherActiveOn">已启动(本行星天气已启用)</s>
     <s id="Volken.UI.WeatherActiveOff">未启动(需启用本行星天气)</s>
@@ -29,17 +28,10 @@
     <s id="Volken.UI.WeatherEnabled">启用天气(本行星)</s>
     <s id="Volken.UI.WeatherEnabledOn">本行星天气已启用。</s>
     <s id="Volken.UI.WeatherEnabledOff">本行星天气已关闭。</s>
-    <s id="Volken.UI.WeatherDynamic">动态天气</s>
-    <s id="Volken.UI.WeatherManualValue">天气值(强制)</s>
     <s id="Volken.UI.WeatherConfigSaved">天气配置已保存(与云层同一份 PlanetConfigList.xml)。</s>
     <s id="Volken.UI.WeatherResetToDefault">已重置为默认(记得点“保存当前配置”)</s>
     <s id="Volken.UI.WeatherNotImplemented">此联动机制暂未实现,以下参数为占位(默认 0 = 不改变云层)。</s>
 
-    <s id="Volken.UI.WeatherCloudLinkage">云层联动(未实现)</s>
-    <s id="Volken.UI.CloudLinkageEnabled">启用云层联动</s>
-    <s id="Volken.UI.CloudLinkageCoverage">天气 → 云覆盖度</s>
-    <s id="Volken.UI.CloudLinkageDarken">天气 → 云色暗化</s>
-    <s id="Volken.UI.CloudLinkageWind">天气 → 云风速</s>
 
     <s id="Volken.UI.WeatherRain">雨(阶段 3,实时生效)</s>
     <s id="Volken.UI.RainStats">状态(实时)</s>
@@ -55,7 +47,6 @@
     <s id="Volken.UI.RainBrightness">亮度增益(0=原色)</s>
     <s id="Volken.UI.WeatherRainRemoved">雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>
     <s id="Volken.UI.RainEnabled">启用雨</s>
-    <s id="Volken.UI.RainTriggerValue">触发天气值</s>
     <s id="Volken.UI.RainCeilingAltitude">雨的海拔上限(米;0=关闭闸门,不限制)</s>
     <s id="Volken.UI.RainCeilingBand">上限淡出带宽(占上限比例;0.4=顶部 40% 渐隐)</s>
     <s id="Volken.UI.RainRespawnMirror">出域镜像重生(开=确定性传送带,会周期性团块;关=随机混合,推荐)</s>
@@ -75,6 +66,7 @@
     <s id="Volken.UI.WeatherFog">雾(已移除,占位)</s>
     <s id="Volken.UI.WeatherFogRemoved">雾系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>
     <s id="Volken.UI.FogEnabled">启用高度雾</s>
+    <s id="Volken.UI.FogDawnFog">黎明起雾</s>
     <s id="Volken.UI.FogBaseHeight">雾底高度(米)</s>
     <s id="Volken.UI.FogHeight">雾层厚度(米)</s>
     <s id="Volken.UI.FogDensity">雾密度</s>
@@ -85,7 +77,6 @@
 
     <s id="Volken.UI.WeatherLightning">雷</s>
     <s id="Volken.UI.LightningEnabled">启用雷电</s>
-    <s id="Volken.UI.LightningStormValue">触发天气值</s>
     <s id="Volken.UI.LightningTriggerNow">立刻劈一道</s>
     <s id="Volken.UI.LightningTriggered">已触发闪电。</s>
     <s id="Volken.UI.LightningStats">落雷状态</s>
@@ -108,12 +99,6 @@
     <s id="Volken.UI.ThunderFallbackSpeedOfSound">兜底声速(米/秒)</s>
     <s id="Volken.UI.ThunderSourceBlend">雷声声源:云底混合</s>
 
-    <s id="Volken.UI.WeatherTiming">天气节奏</s>
-    <s id="Volken.UI.WeatherMinDuration">最短持续(秒)</s>
-    <s id="Volken.UI.WeatherMaxDuration">最长持续(秒)</s>
-    <s id="Volken.UI.WeatherFadeSpeed">淡变速度(/秒)</s>
-    <s id="Volken.UI.WeatherTimeScaleFollow">时间加速跟随</s>
-    <s id="Volken.UI.WeatherFoggyDawn">黎明起雾</s>
     
     <!-- Group Names -->
     <s id="Volken.UI.ConfigManagement">配置管理</s>

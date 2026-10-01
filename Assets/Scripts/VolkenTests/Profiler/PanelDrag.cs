@@ -4,9 +4,7 @@ using UnityEngine.EventSystems;
 namespace VolkenProfiler
 {
     /// <summary>
-    /// 让 GPU 性能面板可拖动(挂在面板背景上,独立命名空间 <c>VolkenProfiler</c>)。
-    /// 复用游戏已有的全局 EventSystem,不新建,避免输入冲突;
-    /// 只需面板所在 Canvas 带有 GraphicRaycaster 即可收到指针事件。
+    /// 让性能面板可拖动。复用游戏已有的全局 EventSystem(不新建);面板 Canvas 需带 GraphicRaycaster。
     /// </summary>
     public class PanelDrag : MonoBehaviour, IPointerDownHandler, IDragHandler
     {

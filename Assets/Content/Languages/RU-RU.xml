@@ -21,7 +21,6 @@
     <s id="Volken.UI.Weather">Погода</s>
     <s id="Volken.UI.WeatherUnavailable">Система погоды не инициализирована (перезагрузите сцену полёта).</s>
     <s id="Volken.UI.WeatherPlanet">Планета</s>
-    <s id="Volken.UI.WeatherValue">Значение погоды</s>
     <s id="Volken.UI.WeatherActive">Активна</s>
     <s id="Volken.UI.WeatherActiveOff">ВЫКЛ (включите погоду этой планеты)</s>
     <s id="Volken.UI.WeatherActiveOn">ВКЛ (погода этой планеты включена)</s>
@@ -29,17 +28,10 @@
     <s id="Volken.UI.WeatherEnabled">Погода включена (эта планета)</s>
     <s id="Volken.UI.WeatherEnabledOn">Погода для этой планеты включена.</s>
     <s id="Volken.UI.WeatherEnabledOff">Погода для этой планеты выключена.</s>
-    <s id="Volken.UI.WeatherDynamic">Динамическая погода</s>
-    <s id="Volken.UI.WeatherManualValue">Значение погоды (принудительно)</s>
     <s id="Volken.UI.WeatherConfigSaved">Конфигурация погоды сохранена (тот же PlanetConfigList.xml, что и облака).</s>
     <s id="Volken.UI.WeatherResetToDefault">Сброшено по умолчанию (не забудьте «Сохранить Текущий Конфиг»)</s>
     <s id="Volken.UI.WeatherNotImplemented">Эта связь ещё не реализована; значения ниже — заготовки (0 = облака не меняются).</s>
 
-    <s id="Volken.UI.WeatherCloudLinkage">Связь с облаками (не реализована)</s>
-    <s id="Volken.UI.CloudLinkageEnabled">Включить связь с облаками</s>
-    <s id="Volken.UI.CloudLinkageCoverage">Погода в покрытие облаков</s>
-    <s id="Volken.UI.CloudLinkageDarken">Погода в затемнение облаков</s>
-    <s id="Volken.UI.CloudLinkageWind">Погода в ветер облаков</s>
 
     <s id="Volken.UI.WeatherRain">Дождь (этап 3, в реальном времени)</s>
     <s id="Volken.UI.RainStats">Состояние (в реальном времени)</s>
@@ -55,7 +47,6 @@
     <s id="Volken.UI.RainBrightness">Яркость (0 = исходная)</s>
     <s id="Volken.UI.WeatherRainRemoved">Система дождя удалена и будет переделана; значения ниже — заготовки и ни на что не влияют.</s>
     <s id="Volken.UI.RainEnabled">Дождь включён</s>
-    <s id="Volken.UI.RainTriggerValue">Порог значения погоды</s>
     <s id="Volken.UI.RainCeilingAltitude">Предел высоты дождя (м; 0 = без ограничения)</s>
     <s id="Volken.UI.RainCeilingBand">Полоса затухания у предела (доля; 0.4 = верхние 40%)</s>
     <s id="Volken.UI.RainRespawnMirror">Зеркальное перерождение (вкл = конвейер с периодическими сгустками; выкл = случайное смешивание, рекомендуется)</s>
@@ -75,6 +66,7 @@
     <s id="Volken.UI.WeatherFog">Туман (удалён, заготовка)</s>
     <s id="Volken.UI.WeatherFogRemoved">Система тумана удалена и будет переделана; значения ниже — заготовки и ни на что не влияют.</s>
     <s id="Volken.UI.FogEnabled">Туман включён</s>
+    <s id="Volken.UI.FogDawnFog">Туман на рассвете</s>
     <s id="Volken.UI.FogBaseHeight">Нижняя граница (м)</s>
     <s id="Volken.UI.FogHeight">Толщина слоя (м)</s>
     <s id="Volken.UI.FogDensity">Плотность тумана</s>
@@ -85,7 +77,6 @@
 
     <s id="Volken.UI.WeatherLightning">Молнии</s>
     <s id="Volken.UI.LightningEnabled">Молнии включены</s>
-    <s id="Volken.UI.LightningStormValue">Порог значения погоды</s>
     <s id="Volken.UI.LightningTriggerNow">Ударить сейчас</s>
     <s id="Volken.UI.LightningTriggered">Молния вызвана.</s>
     <s id="Volken.UI.LightningStats">Состояние разрядов</s>
@@ -108,12 +99,6 @@
     <s id="Volken.UI.ThunderFallbackSpeedOfSound">Резервная скорость звука (м/с)</s>
     <s id="Volken.UI.ThunderSourceBlend">Источник грома: примесь нижней кромки облаков</s>
 
-    <s id="Volken.UI.WeatherTiming">Ритм погоды</s>
-    <s id="Volken.UI.WeatherMinDuration">Мин. длительность (с)</s>
-    <s id="Volken.UI.WeatherMaxDuration">Макс. длительность (с)</s>
-    <s id="Volken.UI.WeatherFadeSpeed">Скорость перехода (/с)</s>
-    <s id="Volken.UI.WeatherTimeScaleFollow">Следование ускорению времени</s>
-    <s id="Volken.UI.WeatherFoggyDawn">Туман на рассвете</s>
     
     <!-- Group Names -->
     <s id="Volken.UI.ConfigManagement">Редактирование Конфигурации</s>

@@ -76,8 +76,6 @@ namespace Volken.HarmonyPatches
 
             if (changed)
             {
-                // 可选：强制刷新renderQueue（保持原版动态调整逻辑）
-                // __instance.UpdateRingsBasedOnCameraPosition(); // 如果需要可以patch LateUpdate调用
             }
         }
     }

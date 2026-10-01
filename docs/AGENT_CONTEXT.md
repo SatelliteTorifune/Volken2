@@ -28,6 +28,7 @@
 | 雨重做的难点与分步计划(**开工前必读**) | `docs/sp2-rain-particledomain-port-2026-09-28.md`(4 条真难点 + 8 阶段准出判据 + 停止条件;含**对母计划 §8 第 2 条的更正**:sp2d4 是 Unity 6000.2,`.asset`/`.compute` **不可跨版本导入,须手写**) |
 | SP2 天气移植母计划(雾/雨历史决策沿革,**已转 proposals**) | `docs/proposals/sp2-weather-port-2026-09-27.md`(§10.2e 移除记录、§10.2f 勿照做、§10.2g 配置合并、§10.2h 天气标度路线修正) |
 | 雷声真实化 + 闪电修复(**已转 proposals**,代码已落地待打包) | `docs/proposals/thunder-realism-2026-09-28.md`(声速 API / 距离衰减 / 残留与紫红根因;§5.3 打包待做) |
+| **天气 ↔ 云 解耦审计与重构**(活跃,**部分已落地**) | `docs/weather-cloud-decoupling-2026-10-01.md`(C1~C10 耦合点清单 + 5 阶段;2026-10-01 已落地:改名 `VolkenClouds`/`VolkenWeatherSettings`、行星生命周期并入 `VolkenClouds`、`Weather/` 分子目录、`TryGetBand` 唯一实现;**期间加的 `SceneOrchestrator`/`ICloudBandSource`/`CloudBand`/`SceneDepthRegistry` 已全部按"过度抽象"回撤**;**A2/D/F 未排期**)。**核心结论:云对天气零依赖,是天气穿透进了云的内部对象图** |
 | 本机路径映射(真实值,**仅本地**) | `docs/LOCAL_PATHS.md`(已被 `.gitignore` 排除,严禁上传) |
 | 游戏运行日志 | `<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log` |
 | 反编译游戏源码(只读) | `<JNO_CODE>`(含 `SimpleRockets2/`、`ModApi/`) |
@@ -40,17 +41,24 @@
 
 | 文件 | 职责 |
 |---|---|
-| `Core/VolkenMod.cs` | mod 入口:`OnSceneLoaded` 注册/初始化、`CloudRenderer` 创建、`StockCloudMap.LoadFor/Release`(有大气 SOI 进/出) |
-| `Core/VolkenUserInterface.cs` | UI(方案 A/B/C 分组、覆盖分解滑块、轨道云组、本地化);曾含自愈初始化 `Update` 驱动,已撤除 |
-| `Core/PlanetConfig.cs` | **行星 → 预设名 的映射**:`PlanetConfig`(`PlanetName`/`CloudConfigName`/`ExtraCloudConfigName`/**`WeatherConfigName`** + `LegacyWeather`,后者**仅用于迁移旧内联格式**)+ `PlanetConfigList`(清单读写 + 旧格式迁移 + `Get/SetWeatherConfig`)。落盘 `UserData/VolkenConfig/PlanetConfigList.xml`。**云与天气的预设互相独立**(各自的名字、各自的列表、各自新建保存,**不做配对联动**):云 `UserData/VolkenConfig/{行星}/{预设}.xml`,天气 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(类在 `Core/VolkenWeatherConfig.cs`,含 `GetAllConfigNames`)。⚠️ `AddConfig` 对已有行星只更新预设名(勿改回 `Add`) |
-| `Weather/VolkenWeather.cs` | 天气状态机单例:天气值推进/随机/淡变、相机指标(海拔/太阳时/云内淡化)、雷电起停。**各子系统阈值读自己的配置字段**(`rain.triggerValue` / `lightning.stormValue`),不用任何全局档位常量 |
-| ~~`Weather/WeatherTypes.cs`~~ | **❌ 已删除(2026-09-27)** —— SP2 的全局天气档位常量(Clear/Few/Rainy/Stormy…)+ `Classify`。**Volken 刻意不要"全局预设"这一层**:云/雨/雾/雷的参数全部由玩家逐项设置并序列化。`Classify` 的去向 = `VolkenWeather.DescribeWeatherValue`(纯显示,**不要在它上面加逻辑**) |
+| `Clouds/VolkenClouds.cs` | **云系统 + 行星生命周期的唯一来源**(原名 `Core/VolkenMod.cs`,2026-10-01 改名并移入 `Clouds/`):持有全部云层、按行星装载云预设、装配 `CloudRenderer`/`FarCameraScript`;并**自己订阅** `SceneLoaded` / `PlayerChangedSoi`,解析 <see cref="PlanetEnvironment"/> 后广播 `PlanetChanged`(天气订阅它)。持有 `planetConfigList`。⚠️ `Mod.OnModLoaded` 里必须先于 `VolkenWeather` 初始化。⚠️ 名字里的 Volken 只是品牌前缀,域由命名空间表达 |
+| `Clouds/PlanetEnvironment.cs` | 当前行星环境快照(行星名 / 是否在飞行 / 是否天体 / 大气 / 水),由 `VolkenClouds` 解析并广播 |
+| `Core/VolkenUserInterface.cs` | UI(方案 A/B/C 分组、覆盖分解滑块、轨道云组、本地化);**只做 UI 自己的场景生命周期**(建面板),行星解析/大气门控/渲染器装配已交给 `VolkenClouds`(原先这里抄了第四份) |
+| `Core/PlanetConfig.cs` | **行星 → 预设名 的映射**:`PlanetConfig`(`PlanetName`/`CloudConfigName`/`ExtraCloudConfigName`/**`WeatherConfigName`** + `LegacyWeather`,后者**仅用于迁移旧内联格式**)+ `PlanetConfigList`(清单读写 + 旧格式迁移 + `Get/SetWeatherConfig`)。落盘 `UserData/VolkenConfig/PlanetConfigList.xml`(文件名见 `PlanetConfigList.DefaultListName`)。**云与天气的预设互相独立**(各自的名字、各自的列表、各自新建保存,**不做配对联动**):云 `UserData/VolkenConfig/{行星}/{预设}.xml`,天气 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(类在 `Weather/VolkenWeatherSettings.cs`,含 `GetAllConfigNames`)。⚠️ `AddConfig` 对已有行星只更新预设名(勿改回 `Add`) |
+| `Weather/`(域根) | `VolkenWeather.cs`(状态机)+ `VolkenWeatherSettings.cs`(预设本体)+ `WeatherPanel.cs`(面板,含三个子系统的分组)。**按子系统分子目录**(2026-10-01) |
+| `Weather/Rain/` | `RainParticles.cs` + `Shader/`(`RainParticles.compute` / `.shader`)—— 雨子系统 |
+| `Weather/Lightning/` | `LightningModule.cs` / `LightningBolt.cs` + `Shader/`(`LightningBolt.shader` / `LightningFlash.shader`)+ `Audio/`(9 条雷声 wav) |
+| `Weather/Fog/` | **待实现**(重做雾时新建;`FogSection` 占位字段现在 `VolkenWeatherSettings.cs` 里) |
+| **约定:资产按子系统归 `Shader/` 子目录** | 每个子系统的 `.shader` / `.compute` 放自己的 `Shader/`,不散在代码旁边:`Clouds/Shader/`、`Weather/Rain/Shader/`、`Weather/Lightning/Shader/`。⚠️ **移动资产必须同步改路径字符串** —— `Mod.LoadVolkenAsset<T>` / `ResourceLoader.LoadAsset<T>` 是按**工程路径**读的,不是 GUID(共 6 处:Clouds.shader、CloudNoiseCompute.compute、RainParticles.{compute,shader}、LightningBolt.shader、LightningFlash.shader) |
+| `Weather/VolkenWeather.cs` | **天气系统**:按行星装载天气预设、相机指标(海拔/太阳时/云内淡化)、雷电启停。**没有"天气值"状态机** —— 各子系统只看**自己的** `enabled` + 节奏参数(雨 `rain.enabled`;雷 `lightning.enabled` + `minDelay/maxDelay`)。**与云只做"直接读 config"**(`VolkenClouds.Instance?.MainLayer?.config?.TryGetBand(...)`),不造接口层 |
+| `Weather/VolkenWeatherConfig.cs` | 天气预设本体(2026-10-01 从 `Core/` 移入 `Weather/`;类名保持 `VolkenWeatherConfig`):4 个 Section(总体 `Overall` / 雨 `Rain` / 雾 `Fog` / 雷 `Lightning`)+ `LoadFromFile/SaveToFile/ClampAll/UpgradeUneditedDefaults`。**黎明起雾是 `fog.dawnFog`**,不属于总体 |
+| ~~`Weather/WeatherTypes.cs`~~ 与 ~~"天气值"标度~~ | **❌ 均已删除(2026-09-27 / 2026-10-01)** —— SP2 的全局档位 `WeatherTypes`,以及随后的 `WeatherValue` 连续标度、随机/淡变状态机、`DescribeWeatherValue`、`rain.triggerValue`、`lightning.stormValue`、`CloudLinkage` 联动占位。**理由(用户)**:JNO 的天气是**整颗星球**尺度的,单个标量状态机不匹配这套设计;各子系统只按自己的配置跑 |
 | `Core/SerializableTypes.cs` | 序列化辅助类型 |
-| `Clouds/CloudRenderer.cs` | **核心**(~484 行):`[ImageEffectOpaque] OnRenderImage` 全流程(远近深度合并 → 逐层 Cloud pass → DilateMV → Upscale → Composite);`SetLayerDynamicProperties`;`BuildCloudSpaceRepro`(云空间重投影,`prevViewProjMat = GL.GetGPUProjectionMatrix(...) * worldToCameraMatrix`);订阅 `IGameView.ReferenceFrameRecentered`(原点重置清历史) |
-| `Clouds/CloudLayer.cs` | 每层 RT 管理(cloudTex/cloudDepth/cloudMV、historyTex/historyDepthTex/historyCloudDepthTex);`SetStaticShaderProperties`;TSS 开关按层处理 |
-| `Clouds/CloudConfig.cs` | 配置:coverage/density/layerStrengths、`useStockCloudMap/stockMapStrength/stockDensityScale/stockMaskInfluence/stockAlign*`、`useOrbitClouds/orbitTransition*`、TSS 相关;`low/mid/highAltitudeThreshold` 为**死配置**(勿删,旧 XML 兼容) |
-| `Clouds/Clouds.shader` | 体积云 shader:Clouds pass(低清全量 raymarch,MRT 颜色/云面距离/MV)、DilateMV(3×3 膨胀)、Upscale(时序核心)、Composite、OrbitClouds(轨道 2D)、ReflectionComposite;`SampleDensity/SampleDensityCheap/SampleCoverageCheap`(方案 A/B/C + 覆盖分解的 4 处同源消费点) |
-| `Clouds/CloudNoise.cs` / `CloudNoiseCompute.compute` | 3D Worley 噪声(GetWhorleyFBM3D)与 compute 变体 |
+| `Clouds/CloudRenderer.cs` | **核心**(~1000 行):`[ImageEffectOpaque] OnRenderImage` 全流程(远近深度合并 → 逐层 Cloud pass → DilateMV → Upscale → Composite);`SetLayerDynamicProperties`;`BuildCloudSpaceRepro`(云空间重投影,`prevViewProjMat = GL.GetGPUProjectionMatrix(...) * worldToCameraMatrix`);订阅 `IGameView.ReferenceFrameRecentered`(原点重置清历史)+ `VolkenClouds.PlanetChanged`(切天体清本相机时序历史,`OnDestroy` 退订);`LinearSceneDepth` = 本相机线性场景深度(雨的软粒子直接 `GetComponent<CloudRenderer>()` 取) |
+| `Clouds/CloudLayer.cs` | 每层 RT 管理(cloudTex/cloudDepth/cloudMV、historyTex/historyDepthTex/historyCloudDepthTex);`SetStaticShaderProperties`;TSS 开关按层处理。**`EnvironmentSuppressed`(运行时,不落盘)**= 绕恒星/无大气时的抑制标志;渲染只认 `config.enabled && !EnvironmentSuppressed`(用户开关与环境分离,勿再回写 `config.enabled`) |
+| `Clouds/CloudConfig.cs` | 配置:coverage/density/layerStrengths、`useStockCloudMap/stockMapStrength/stockDensityScale/stockMaskInfluence/stockAlign*`、`useOrbitClouds/orbitTransition*`、TSS 相关。**`TryGetBand(out bottom, out top)` = 云层高度带的唯一实现**(天气直接读 `VolkenClouds.Instance.MainLayer.config` 调它;勿再各自遍历 `layerHeights/layerSpreads/layerStrengths`,也**不要再为它加接口/注册表**) |
+| `Clouds/Shader/Clouds.shader` | 体积云 shader:Clouds pass(低清全量 raymarch,MRT 颜色/云面距离/MV)、DilateMV(3×3 膨胀)、Upscale(时序核心)、Composite、OrbitClouds(轨道 2D)、ReflectionComposite;`SampleDensity/SampleDensityCheap/SampleCoverageCheap`(方案 A/B/C + 覆盖分解的 4 处同源消费点) |
+| `Clouds/CloudNoise.cs` / `Clouds/Shader/CloudNoiseCompute.compute` | 3D Worley 噪声(GetWhorleyFBM3D)与 compute 变体 |
 | `Clouds/StockCloudMap.cs` | 游戏自带云 cubemap 静态缓存:`LoadFor(IPlanetNode)` 按画质档加载、缺层检测、`Release()` |
 | `Clouds/UpscalingPixelSequence.cs` | KSA 最优采样序列算法(格网变化时重建缓存) |
 | `Clouds/CloudReflectionRenderer.cs` | 水面反射云渲染(方案 A;读 `ModSettings.Instance.WaterReflection`,默认关;复用 Clouds pass) |
@@ -98,7 +106,7 @@
 **冲突 / 兼容**
 - JNO 联机 mod 的 `MultiPlayerUI.OnSceneLoaded` 曾在 `inspectorPanel==null` 时抛 NRE 中断 `SceneLoaded` 事件链 → Volken `OnSceneLoaded` 被跳过(看不到云/自带云开关锁死);JNO 侧空值护栏已手动应用,Volken 侧自愈已撤除(纯事件驱动)。
 - Mods 目录勿同时放 `Volken.sr2-mod` 与 `Volken-R.sr2-mod`(同名程序集冲突)。
-- `CloudConfig.low/mid/highAltitudeThreshold` 是死配置但**不可删除**(旧 XML 含节点,删除 → XmlSerializer 反序列化失败回退默认配置)。
+- ~~`CloudConfig.low/mid/highAltitudeThreshold` 是死配置但不可删除~~ → **⚠️ 已更正(2026-10-01)**:这三个字段早在 `fe87e59` 就删掉了(全仓库 0 命中),**并且没有任何反序列化问题** —— `XmlSerializer` 对未知节点默认忽略、不抛异常。**结论:`CloudConfig` 里废弃字段可以放心删**;归档文档里"不可删除"的旧说法是未经验证的推测,勿再引用。
 
 ## 4. 游戏 API 关键入口(反编译确认 / ModApi)
 
@@ -117,10 +125,30 @@
 4. shader 改动注意两处同源同步:3D 体积云(`Clouds` pass)与轨道云(`OrbitClouds` pass)的密度/覆盖消费函数共 4 处,须同步改;`orbitDebugMode=1` 分屏复验。
 5. 新增游戏内可见文案 → 同步改本地化文件(EN-US/ZH-CN/RU-RU,key 前缀 `Volken.UI.*`);新配置字段 → `CloudConfig.Clone/CopyFrom` + 旧 XML 兼容(默认值 = 关闭/恒等)。
 6. 回复中给出改动的文件(带完整路径),方便点击。
+7. **代码注释约定(2026-10-01 起,同日二次收紧)** —— `.cs` 里的注释**只写代码本身看不出来的信息**,历史与论证一律进 `docs/`。
+   - **每次写注释前问一遍**:删掉它,**下一个来改这里的人会不会犯错 / 多花时间?** 不会 → 删掉。
+   - **禁止写进代码**:「阶段 N / 第 N 轮」迭代编号、日期标注(`2026-09-29`)、踩坑史/复盘/教训、
+     方案对比与设计论证、SP2/参考工程对照、「曾经…后来改成…」的演变叙述、调试步骤流水、发布/打包清单。
+     (判据:一段注释如果**两年后改这里的人不需要知道**,它就是历史。)
+   - **复述名字的注释一律删**(如挂在 `public bool enabled` 上的 `/// <summary>是否启用雷电。</summary>`)。
+   - **类注释 ≤ 3 行;方法注释 ≤ 1 行**(非显然坑最多 3 行);删掉 doc 块内部的空 `///` 行(多段并一段);
+     `/// <param>` / `<returns>` / `<typeparam>` 只在承载约束时才留。
+   - **单位/取值范围/默认值压成行尾注释**(`public static float R = 50f;   // 米`),不要独占多行。
+   - **必须保留,且压到 1~3 行**:类/成员的职责;不知道就会再踩的约定(例:Unity 的 `==` 重载与 `??=`、
+     compute 原子加只能用带下标的 `RWStructuredBuffer<uint>`、`[ImageEffectOpaque]` 不能删、
+     `CloudLayer.EnvironmentSuppressed` 不能回写成 `config.enabled`、雷电动画不能用协程);单位/取值范围/默认值;
+     失败降级语义("取不到 → 返回 X")。
+   - 删掉大段历史时,**留一行指针**:`// 沿革与踩坑见 docs/<文档>.md §X`(写之前先确认该路径存在)。
+   - **分区线**:仅在 ≥300 行的文件里、且确实分成 4 段以上时才用;低于此就不加,纯名词的分区线
+     (`// ===== 事件 =====`)一律不写。
+   - **硬约束:清理注释不得改动任何代码(含字符串字面量)**。改完必须自证(见 §6)。
+   - 参考量级:类注释 ≤3 行、方法注释 1 行;**单文件注释占比 5~8% 是健康值**,超过 15% 说明又在写文档了。
+   - 历史基线(2026-10-01,两轮清理):`Assets/Scripts` 注释行 **2378 → 683**(占 **18% → 6.1%**,总行 13009 → 11145),`dotnet build` 0 错误且代码逐行未变。
 
 ## 6. 调试/验证
 
 - **日志**:`Mod.LOG`(受 `ShowDevLog` 控制);游戏内诊断:`Volken:OrbitDiag`(2s 节流,相机海拔/淡入/RT 尺寸/真实配置)、`Volken:Coverage`(覆盖探针,`orbitDebugMode>0` 时启用)。
 - **UI 开关**:`useTemporalUpscale`(TSS 3×3)、`historyBlend`(运动残影)、`useStockCloudMap`(方案 B)、`stockDensityScale`(方案 A)、`useOrbitClouds` + 过渡带(轨道云)、`orbitDebugMode`(分屏)、`WaterReflection`(反射云,默认关)。
 - **复现/验收要点**(详见各归档文档):默认配置全部关闭时行为与旧版逐字节一致;开启各功能后对照归档文档的验收清单。
+- **只动注释的验证法(2026-10-01,清理注释后必做)**:改注释前把 `Assets/Scripts` 整体快照到 `%TEMP%`;改完用一个"剥注释"脚本(状态机识别 `"…"` / `@"…"` / `'c'` / `//` / `/* */`)把新旧两版都剥掉注释,再逐行比对**非空代码行**——完全一致才算"只动了注释"。手动做法:临时 `git stash` 前先复制一份,或先 `git commit` 注释清理前的状态再 `git diff -w` 目视。
 - **文本编码约定**:`.md` / `.cs` 一律 **UTF-8 无 BOM、LF**。改文档时不要用会把非 UTF-8 字节替换成 `U+FFFD` 的工具(尤其 PowerShell 5.1 的 `Set-Content -Encoding UTF8` 与 `-replace`,前者加 BOM、后者在处理含 `[`/反引号的 Markdown 链接时会吃字符)。**完整写入规则 / 校验脚本 / 改后自检清单见 [`README.md`](README.md) §五。**

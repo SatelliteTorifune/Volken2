@@ -33,15 +33,9 @@ namespace Volken.Core
             DontDestroyOnLoad(this);
         }
 
-        // === 额外摄像机(PIP 等)体积云自动挂载 ===
-        // 约束:不修改 PigeonEye、不引用/调用其任何类型/函数 —— 只按 Unity 通用规则识别"渲染世界的
-        // 额外相机"(纯行为识别,与具体 mod 无关):
-        //   启用中 + 渲染到 RenderTexture(非屏幕) + 不是游戏 Near/Far 相机(无 SceneCameraScript) +
-        //   无 JNO 专用相机脚本(地图/UI/水面) + RT 尺寸 ≥ 320×240(排除水面反射小方图) +
-        //   与游戏 NearCamera 的 cullingMask 有交集(确实渲染世界层)。
-        // CloudRenderer 自身再通过"共享同一 targetTexture 的更低 depth 相机"配对远相机(PIP 的
-        // scaled-space 克隆),同样不依赖任何名字/类型。
-        // 开关:ModSettings.ExtraCameraClouds(默认开);关闭时卸载已挂载的额外 CloudRenderer。
+        // 额外摄像机(PIP 等)体积云自动挂载
+        // 不引用任何具体 mod 的类型:按 Unity 通用规则识别"渲染世界的额外相机"。
+        // 开关 ModSettings.ExtraCameraClouds(默认开);远相机由 CloudRenderer 自行配对。
         private float _nextExtraCameraScanTime = -1f;
 
         private void Update()
@@ -111,95 +105,26 @@ namespace Volken.Core
             Game.Instance.UserInterface.AddBuildUserInterfaceXmlAction(UserInterfaceIds.Flight.NavPanel, OnBuildFlightUI);
         }
 
+        /// <summary>进飞行场景时建面板。**不做行星解析 / 云装配 / 大气门控** —— 那些属于 VolkenClouds。</summary>
         private void OnSceneLoaded(object sender, SceneEventArgs e)
         {
-            if (e.Scene == "Flight")
-            {
-                try
-                {
-                    Volken.Core.VolkenMod.Initialize();
+            if (e.Scene != "Flight") return;
 
-                    Volken.Core.VolkenMod.Instance.RefreshConfigList();
-
-                    CreateInspectorPanel();
-                    if (inspectorPanel != null)
-                    {
-                        inspectorPanel.Visible = false;
-                        inspectorPanel.CloseButtonClicked += OnCloseButtonClicked;
-                    }
-
-                    Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
-                }
-                catch (Exception ex)
-                {
-                    Mod.Log("Volken: Error OnSceneLoaded: " + ex);
-                }
-            }
-            else
-            {
-                try
-                {
-                    if (Game.Instance?.FlightScene != null)
-                    {
-                        Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
-                    }
-                }
-                catch (Exception exception)
-                {
-                    Mod.Log("Volken: Error OnSceneLoaded: " + exception);
-                }
-            }
-        }
-
-        private void OnPlayerChangedSoi(ICraftNode craftNode, IOrbitNode orbitNode)
-        {
             try
             {
-                var main = Volken.Core.VolkenMod.Instance.MainLayer;
-                if (main == null) return;
+                // 幂等兜底(正常路径已由 Mod.OnModLoaded 初始化过)
+                Volken.Clouds.VolkenClouds.Initialize();
 
-                if (craftNode.Parent.Parent == null)
+                CreateInspectorPanel();
+                if (inspectorPanel != null)
                 {
-                    main.config.enabled = false;
-                    return;
-                }
-
-                if (craftNode?.Parent?.PlanetData?.AtmosphereData != null)
-                {
-                    bool hasAtmosphere = craftNode.Parent.PlanetData.AtmosphereData.HasPhysicsAtmosphere;
-                    main.config.enabled = hasAtmosphere;
-
-                    var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-                    if (gameCam != null)
-                    {
-                        if (gameCam.NearCamera != null && Volken.Core.VolkenMod.Instance.cloudRenderer == null)
-                        {
-                            Volken.Core.VolkenMod.Instance.cloudRenderer = gameCam.NearCamera.gameObject.AddComponent<CloudRenderer>();
-                        }
-                        if (gameCam.FarCamera != null && Volken.Core.VolkenMod.Instance.farCam == null)
-                        {
-                            Volken.Core.VolkenMod.Instance.farCam = gameCam.FarCamera.gameObject.AddComponent<FarCameraScript>();
-                        }
-                        // 主视角 CloudRenderer 配对游戏 FarCamera 作为远深度源
-                        if (Volken.Core.VolkenMod.Instance.cloudRenderer != null)
-                            Volken.Core.VolkenMod.Instance.cloudRenderer.farDepthSource = Volken.Core.VolkenMod.Instance.farCam;
-                    }
-                    Volken.Core.VolkenMod.Instance.RefreshConfigList();
-                    RebuildInspectorPanel();
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
-                    Volken.Core.VolkenMod.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
-                }
-                else
-                {
-                    Volken.Core.VolkenMod.Instance.RefreshConfigList();
-                    RebuildInspectorPanel();
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
-                    Volken.Core.VolkenMod.Instance.OnPlayerChangedSoi(craftNode, orbitNode);
+                    inspectorPanel.Visible = false;
+                    inspectorPanel.CloseButtonClicked += OnCloseButtonClicked;
                 }
             }
             catch (Exception ex)
             {
-                Mod.Log("Volken: Error in OnPlayerChangedSoi: " + ex);
+                Mod.Log("Volken: Error OnSceneLoaded: " + ex);
             }
         }
 
@@ -245,7 +170,7 @@ namespace Volken.Core
         {
             try
             {
-                Volken.Core.VolkenMod.Instance.RefreshConfigList();
+                Volken.Clouds.VolkenClouds.Instance.RefreshConfigList();
                 if (inspectorPanel == null)
                 {
                     CreateInspectorPanel();
@@ -293,19 +218,17 @@ namespace Volken.Core
                 inspectorModel = new InspectorModel("VolkenSettingsInspector",
                     "<color=green>" + Locale.GetString("Volken.UI.CloudSettings") + "</color>");
 
-                var main = Volken.Core.VolkenMod.Instance.MainLayer;
+                var main = Volken.Clouds.VolkenClouds.Instance.MainLayer;
                 if (main == null) return;
 
-                // === Config Management (uses MainLayer) ===
+                // Config Management (uses MainLayer)
                 CreateConfigManagementGroup(main);
 
-                // === Main Layer ===
                 CreateLayerGroup(main, "Main");
 
-                // === Extra Layers ===
-                for (int i = 1; i < Volken.Core.VolkenMod.Instance.layers.Count; i++)
+                for (int i = 1; i < Volken.Clouds.VolkenClouds.Instance.layers.Count; i++)
                 {
-                    var layer = Volken.Core.VolkenMod.Instance.layers[i];
+                    var layer = Volken.Clouds.VolkenClouds.Instance.layers[i];
                     if (layer != null)
                     {
                         CreateExtraConfigManagementGroup(layer, layer.displayName);
@@ -313,7 +236,6 @@ namespace Volken.Core
                     }
                 }
 
-                
                 // —— 玩家只有一个"调这颗行星观感"的地方。
                 WeatherPanel.Build(inspectorModel);
 
@@ -385,19 +307,19 @@ namespace Volken.Core
                                     mainLayer.config.SaveToFile(
                                         Game.Instance.FlightScene.CraftNode.Parent.Name, name);
                                     mainLayer.currentConfigName = name;
-                                    Volken.Core.VolkenMod.Instance.AddConfig(name);
-                                    if (Volken.Core.VolkenMod.Instance.planetConfigList.ExistsInConfig(
+                                    Volken.Clouds.VolkenClouds.Instance.AddConfig(name);
+                                    if (Volken.Clouds.VolkenClouds.Instance.planetConfigList.ExistsInConfig(
                                         Game.Instance.FlightScene.CraftNode.Parent.Name))
                                     {
-                                        Volken.Core.VolkenMod.Instance.planetConfigList.SetConfig(
+                                        Volken.Clouds.VolkenClouds.Instance.planetConfigList.SetConfig(
                                             Game.Instance.FlightScene.CraftNode.Parent.Name, name);
                                     }
                                     else
                                     {
-                                        Volken.Core.VolkenMod.Instance.planetConfigList.AddConfig(
+                                        Volken.Clouds.VolkenClouds.Instance.planetConfigList.AddConfig(
                                             Game.Instance.FlightScene.CraftNode.Parent.Name, name);
                                     }
-                                    Volken.Core.VolkenMod.Instance.RefreshConfigList();
+                                    Volken.Clouds.VolkenClouds.Instance.RefreshConfigList();
                                     inspectorPanel.Visible = false;
                                     RebuildInspectorPanel();
                                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
@@ -438,17 +360,17 @@ namespace Volken.Core
                                 Game.Instance.FlightScene.CraftNode.Parent.Name, newConfig);
                             mainLayer.config.CopyFrom(loadedConfig);
                             mainLayer.currentConfigName = newConfig;
-                            Volken.Core.VolkenMod.Instance.ValueChanged();
+                            Volken.Clouds.VolkenClouds.Instance.ValueChanged();
 
-                            if (Volken.Core.VolkenMod.Instance.planetConfigList.ExistsInConfig(
+                            if (Volken.Clouds.VolkenClouds.Instance.planetConfigList.ExistsInConfig(
                                 Game.Instance.FlightScene.CraftNode.Parent.Name))
                             {
-                                Volken.Core.VolkenMod.Instance.planetConfigList.SetConfig(
+                                Volken.Clouds.VolkenClouds.Instance.planetConfigList.SetConfig(
                                     Game.Instance.FlightScene.CraftNode.Parent.Name, mainLayer.currentConfigName);
                             }
                             else
                             {
-                                Volken.Core.VolkenMod.Instance.planetConfigList.AddConfig(
+                                Volken.Clouds.VolkenClouds.Instance.planetConfigList.AddConfig(
                                     Game.Instance.FlightScene.CraftNode.Parent.Name, mainLayer.currentConfigName);
                             }
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
@@ -462,7 +384,7 @@ namespace Volken.Core
                             Locale.GetString("Volken.UI.ErrorLoadingConfig"));
                     }
                 },
-                Volken.Core.VolkenMod.Instance._availableConfigs);
+                Volken.Clouds.VolkenClouds.Instance._availableConfigs);
             configManagementGroup.Add(loadConfigDropdown);
 
             var resetToDefaultButton = new TextButtonModel(Locale.GetString("Volken.UI.ResetCurrentToDefault"),
@@ -471,7 +393,7 @@ namespace Volken.Core
                     try
                     {
                         mainLayer.config.CopyFrom(CloudConfig.CreateDefault());
-                        Volken.Core.VolkenMod.Instance.ValueChanged();
+                        Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                             Locale.GetString("Volken.UI.ConfigResetToDefaults"));
                     }
@@ -490,7 +412,7 @@ namespace Volken.Core
                     try
                     {
                         mainLayer.config.CopyFrom(CloudConfig.CreateAnotherDefault());
-                        Volken.Core.VolkenMod.Instance.ValueChanged();
+                        Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                             Locale.GetString("Volken.UI.ConfigSetToDefaultII"));
                     }
@@ -523,11 +445,11 @@ namespace Volken.Core
                     {
                         string name = layer.currentConfigName ?? "Default";
                         layer.config.SaveToFile(planet, name);
-                        Volken.Core.VolkenMod.Instance.RefreshConfigList();
-                        if (!Volken.Core.VolkenMod.Instance.planetConfigList.ExistsInConfig(planet))
-                            Volken.Core.VolkenMod.Instance.planetConfigList.AddConfig(planet, "Default", name);
+                        Volken.Clouds.VolkenClouds.Instance.RefreshConfigList();
+                        if (!Volken.Clouds.VolkenClouds.Instance.planetConfigList.ExistsInConfig(planet))
+                            Volken.Clouds.VolkenClouds.Instance.planetConfigList.AddConfig(planet, "Default", name);
                         else
-                            Volken.Core.VolkenMod.Instance.planetConfigList.SetConfig(planet, name, 1);
+                            Volken.Clouds.VolkenClouds.Instance.planetConfigList.SetConfig(planet, name, 1);
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                             string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSaved"), title));
                     }
@@ -553,11 +475,11 @@ namespace Volken.Core
                                 {
                                     layer.config.SaveToFile(planet, name);
                                     layer.currentConfigName = name;
-                                    Volken.Core.VolkenMod.Instance.RefreshConfigList();
-                                    if (!Volken.Core.VolkenMod.Instance.planetConfigList.ExistsInConfig(planet))
-                                        Volken.Core.VolkenMod.Instance.planetConfigList.AddConfig(planet, "Default", name);
+                                    Volken.Clouds.VolkenClouds.Instance.RefreshConfigList();
+                                    if (!Volken.Clouds.VolkenClouds.Instance.planetConfigList.ExistsInConfig(planet))
+                                        Volken.Clouds.VolkenClouds.Instance.planetConfigList.AddConfig(planet, "Default", name);
                                     else
-                                        Volken.Core.VolkenMod.Instance.planetConfigList.SetConfig(planet, name, 1);
+                                        Volken.Clouds.VolkenClouds.Instance.planetConfigList.SetConfig(planet, name, 1);
                                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                                         string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSavedAs"), title, name));
                                     RebuildInspectorPanel();
@@ -583,18 +505,18 @@ namespace Volken.Core
                             var loaded = CloudConfig.LoadFromFile(planet, newConfig);
                             layer.config.CopyFrom(loaded);
                             layer.currentConfigName = newConfig;
-                            Volken.Core.VolkenMod.Instance.ValueChanged();
-                            if (!Volken.Core.VolkenMod.Instance.planetConfigList.ExistsInConfig(planet))
-                                Volken.Core.VolkenMod.Instance.planetConfigList.AddConfig(planet, "Default", newConfig);
+                            Volken.Clouds.VolkenClouds.Instance.ValueChanged();
+                            if (!Volken.Clouds.VolkenClouds.Instance.planetConfigList.ExistsInConfig(planet))
+                                Volken.Clouds.VolkenClouds.Instance.planetConfigList.AddConfig(planet, "Default", newConfig);
                             else
-                                Volken.Core.VolkenMod.Instance.planetConfigList.SetConfig(planet, newConfig, 1);
+                                Volken.Clouds.VolkenClouds.Instance.planetConfigList.SetConfig(planet, newConfig, 1);
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                                 string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigLoaded"), title, newConfig));
                         }
                     }
                     catch (Exception ex) { Mod.Log("Volken: Error loading: " + ex); }
                 },
-                Volken.Core.VolkenMod.Instance._availableConfigs);
+                Volken.Clouds.VolkenClouds.Instance._availableConfigs);
             group.Add(loadDropdown);
 
             inspectorModel.Add(group);
@@ -604,9 +526,6 @@ namespace Volken.Core
 
         #region Layer Groups
 
-        /// <summary>
-        /// Creates full UI group for the main cloud layer.
-        /// </summary>
         private void CreateLayerGroup(CloudLayer layer, string title)
         {
             GroupModel group = new GroupModel(Locale.GetString("Volken.UI.Clouds") + " [" + title + "]");
@@ -629,7 +548,7 @@ namespace Volken.Core
                         return;
                     }
                     cfg.enabled = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             group.Add(renderToggleModel);
 
@@ -639,12 +558,12 @@ namespace Volken.Core
                 (val) =>
                 {
                     cfg.compositeMode = val == "Standard" ? CompositeMode.Standard : CompositeMode.Additive;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 },
                 new System.Collections.Generic.List<string> { "Additive", "Standard" });
             group.Add(compositeDropdown);
 
-            // === 方案 B: 游戏自带云作为全球分布形状(对比用) ===
+            // 方案 B: 游戏自带云作为全球分布形状(对比用)
             var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
                 () => cfg.useStockCloudMap, s =>
                 {
@@ -655,7 +574,7 @@ namespace Volken.Core
                         return;
                     }
                     cfg.useStockCloudMap = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             group.Add(stockToggleModel);
 
@@ -673,142 +592,140 @@ namespace Volken.Core
                 {
                     int idx = stockLayerOptions.IndexOf(val);
                     if (idx >= 0) cfg.stockMapLayer = idx;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 },
                 stockLayerOptions);
             group.Add(stockLayerDropdown);
             CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
-                s => { cfg.stockMapStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockMapStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockDensityScale"), () => cfg.stockDensityScale,
-                s => { cfg.stockDensityScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockDensityScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
-                s => { cfg.stockMaskInfluence = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockMaskInfluence = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
-                s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Core.VolkenMod.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
+                s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.StockAlignAngleOffset"), () => cfg.stockAlignAngleOffset,
-                s => { cfg.stockAlignAngleOffset = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
+                s => { cfg.stockAlignAngleOffset = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
 
-            // === Cloud Shape ===
             CreateSlider(group, Locale.GetString("Volken.UI.Density"), () => cfg.density,
-                s => { cfg.density = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);
+                s => { cfg.density = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);
             CreateSlider(group, Locale.GetString("Volken.UI.Absorption"), () => cfg.absorption,
-                s => { cfg.absorption = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.absorption = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.AmbientLight"), () => cfg.ambientLight,
-                s => { cfg.ambientLight = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.5f, 2);
+                s => { cfg.ambientLight = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.5f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.Coverage"), () => cfg.coverage,
-                s => { cfg.coverage = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
+                s => { cfg.coverage = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ShapeScale"), () => cfg.shapeScale,
-                s => { cfg.shapeScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
+                s => { cfg.shapeScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.DetailScale"), () => cfg.detailScale,
-                s => { cfg.detailScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 500.0f, 25000.0f, 0);
+                s => { cfg.detailScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 500.0f, 25000.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.DetailStrength"), () => cfg.detailStrength,
-                s => { cfg.detailStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.detailStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudMovementSpeed"), () => cfg.windSpeed,
-                s => { cfg.windSpeed = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -0.05f, 0.05f, 4);
+                s => { cfg.windSpeed = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -0.05f, 0.05f, 4);
             CreateSlider(group, Locale.GetString("Volken.UI.WindDirection"), () => cfg.windDirection,
-                s => { cfg.windDirection = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 360.0f, 0, true);
+                s => { cfg.windDirection = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 360.0f, 0, true);
 
             CreateSlider(group, Locale.GetString("Volken.UI.GlobalRotationAngular"), () => cfg.globalRotationAngular,
-                s => { cfg.globalRotationAngular = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
+                s => { cfg.globalRotationAngular = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
 
             // Cloud Color
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorRed"), () => cfg.cloudColor.r,
-                s => { var c = cfg.cloudColor; c.r = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.r = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorGreen"), () => cfg.cloudColor.g,
-                s => { var c = cfg.cloudColor; c.g = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.g = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorBlue"), () => cfg.cloudColor.b,
-                s => { var c = cfg.cloudColor; c.b = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.b = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
 
             // Scattering
             CreateSlider(group, Locale.GetString("Volken.UI.ScatterStrength"), () => cfg.scatterStrength,
-                s => { cfg.scatterStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 2.0f, 3);
+                s => { cfg.scatterStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 2.0f, 3);
             CreateSlider(group, Locale.GetString("Volken.UI.AtmosphereBlendFactor"), () => cfg.atmoBlendFactor,
-                s => { cfg.atmoBlendFactor = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 50.0f, 2);
+                s => { cfg.atmoBlendFactor = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 50.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ScatterPower"), () => cfg.scatterPower,
-                s => { cfg.scatterPower = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1.0f, 2.5f, 2);
+                s => { cfg.scatterPower = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1.0f, 2.5f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.MultiScatterBlend"), () => cfg.multiScatterBlend,
-                s => { cfg.multiScatterBlend = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.multiScatterBlend = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.AmbientScatter"), () => cfg.ambientScatterStrength,
-                s => { cfg.ambientScatterStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 2.0f, 2);
+                s => { cfg.ambientScatterStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 2.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.SilverLiningIntensity"), () => cfg.silverLiningIntensity,
-                s => { cfg.silverLiningIntensity = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 3.0f, 2);
+                s => { cfg.silverLiningIntensity = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 3.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ForwardScatterBias"), () => cfg.forwardScatteringBias,
-                s => { cfg.forwardScatteringBias = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+                s => { cfg.forwardScatteringBias = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
 
-            // === Container Settings ===
+            // Container Settings
             GroupModel containerGroup = new GroupModel(Locale.GetString("Volken.UI.CloudContainer") + " [" + title + "]");
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Height"), () => cfg.layerHeights.x,
-                s => { var v = cfg.layerHeights; v.x = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.x = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Spread"), () => cfg.layerSpreads.x,
-                s => { var v = cfg.layerSpreads; v.x = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.x = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 5000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Strength"), () => cfg.layerStrengths.x,
-                s => { var v = cfg.layerStrengths; v.x = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.x = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Height"), () => cfg.layerHeights.y,
-                s => { var v = cfg.layerHeights; v.y = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.y = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Spread"), () => cfg.layerSpreads.y,
-                s => { var v = cfg.layerSpreads; v.y = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.y = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 5000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Strength"), () => cfg.layerStrengths.y,
-                s => { var v = cfg.layerStrengths; v.y = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.y = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Height"), () => cfg.layerHeights.z,
-                s => { var v = cfg.layerHeights; v.z = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.z = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 20000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Spread"), () => cfg.layerSpreads.z,
-                s => { var v = cfg.layerSpreads; v.z = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.z = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Strength"), () => cfg.layerStrengths.z,
-                s => { var v = cfg.layerStrengths; v.z = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.z = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Height"), () => cfg.layerHeights.w,
-                s => { var v = cfg.layerHeights; v.w = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.w = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 20000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Spread"), () => cfg.layerSpreads.w,
-                s => { var v = cfg.layerSpreads; v.w = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.w = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Strength"), () => cfg.layerStrengths.w,
-                s => { var v = cfg.layerStrengths; v.w = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.w = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.MaxCloudHeight"), () => cfg.maxCloudHeight,
-                s => { cfg.maxCloudHeight = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1000.0f, 25000.0f, 0);
+                s => { cfg.maxCloudHeight = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1000.0f, 25000.0f, 0);
             group.Add(containerGroup);
 
-            // === Quality ===
             GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
-            // === 方案 C: 时序超采样(A/B 对比用) ===
+            // 方案 C: 时序超采样(A/B 对比用)
             var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
                 () => cfg.useTemporalUpscale, s =>
                 {
                     cfg.useTemporalUpscale = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             qualityGroup.Add(temporalToggleModel);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
-                s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1, 6, 0, true);
+                s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1, 6, 0, true);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
                 s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,
-                s => { cfg.stepSize = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 100.0f, 2000.0f, 0);
+                s => { cfg.stepSize = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 100.0f, 2000.0f, 0);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSizeFalloff"), () => cfg.stepSizeFalloff,
-                s => { cfg.stepSizeFalloff = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
+                s => { cfg.stepSizeFalloff = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
-                s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1, 25, 0, true);
+                s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1, 25, 0, true);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
-                s => { cfg.lightMarchDistance = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
+                s => { cfg.lightMarchDistance = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
-                s => { cfg.blueNoiseStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
+                s => { cfg.blueNoiseStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
-                s => { cfg.historyBlend = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+                s => { cfg.historyBlend = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
             group.Add(qualityGroup);
 
-            // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+            // 轨道云(2D 壳着色 + 过渡带交叉淡入)
             GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
             CreateOrbitCloudsGroup(orbitGroup, cfg);
             group.Add(orbitGroup);
@@ -816,9 +733,7 @@ namespace Volken.Core
             inspectorModel.Add(group);
         }
 
-        /// <summary>
-        /// Creates a full UI group for extra cloud layers (same controls as Main layer).
-        /// </summary>
+        /// <summary>额外云层的控件组(与主层同款)。</summary>
         private void CreateExtraLayerGroup(CloudLayer layer, string title)
         {
             GroupModel group = new GroupModel(string.Format(Locale.GetString("Volken.UI.ExtraLayer"), title));
@@ -836,7 +751,7 @@ namespace Volken.Core
                         return;
                     }
                     cfg.enabled = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             group.Add(renderToggleModel);
 
@@ -847,12 +762,12 @@ namespace Volken.Core
                 (val) =>
                 {
                     cfg.compositeMode = val == "Standard" ? CompositeMode.Standard : CompositeMode.Additive;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 },
                 new System.Collections.Generic.List<string> { "Additive", "Standard" });
             group.Add(compositeDropdown);
 
-            // === 方案 B/方案 A: 游戏自带云分布 + 区域内密度缩放(与主层一致) ===
+            // 方案 B/方案 A: 游戏自带云分布 + 区域内密度缩放(与主层一致)
             var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
                 () => cfg.useStockCloudMap, s =>
                 {
@@ -863,7 +778,7 @@ namespace Volken.Core
                         return;
                     }
                     cfg.useStockCloudMap = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             group.Add(stockToggleModel);
 
@@ -881,143 +796,141 @@ namespace Volken.Core
                 {
                     int idx = stockLayerOptions.IndexOf(val);
                     if (idx >= 0) cfg.stockMapLayer = idx;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 },
                 stockLayerOptions);
             group.Add(stockLayerDropdown);
             CreateSlider(group, Locale.GetString("Volken.UI.StockMapStrength"), () => cfg.stockMapStrength,
-                s => { cfg.stockMapStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockMapStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockDensityScale"), () => cfg.stockDensityScale,
-                s => { cfg.stockDensityScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockDensityScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockMaskInfluence"), () => cfg.stockMaskInfluence,
-                s => { cfg.stockMaskInfluence = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.stockMaskInfluence = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.StockAlignSign"), () => cfg.stockAlignSign,
-                s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Core.VolkenMod.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
+                s => { cfg.stockAlignSign = Mathf.Sign(s); Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -1.0f, 1.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.StockAlignAngleOffset"), () => cfg.stockAlignAngleOffset,
-                s => { cfg.stockAlignAngleOffset = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
+                s => { cfg.stockAlignAngleOffset = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -180.0f, 180.0f, 1);
 
-            // === Cloud Shape ===
             CreateSlider(group, Locale.GetString("Volken.UI.Density"), () => cfg.density,
-                s => { cfg.density = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);
+                s => { cfg.density = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0001f, 0.05f, 4);
             CreateSlider(group, Locale.GetString("Volken.UI.Absorption"), () => cfg.absorption,
-                s => { cfg.absorption = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.absorption = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.AmbientLight"), () => cfg.ambientLight,
-                s => { cfg.ambientLight = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.5f, 2);
+                s => { cfg.ambientLight = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.5f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.Coverage"), () => cfg.coverage,
-                s => { cfg.coverage = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
+                s => { cfg.coverage = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ShapeScale"), () => cfg.shapeScale,
-                s => { cfg.shapeScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
+                s => { cfg.shapeScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.DetailScale"), () => cfg.detailScale,
-                s => { cfg.detailScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 500.0f, 25000.0f, 0);
+                s => { cfg.detailScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 500.0f, 25000.0f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.DetailStrength"), () => cfg.detailStrength,
-                s => { cfg.detailStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.detailStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudMovementSpeed"), () => cfg.windSpeed,
-                s => { cfg.windSpeed = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -0.05f, 0.05f, 4);
+                s => { cfg.windSpeed = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -0.05f, 0.05f, 4);
             CreateSlider(group, Locale.GetString("Volken.UI.WindDirection"), () => cfg.windDirection,
-                s => { cfg.windDirection = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 360.0f, 0, true);
+                s => { cfg.windDirection = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 360.0f, 0, true);
             CreateSlider(group, Locale.GetString("Volken.UI.GlobalRotationAngular"), () => cfg.globalRotationAngular,
-                s => { cfg.globalRotationAngular = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
+                s => { cfg.globalRotationAngular = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, -2.0f, 2.0f, 2);
 
             // Cloud Color
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorRed"), () => cfg.cloudColor.r,
-                s => { var c = cfg.cloudColor; c.r = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.r = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorGreen"), () => cfg.cloudColor.g,
-                s => { var c = cfg.cloudColor; c.g = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.g = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
             CreateSlider(group, Locale.GetString("Volken.UI.CloudColorBlue"), () => cfg.cloudColor.b,
-                s => { var c = cfg.cloudColor; c.b = s; cfg.cloudColor = c; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var c = cfg.cloudColor; c.b = s; cfg.cloudColor = c; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 1.0f, 0, false, true);
 
             // Scattering
             CreateSlider(group, Locale.GetString("Volken.UI.ScatterStrength"), () => cfg.scatterStrength,
-                s => { cfg.scatterStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 2.0f, 3);
+                s => { cfg.scatterStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 2.0f, 3);
             CreateSlider(group, Locale.GetString("Volken.UI.AtmosphereBlendFactor"), () => cfg.atmoBlendFactor,
-                s => { cfg.atmoBlendFactor = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 50.0f, 2);
+                s => { cfg.atmoBlendFactor = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 50.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ScatterPower"), () => cfg.scatterPower,
-                s => { cfg.scatterPower = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1.0f, 2.5f, 2);
+                s => { cfg.scatterPower = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1.0f, 2.5f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.MultiScatterBlend"), () => cfg.multiScatterBlend,
-                s => { cfg.multiScatterBlend = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
+                s => { cfg.multiScatterBlend = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 1.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.AmbientScatter"), () => cfg.ambientScatterStrength,
-                s => { cfg.ambientScatterStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 2.0f, 2);
+                s => { cfg.ambientScatterStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 2.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.SilverLiningIntensity"), () => cfg.silverLiningIntensity,
-                s => { cfg.silverLiningIntensity = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 3.0f, 2);
+                s => { cfg.silverLiningIntensity = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 3.0f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.ForwardScatterBias"), () => cfg.forwardScatteringBias,
-                s => { cfg.forwardScatteringBias = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+                s => { cfg.forwardScatteringBias = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
 
-            // === Container Settings ===
+            // Container Settings
             GroupModel containerGroup = new GroupModel(
                 Locale.GetString("Volken.UI.CloudContainer") + " [" + title + "]");
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Height"), () => cfg.layerHeights.x,
-                s => { var v = cfg.layerHeights; v.x = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.x = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 30000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Spread"), () => cfg.layerSpreads.x,
-                s => { var v = cfg.layerSpreads; v.x = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.x = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer1Strength"), () => cfg.layerStrengths.x,
-                s => { var v = cfg.layerStrengths; v.x = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.x = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Height"), () => cfg.layerHeights.y,
-                s => { var v = cfg.layerHeights; v.y = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.y = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 30000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Spread"), () => cfg.layerSpreads.y,
-                s => { var v = cfg.layerSpreads; v.y = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.y = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer2Strength"), () => cfg.layerStrengths.y,
-                s => { var v = cfg.layerStrengths; v.y = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.y = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Height"), () => cfg.layerHeights.z,
-                s => { var v = cfg.layerHeights; v.z = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.z = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 30000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Spread"), () => cfg.layerSpreads.z,
-                s => { var v = cfg.layerSpreads; v.z = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.z = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer3Strength"), () => cfg.layerStrengths.z,
-                s => { var v = cfg.layerStrengths; v.z = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.z = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Height"), () => cfg.layerHeights.w,
-                s => { var v = cfg.layerHeights; v.w = s; cfg.layerHeights = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerHeights; v.w = s; cfg.layerHeights = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 500.0f, 30000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Spread"), () => cfg.layerSpreads.w,
-                s => { var v = cfg.layerSpreads; v.w = s; cfg.layerSpreads = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerSpreads; v.w = s; cfg.layerSpreads = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 100.0f, 10000.0f, 0);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.Layer4Strength"), () => cfg.layerStrengths.w,
-                s => { var v = cfg.layerStrengths; v.w = s; cfg.layerStrengths = v; Volken.Core.VolkenMod.Instance.ValueChanged(); },
+                s => { var v = cfg.layerStrengths; v.w = s; cfg.layerStrengths = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); },
                 0.0f, 2.0f, 1);
             CreateSlider(containerGroup, Locale.GetString("Volken.UI.MaxCloudHeight"), () => cfg.maxCloudHeight,
-                s => { cfg.maxCloudHeight = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
+                s => { cfg.maxCloudHeight = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1000.0f, 50000.0f, 0);
             group.Add(containerGroup);
 
-            // === Quality ===
             GroupModel qualityGroup = new GroupModel(
                 Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
-            // === 方案 C: 时序超采样(A/B 对比用) ===
+            // 方案 C: 时序超采样(A/B 对比用)
             var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
                 () => cfg.useTemporalUpscale, s =>
                 {
                     cfg.useTemporalUpscale = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             qualityGroup.Add(temporalToggleModel);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.UpscaleGrid"), () => cfg.upscaleX,
-                s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1, 6, 0, true);
+                s => { int v = Mathf.Clamp(Mathf.RoundToInt(s), 1, 6); cfg.upscaleX = v; cfg.upscaleY = v; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1, 6, 0, true);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.ResolutionScale"), () => cfg.resolutionScale,
                 s => { cfg.resolutionScale = Mathf.Clamp(s, 0.1f, 1.0f); }, 0.1f, 1.0f, 2);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSize"), () => cfg.stepSize,
-                s => { cfg.stepSize = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 100.0f, 3000.0f, 0);
+                s => { cfg.stepSize = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 100.0f, 3000.0f, 0);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.StepSizeFalloff"), () => cfg.stepSizeFalloff,
-                s => { cfg.stepSizeFalloff = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
+                s => { cfg.stepSizeFalloff = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.1f, 3.0f, 2);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.NumberOfLightSamples"), () => cfg.numLightSamplePoints,
-                s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Core.VolkenMod.Instance.ValueChanged(); }, 1, 25, 0, true);
+                s => { cfg.numLightSamplePoints = Mathf.RoundToInt(s); Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 1, 25, 0, true);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.LightMarchDistance"), () => cfg.lightMarchDistance,
-                s => { cfg.lightMarchDistance = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
+                s => { cfg.lightMarchDistance = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 500.0f, 30000.0f, 0);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.RayOffsetStrength"), () => cfg.blueNoiseStrength,
-                s => { cfg.blueNoiseStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
+                s => { cfg.blueNoiseStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
-                s => { cfg.historyBlend = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+                s => { cfg.historyBlend = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
             group.Add(qualityGroup);
 
-            // === 轨道云(2D 壳着色 + 过渡带交叉淡入) ===
+            // 轨道云(2D 壳着色 + 过渡带交叉淡入)
             GroupModel orbitGroup = new GroupModel(Locale.GetString("Volken.UI.OrbitClouds") + " [" + title + "]");
             CreateOrbitCloudsGroup(orbitGroup, cfg);
             group.Add(orbitGroup);
@@ -1025,36 +938,33 @@ namespace Volken.Core
             inspectorModel.Add(group);
         }
 
-        /// <summary>
-        /// 轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。
-        /// 默认关闭 → 零回归;开启后按海拔在体积云/2D 轨道云间分派并交叉淡入。
-        /// </summary>
+        /// <summary>轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。默认关闭 → 零回归。</summary>
         private static void CreateOrbitCloudsGroup(GroupModel group, CloudConfig cfg)
         {
             var orbitToggle = new ToggleModel(Locale.GetString("Volken.UI.UseOrbitClouds"),
                 () => cfg.useOrbitClouds, s =>
                 {
                     cfg.useOrbitClouds = s;
-                    Volken.Core.VolkenMod.Instance.ValueChanged();
+                    Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                 });
             group.Add(orbitToggle);
 
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionStart"), () => cfg.orbitTransitionStartAltitude,
-                s => { cfg.orbitTransitionStartAltitude = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 200000f, 0);
+                s => { cfg.orbitTransitionStartAltitude = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 200000f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitTransitionEnd"), () => cfg.orbitTransitionEndAltitude,
-                s => { cfg.orbitTransitionEndAltitude = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 500000f, 0);
+                s => { cfg.orbitTransitionEndAltitude = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 500000f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitSampleAltitude"), () => cfg.orbitSampleAltitude,
-                s => { cfg.orbitSampleAltitude = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 50000f, 0);
+                s => { cfg.orbitSampleAltitude = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 50000f, 0);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitDensityBoost"), () => cfg.orbitDensityBoost,
-                s => { cfg.orbitDensityBoost = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.1f, 5f, 2);
+                s => { cfg.orbitDensityBoost = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.1f, 5f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitBrightness"), () => cfg.orbitBrightness,
-                s => { cfg.orbitBrightness = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 2f, 2);
+                s => { cfg.orbitBrightness = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 2f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitReliefStrength"), () => cfg.orbitReliefStrength,
-                s => { cfg.orbitReliefStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 4f, 2);
+                s => { cfg.orbitReliefStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 4f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitDetailStrength"), () => cfg.orbitDetailStrength,
-                s => { cfg.orbitDetailStrength = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0f, 1f, 2);
+                s => { cfg.orbitDetailStrength = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0f, 1f, 2);
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
-                s => { cfg.orbitResolutionScale = s; Volken.Core.VolkenMod.Instance.ValueChanged(); }, 0.1f, 1f, 2);
+                s => { cfg.orbitResolutionScale = s; Volken.Clouds.VolkenClouds.Instance.ValueChanged(); }, 0.1f, 1f, 2);
 
             // 调试分屏开关:仅在 debug 模式(ModSettings.DevMode)下显示,平时对用户隐藏
             bool orbitDebugShown = false;
@@ -1065,7 +975,7 @@ namespace Volken.Core
                     () => cfg.orbitDebugMode > 0.5f, s =>
                     {
                         cfg.orbitDebugMode = s ? 1f : 0f;
-                        Volken.Core.VolkenMod.Instance.ValueChanged();
+                        Volken.Clouds.VolkenClouds.Instance.ValueChanged();
                     });
                 group.Add(debugToggle);
             }

@@ -7,26 +7,8 @@ using Volken.Weather;
 namespace Volken.Tests
 {
     /// <summary>
-    /// 雨系统**编辑器内预览台** —— 不打包、不进游戏,直接在 Unity 里按 Play 迭代视觉(5 分钟 → 5 秒)。
-    ///
-    /// 【为什么能这么干】<see cref="RainParticles"/> 对游戏 API 的依赖都写成了"失败即降级":
-    ///   · 下落方向 ← <c>craft.GravityNormal</c>,拿不到 → 世界 (0,-1,0);
-    ///   · 朝向/拉伸的速度源 ← <c>craft.FrameVelocity</c>,拿不到 → **相机实测位移速度**(正是预览想要的);
-    ///   · 海拔闸门 ← craftNode/PlanetData,拿不到 → 返回 −1(闸门不生效);本组件用 DebugAltitudeOverride 手动喂;
-    ///   · 软粒子 ← CloudRenderer 深度图,拿不到 → <c>_InvFade=0</c> 自动关;
-    ///   · 换帧重定位 ← ModApi 事件,挂不上 → 只打日志(预览不需要);
-    ///   · 资产加载 ← <c>Mod.LoadVolkenAsset</c> 在编辑器里回退到 <c>AssetDatabase</c>。
-    /// 所以这里跑的是**同一份 compute/shader/驱动代码**,只是把输入换成"手动/相机"。
-    ///
-    /// 【用法】任意场景新建空物体 → Add Component → <c>Volken Rain Preview</c> → Play。
-    ///   勾上面板里的「下次 Play 自动启动」后,以后**任意场景按 Play 都会自动出现预览台**(写入 PlayerPrefs,
-    ///   并且只在编辑器里自动启动,不影响正式游戏)。
-    ///
-    /// 【操作】右键拖拽 = 转视角;WASD = 前后左右;Q/E = 升降;Shift = 加速;滚轮 = 调基础速度。
-    ///   相机的位移速度就是雨丝朝向/拉伸的输入 → 直接看"飞行时"的样子。
-    ///
-    /// 【预览测不到的项】软粒子(需要云的深度图)、换帧重定位、真实海拔(用手动覆盖值代替)、
-    ///   游戏内天气面板/配置持久化、与其他 mod 系统的交互。
+    /// 编辑器内预览台(不打包、不进游戏):跑的就是正式那份 compute/shader/驱动代码。
+    /// **测不到**:软粒子(需云的深度图)、换帧重定位、真实海拔、天气面板与配置持久化。
     /// </summary>
     [AddComponentMenu("Volken/Rain Preview (编辑器预览台)")]
     public class RainPreview : MonoBehaviour
@@ -34,7 +16,7 @@ namespace Volken.Tests
         /// <summary>PlayerPrefs 键:下次 Play 是否自动生成预览台(仅编辑器生效)。</summary>
         private const string AutoStartPref = "Volken.RainPreview.AutoStart";
 
-        /// <summary>PlayerPrefs 键:记住上次调好的参数(自动启动时也能接着调)。</summary>
+        /// <summary>PlayerPrefs 键:记住上次调好的参数。</summary>
         private const string ParamsPref = "Volken.RainPreview.Params";
 
         [Header("相机与场景")]
@@ -95,12 +77,7 @@ namespace Volken.Tests
         private string _fatal;         // 异常信息 → 直接显示在面板上(不再静默 FPS 0)
         private bool _fatalLogged;
 
-        // ======================= 自动启动 =======================
-
-        /// <summary>
-        /// 勾过「下次 Play 自动启动」后,任意场景按 Play 都会自动生成预览台。
-        /// 只在编辑器里生效(Application.isEditor),不会影响正式游戏。
-        /// </summary>
+        /// <summary>勾过「自动启动」后,任意场景按 Play 都会自动生成预览台(仅编辑器生效,PlayerPrefs 记忆)。</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoSpawn()
         {
@@ -118,8 +95,6 @@ namespace Volken.Tests
                 UnityEngine.Debug.LogWarning("[Volken] RainPreview AutoSpawn: " + ex.Message);
             }
         }
-
-        // ======================= 生命周期 =======================
 
         private void Awake()
         {
@@ -169,12 +144,12 @@ namespace Volken.Tests
             }
             catch (Exception ex)
             {
-                // 关键:不要再让异常每帧静默中断(那正是"FPS 一直 0"的成因)——存起来直接显示在面板上
+                // 异常不能每帧静默吞掉:存下来直接显示在面板上(否则只会看到 FPS 恒 0)
                 _fatal = "Update 异常(每帧抛): " + ex.Message;
                 if (!_fatalLogged) { _fatalLogged = true; UnityEngine.Debug.LogException(ex); }
             }
 
-            // FPS:窗口内帧数 / 真实耗时(比 1/delta 稳;暂停时不会算出 10000 这种假值)
+            // FPS:窗口内帧数 / 真实耗时(比 1/delta 稳,暂停时不会算出假值)
             _frameCount++;
             float now = Time.realtimeSinceStartup;
             if (now - _fpsWindowStart >= 0.5f)
@@ -190,8 +165,6 @@ namespace Volken.Tests
             _toast = msg;
             _toastUntil = Time.realtimeSinceStartup + 4f;
         }
-
-        // ======================= 相机 / 场景 =======================
 
         private void ResolveCamera()
         {
@@ -212,7 +185,7 @@ namespace Volken.Tests
             if (_pitch > 180f) _pitch -= 360f;
         }
 
-        /// <summary>极简环境:地面 + 近/中/远三个参照方块,用来判断尺度、距离感与遮挡。不依赖任何 mod 资产。</summary>
+        /// <summary>极简环境:地面 + 近/中/远参照方块,用于判断尺度与遮挡。不依赖任何 mod 资产。</summary>
         private void BuildEnvironment()
         {
             var root = new GameObject("RainPreviewEnv");
@@ -260,8 +233,6 @@ namespace Volken.Tests
             }
             catch { }
         }
-
-        // ======================= 雨的挂载与参数同步 =======================
 
         private void EnsureRain()
         {
@@ -326,13 +297,8 @@ namespace Volken.Tests
             }
         }
 
-        // ======================= 自由飞行 =======================
-        // ⚠️ **不要用旧版 UnityEngine.Input.***:本工程 Player Settings 是
-        //   `activeInputHandler: 1`(只用 Input System Package (New)),旧 API 每次调用都会抛
-        //   InvalidOperationException("...switched active Input handling to Input System package...")
-        //   → Update 每帧在最前面就中断 → 面板显示"❌ Update 异常(每帧抛)"、FPS 永远 0(实测踩过)。
-        //   这里统一改用 **IMGUI 事件**(OnGUI 里的 Event.current):纯运行时 API,
-        //   不受输入后端设置影响,也不需要引入 Input System 包。
+        // ⚠️ **不要用旧版 UnityEngine.Input.***:本工程 activeInputHandler = 1,旧 API 每次调用都抛异常、
+        //   Update 会在最前面中断(FPS 恒 0)。统一改用 IMGUI 事件(OnGUI 里的 Event.current)。
 
         private readonly HashSet<KeyCode> _keysHeld = new HashSet<KeyCode>();
         private Vector2 _lookDelta;      // 本帧右键拖拽的鼠标位移(像素)
@@ -401,8 +367,6 @@ namespace Volken.Tests
             float speed = moveSpeed * ((KeyHeld(KeyCode.LeftShift) || KeyHeld(KeyCode.RightShift)) ? boostMultiplier : 1f);
             targetCamera.transform.position += dir.normalized * speed * Time.unscaledDeltaTime;
         }
-
-        // ======================= IMGUI 面板 =======================
 
         private void OnGUI()
         {
@@ -534,9 +498,7 @@ namespace Volken.Tests
             Toast("已重置为 SP2 出厂参数");
         }
 
-        // ======================= 参数记忆 / 导出 =======================
-
-        /// <summary>把当前参数存进 PlayerPrefs(下次 Play、包括自动启动,都接着这次调)。</summary>
+        /// <summary>把当前参数存进 PlayerPrefs(下次 Play 接着调)。</summary>
         private void SaveParams()
         {
             _paramsDirty = false;
@@ -589,7 +551,6 @@ namespace Volken.Tests
 
         /// <summary>
         /// 把当前参数复制成**可直接替换 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml` 里 &lt;Rain&gt; 段**的 XML。
-        /// 这样编辑器里调好的值一次粘贴就能进游戏(不必在游戏面板里照抄一遍)。
         /// </summary>
         private void CopyRainXmlToClipboard()
         {
@@ -601,7 +562,6 @@ namespace Volken.Tests
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("  <Rain>");
                 sb.AppendLine("    <enabled>" + B(rainEnabled) + "</enabled>");
-                sb.AppendLine("    <triggerValue>2.25</triggerValue>");     // 阶段 6 天气状态机用,预览不涉及
                 sb.AppendLine("    <amount>" + N(amount) + "</amount>");
                 sb.AppendLine("    <domainRadius>" + N(domainRadius) + "</domainRadius>");
                 sb.AppendLine("    <adaptiveDomain>true</adaptiveDomain>");
@@ -623,7 +583,7 @@ namespace Volken.Tests
                 sb.AppendLine("    <respawnMirror>" + B(respawnMirror) + "</respawnMirror>");
                 sb.AppendLine("  </Rain>");
                 GUIUtility.systemCopyBuffer = sb.ToString();
-                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(triggerValue/strength/windInfluence/volume 未调,按原值改回)");
+                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(strength/windInfluence/volume 未调,按原值改回)");
                 UnityEngine.Debug.Log("[Volken] RainPreview 已复制参数 XML:\n" + sb);
             }
             catch (Exception ex)

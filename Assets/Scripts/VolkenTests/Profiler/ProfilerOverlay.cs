@@ -4,11 +4,7 @@ using UnityEngine.UI;
 
 namespace VolkenProfiler
 {
-    /// <summary>
-    /// GPU 焦点性能叠加层(独立命名空间 <c>VolkenProfiler</c>)。
-    /// 纯代码构建的 uGUI 覆盖层,重点展示 GPU 帧时间 / 渲染线程 / Present 等待 / 瓶颈判断;
-    /// 仅展示 <see cref="ProfilerSession"/> 采集的 GPU 相关数据。
-    /// </summary>
+    /// <summary>纯代码构建的 uGUI 性能叠加层,只展示 <see cref="ProfilerSession"/> 采集的 GPU 数据。</summary>
     public class ProfilerOverlay : MonoBehaviour
     {
         public static ProfilerOverlay Instance { get; private set; }
@@ -30,7 +26,7 @@ namespace VolkenProfiler
 
         private void OnEnable()
         {
-            // 显示时重置,让数据从本次打开开始(与游戏内置一致)
+            // 显示时重置,让数据从本次打开开始
             Session.Reset();
         }
 

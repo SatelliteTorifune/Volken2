@@ -1,17 +1,9 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 /// <summary>
-/// Captures the far camera's linearized depth into a render texture for the cloud pipeline.
-///
-/// Uses a CommandBuffer instead of OnRenderImage: merely having an OnRenderImage hook on the
-/// far camera forces it through an intermediate render target + resolve, which subtly changes
-/// its output and draws a visible single-pixel seam line where the near camera's coverage ends
-/// (at the near camera's far clip plane, ~10 km). A command buffer leaves the camera's normal
-/// render path untouched.
-///
-/// 多相机支持:farDepthTex / maxFarDepth 都是【实例成员】(不再是 static)。每对(主视角 / PIP)
-/// 相机各自持有自己的远相机深度纹理 —— 否则多台额外相机会在同一个 static 纹理上互相 Release/
-/// 重建,导致命令缓冲写入已释放纹理(报错/云消失)。
+/// 用 CommandBuffer 抓取远相机的线性化深度到 RT(供云渲染管线使用)。
+/// ⚠️ 不要改用 OnRenderImage:远相机上挂该钩子会被迫走中间 RT + resolve,并在近相机远裁剪面(~10 km)处画出可见的像素缝线。
+/// ⚠️ farDepthTex / maxFarDepth 是【实例成员】:每对(主视角 / PIP)相机各自持有,否则多相机会互相 Release/重建同一纹理。
 /// </summary>
 
 namespace Volken.Clouds
@@ -24,20 +16,18 @@ namespace Volken.Clouds
         public RenderTexture farDepthTex;
 
         private Camera _cam;
-        // dedicated material instance: its "clipPlanes" uniform must hold the FAR camera's planes,
-        // while the shared cloud material gets overwritten with the near camera's planes every frame
+        // 独立材质实例:它的 "clipPlanes" 必须始终是远相机的裁剪面,而共享的云材质每帧会被近相机的裁剪面覆盖
         private Material _depthMat;
         private CommandBuffer _commandBuffer;
         private const CameraEvent CaptureEvent = CameraEvent.AfterForwardOpaque;
 
-        /// <summary>本脚本挂载的相机。</summary>
         public Camera Camera => _cam;
 
         private void Awake()
         {
             _cam = GetComponent<Camera>();
             _cam.depthTextureMode |= DepthTextureMode.Depth;
-            _depthMat = new Material(Volken.Core.VolkenMod.Instance.MainLayer?.material?.shader);
+            _depthMat = new Material(Volken.Clouds.VolkenClouds.Instance.MainLayer?.material?.shader);
         }
 
         private void OnEnable()
@@ -54,8 +44,7 @@ namespace Volken.Clouds
         {
             maxFarDepth = _cam.farClipPlane;
 
-            // recreate resources on resolution changes
-            if (farDepthTex == null || !farDepthTex.IsCreated() ||
+            if (farDepthTex == null || !farDepthTex.IsCreated() ||   // 分辨率变化时重建
                 farDepthTex.width != _cam.pixelWidth || farDepthTex.height != _cam.pixelHeight)
             {
                 RebuildResources();
@@ -83,8 +72,7 @@ namespace Volken.Clouds
 
             _commandBuffer = new CommandBuffer { name = "Volken Far Depth Capture" };
             _commandBuffer.Blit(BuiltinRenderTextureType.None, farDepthTex, _depthMat, _depthMat.FindPass("FarDepth"));
-            // restore the camera's own target so the rest of the frame renders normally
-            _commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+            _commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);   // 恢复相机自身的渲染目标
             _cam.AddCommandBuffer(CaptureEvent, _commandBuffer);
         }
 

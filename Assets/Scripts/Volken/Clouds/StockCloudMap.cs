@@ -4,16 +4,9 @@ using ModApi.Flight.Sim;
 using ModApi.Planet;
 using UnityEngine;
 /// <summary>
-/// 方案 B:加载游戏自带云的 Cloud cubemap(PlanetCubemapType.Clouds),
-/// 作为 Volken 的"全球分布形状"(哪里出云、云多大、纬度带怎么走)。
-///
-/// 通道语义:RGBA = (低云密度, 中云密度, 高云密度, 纬度/行星遮罩),全部 clamp01。
-///
-///  - SOI 进入有大气星球时 LoadFor(),缓存当前星球;切换/进太阳时 Release()。
-///  - 加载失败(无 Clouds modifier / renderClouds=false / 该画质档未生成)返回 null
-///    → shader 自动回退 Volken 的 PlanetMapTex(行为与之前完全一致)。
-///
-/// 注意:本方案只借用水平分布,**不**替换 Volken 的垂直层带(layerHeights/spreads)与密度公式。
+/// 把游戏自带云的 Cloud cubemap(PlanetCubemapType.Clouds)当作 Volken 的"全球分布形状"。
+/// 通道语义:RGBA = (低云, 中云, 高云, 纬度/行星遮罩)。只借用水平分布,**不**替换 Volken 的垂直层带与密度公式。
+/// 加载失败(无 Clouds modifier / renderClouds=false / 该画质档未生成)返回 null → shader 回退 PlanetMapTex。
 /// </summary>
 
 namespace Volken.Clouds
@@ -21,20 +14,12 @@ namespace Volken.Clouds
 
     public static class StockCloudMap
     {
-        /// <summary>当前星球已加载的 Cloud cubemap;null = 回退程序化分布。</summary>
-        public static Cubemap Current { get; private set; }
+        public static Cubemap Current { get; private set; }   // 当前星球已加载的 Cloud cubemap;null = 回退程序化分布
 
-        /// <summary>
-        /// 加载时检测出的"该星球游戏各云层是否真实存在"。
-        /// (R,G,B,A) = (低云, 中云, 高云, 纬度/行星遮罩),1=有数据,0=该层不存在。
-        /// 某层为 0 时,shader 会将该 Volken 层回退到老 planetMap 分布(兜底)。
-        /// </summary>
+        /// <summary>该星球游戏各云层是否真实存在 (R,G,B,A) = (低云, 中云, 高云, 遮罩);某层为 0 时 shader 回退老 planetMap 分布。</summary>
         public static Vector4 LayerValid { get; private set; } = Vector4.one;
 
-        /// <summary>
-        /// 加载并缓存当前星球的 Cloud cubemap。
-        /// 优先尝试画质设置里最大的已生成档位(与游戏 SaveCloudCubemap 的尺寸集合一致)。
-        /// </summary>
+        /// <summary>加载并缓存当前星球的 Cloud cubemap:优先尝试画质设置里最大的已生成档位。</summary>
         public static Cubemap LoadFor(IPlanetNode planet)
         {
             Release();
@@ -62,7 +47,7 @@ namespace Volken.Clouds
                         continue;
                     }
 
-                    // create=false: missing size / no clouds returns null quickly.
+                    // create=false:缺尺寸 / 无云时快速返回 null。
                     cube = PlanetCubemapUtility.LoadCubemap(data, PlanetCubemapType.Clouds, size, false);
                     if (cube != null)
                     {
@@ -98,10 +83,7 @@ namespace Volken.Clouds
             return null;
         }
 
-        /// <summary>
-        /// 采样低 mip 检测各通道是否真有数据(区分"该层是真实云层"与"dummy/全 0 层")。
-        /// 返回 (R,G,B,A) = (低云, 中云, 高云, 遮罩) 的 0/1 存在性。
-        /// </summary>
+        // 采样低 mip 检测各通道是否真有数据(区分"该层是真实云层"与"dummy/全 0 层"),返回 0/1 存在性
         private static Vector4 ComputeLayerValidity(Cubemap cube)
         {
             Vector4 valid = Vector4.one;

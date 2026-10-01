@@ -21,7 +21,6 @@
     <s id="Volken.UI.Weather">Weather</s>
     <s id="Volken.UI.WeatherUnavailable">Weather system not initialized (reload the flight scene).</s>
     <s id="Volken.UI.WeatherPlanet">Planet</s>
-    <s id="Volken.UI.WeatherValue">Weather Value</s>
     <s id="Volken.UI.WeatherActive">Active</s>
     <s id="Volken.UI.WeatherActiveOn">ON (this planet's weather is enabled)</s>
     <s id="Volken.UI.WeatherActiveOff">OFF (enable this planet's weather)</s>
@@ -29,17 +28,10 @@
     <s id="Volken.UI.WeatherEnabled">Weather Enabled (this planet)</s>
     <s id="Volken.UI.WeatherEnabledOn">Weather enabled for this planet.</s>
     <s id="Volken.UI.WeatherEnabledOff">Weather disabled for this planet.</s>
-    <s id="Volken.UI.WeatherDynamic">Dynamic Weather</s>
-    <s id="Volken.UI.WeatherManualValue">Weather Value (force)</s>
     <s id="Volken.UI.WeatherConfigSaved">Weather config saved (same PlanetConfigList.xml as the clouds).</s>
     <s id="Volken.UI.WeatherResetToDefault">Reset to default (remember to click "Save Current Config")</s>
     <s id="Volken.UI.WeatherNotImplemented">This linkage is not implemented yet; the values below are placeholders (0 = clouds unchanged).</s>
 
-    <s id="Volken.UI.WeatherCloudLinkage">Cloud Linkage (not implemented)</s>
-    <s id="Volken.UI.CloudLinkageEnabled">Enable Cloud Linkage</s>
-    <s id="Volken.UI.CloudLinkageCoverage">Weather to Cloud Coverage</s>
-    <s id="Volken.UI.CloudLinkageDarken">Weather to Cloud Darkening</s>
-    <s id="Volken.UI.CloudLinkageWind">Weather to Cloud Wind</s>
 
     <s id="Volken.UI.WeatherRain">Rain (stage 3, live)</s>
     <s id="Volken.UI.RainStats">Status (live)</s>
@@ -55,7 +47,6 @@
     <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
     <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>
     <s id="Volken.UI.RainEnabled">Rain Enabled</s>
-    <s id="Volken.UI.RainTriggerValue">Trigger Weather Value</s>
     <s id="Volken.UI.RainCeilingAltitude">Rain ceiling altitude (m; 0 = no limit (gate off))</s>
     <s id="Volken.UI.RainCeilingBand">Ceiling fade band (fraction of ceiling; 0.4 = top 40% fades)</s>
     <s id="Volken.UI.RainRespawnMirror">Mirror respawn (on = deterministic conveyor, periodic clumps; off = randomized mixing, recommended)</s>
@@ -75,6 +66,7 @@
     <s id="Volken.UI.WeatherFog">Fog (removed, placeholder)</s>
     <s id="Volken.UI.WeatherFogRemoved">The fog system was removed and will be redone; the values below are placeholders and do nothing.</s>
     <s id="Volken.UI.FogEnabled">Fog Enabled</s>
+    <s id="Volken.UI.FogDawnFog">Dawn Fog</s>
     <s id="Volken.UI.FogBaseHeight">Fog Base Height (m)</s>
     <s id="Volken.UI.FogHeight">Fog Height (m)</s>
     <s id="Volken.UI.FogDensity">Fog Density</s>
@@ -85,7 +77,6 @@
 
     <s id="Volken.UI.WeatherLightning">Lightning</s>
     <s id="Volken.UI.LightningEnabled">Lightning Enabled</s>
-    <s id="Volken.UI.LightningStormValue">Trigger Weather Value</s>
     <s id="Volken.UI.LightningTriggerNow">Strike Now</s>
     <s id="Volken.UI.LightningTriggered">Lightning triggered.</s>
     <s id="Volken.UI.LightningStats">Bolt status</s>
@@ -108,12 +99,6 @@
     <s id="Volken.UI.ThunderFallbackSpeedOfSound">Fallback Speed of Sound (m/s)</s>
     <s id="Volken.UI.ThunderSourceBlend">Thunder Source: Cloud-Base Blend</s>
 
-    <s id="Volken.UI.WeatherTiming">Weather Timing</s>
-    <s id="Volken.UI.WeatherMinDuration">Min Duration (s)</s>
-    <s id="Volken.UI.WeatherMaxDuration">Max Duration (s)</s>
-    <s id="Volken.UI.WeatherFadeSpeed">Fade Speed (/s)</s>
-    <s id="Volken.UI.WeatherTimeScaleFollow">Time-scale Follow</s>
-    <s id="Volken.UI.WeatherFoggyDawn">Foggy Dawn</s>
     
     <!-- Group Names -->
     <s id="Volken.UI.ConfigManagement">Config Management</s>

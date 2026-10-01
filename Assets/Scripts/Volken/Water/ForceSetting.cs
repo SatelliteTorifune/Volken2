@@ -20,8 +20,7 @@ namespace Volken.Water
 
         private void CheckWaterTransparency()
         {
-            // respect the user's choice: when AlterTransparency is off, leave the game's
-            // water settings completely alone (previously this forced transparency to false)
+            // respect the user's choice: when AlterTransparency is off, leave the game's water settings alone
             if (!ModSettings.Instance.AlterTransparency.Value) return;
 
             var flightScene = Game.Instance.FlightScene;

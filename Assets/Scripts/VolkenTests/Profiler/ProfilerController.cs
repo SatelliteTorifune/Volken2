@@ -5,12 +5,8 @@ using UnityEngine;
 namespace VolkenProfiler
 {
     /// <summary>
-    /// 性能分析器入口(独立命名空间 <c>Volken.Profiler</c>)。
-    /// 单例:由 <c>Mod.OnModLoaded()</c> 调用 <see cref="Create"/> 创建,
-    /// 负责承载叠加层并注册开发控制台命令:
-    ///   VolkenProfiler          —— 开关叠加层
-    ///   VolkenProfiler.Capture  —— 开始/结束录制帧数据并导出 CSV
-    /// 可见性同步自 <see cref="Assets.Scripts.ModSettings.ShowProfiler"/>。
+    /// 性能分析器入口,由 <c>TestsBootstrap</c> 调 <see cref="Create"/> 创建(幂等)。
+    /// 命令 <c>VolkenProfiler</c> / <c>VolkenProfiler.Capture</c>;可见性以 <c>ModSettings.ShowProfiler</c> 为准。
     /// </summary>
     public class ProfilerController : MonoBehaviour
     {

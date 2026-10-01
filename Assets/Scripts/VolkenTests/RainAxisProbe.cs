@@ -9,50 +9,16 @@ using Volken.Weather;
 namespace Volken.Tests
 {
     /// <summary>
-    /// Phase 1 —— 最小 billboard 朝向验证探针(「屏幕平面构轴」算法)。
-    ///
-    /// 【目的】(对应文档《Volken-SP2雨系统ParticleDomain移植难点与分步计划-2026-09-28.md》阶段 1)
-    /// 用 1~10 个粒子、CPU 算顶点、不碰 compute —— 以最小代价回答:
-    ///   "屏幕平面内构造长度轴"这套基向量在真机上到底立不立得住。
-    /// 上一次失败(雨丝朝向 8 轮不收敛)的根源就是"诊断量错对象"(用世界空间夹角当屏幕倾角),
-    /// 所以本探针**只输出屏幕空间**的量(倾角 / 长宽比),并同时画出两条算法的四边形做直接对比:
-    ///   - 版本 A(青色)= 本项目方案:长度轴在屏幕平面内构造,宽度轴 = cross(L, viewDir)
-    ///     (复盘 §3.1㈢ 的算法骨架,原文自注"尚未在真机验证" —— 本探针就是它的验证);
-    ///   - 版本 B(品红)= SP2 <c>AlignStreaks</c> 原样复刻(世界空间长度轴 + 任意宽度轴),
-    ///     作为"对照实验":模式 2(雨朝相机飞)下它应当复现"横块/细线"退化,而 A 不应退化。
-    ///
-    /// 【挂载】游戏近相机(由 <c>Volken.Core.VolkenMod.OnSceneLoaded</c> 挂,幂等)。
-    /// 绘制走**实例 OnPreCull** + <c>Graphics.DrawMesh</c>(命令提交类 API —— 计划 §10.2b ⑪
-    /// 真机验证过这条路径可靠;静态 <c>Camera.onPreCull</c> 在本工程从不触发)。
-    ///
-    /// 【dev 命令】(见 <c>Mod.RegisterCommands</c>)
-    ///   volkenRainAxis            → 打印状态(未挂载则尝试挂载)
-    ///   volkenRainAxisOn 0|1      → 开关(默认 0:不改变现有画面)
-    ///   volkenRainAxisMode 0..4   → 气流方向模式(0=竖直下落 1=前下 45° 2=朝相机[退化] 3=自定义 4=重力−相机速度)
-    ///   volkenRainAxisVec x y z   → 自定义气流方向(配合 Mode 3)
-    ///   volkenRainAxisCount 1..10 → 测试粒子数
-    ///
-    /// 【验收判据】(阶段 1 准出,逐条对应)
-    ///   - 相机任意朝向(含正仰视/正俯视/雨丝朝相机飞):A **不出现**"横块"**也不**出现"细线拉飞";
-    ///   - 屏幕倾角随视角单调连续,无跳变、无径向爆散;
-    ///   - 退化视角(气流 ∥ 视线):A 稳定表现为**竖直下落**(d2≈0 → 显式兜底 (0,-1)),
-    ///     而不是随机方向;同时 B 在同一视角应量出退化(横块/细线)作为对照。
+    /// billboard 朝向对照探针:青色 A = 屏幕平面构轴(正确),品红 B = SP2 世界空间长度轴(会退化);只量屏幕空间。
+    /// 绘制必须走**实例 OnPreCull** + <c>Graphics.DrawMesh</c>(静态 <c>Camera.onPreCull</c> 本工程不触发)。
     /// </summary>
     public class RainAxisProbe : MonoBehaviour
     {
-        // ================= 静态调试开关(铁律 14:全局调试开关必须 static) =================
 
         /// <summary>总开关。默认关 —— 不改变现有画面。</summary>
         public static bool Enabled;
 
-        /// <summary>
-        /// 气流方向模式:
-        /// 0 = 竖直下落(行星径向,量级 = <see cref="FallSpeed"/>);
-        /// 1 = 前下 45°(径向下落 + 0.6×相机前向);
-        /// 2 = **朝相机**(退化视角:气流 ∥ 视线,旧实现的"横块"复现场景);
-        /// 3 = 自定义 <see cref="CustomAirDir"/>;
-        /// 4 = 重力 − 相机速度(移动中的真实朝向贡献)。
-        /// </summary>
+        /// <summary>气流方向模式:0=竖直下落 1=前下45° 2=朝相机(退化) 3=自定义 4=重力−相机速度。</summary>
         public static int Mode;
 
         /// <summary>模式 3 的自定义气流方向(米/秒量级)。</summary>
@@ -68,7 +34,7 @@ namespace Volken.Tests
         public const float StretchAmount = 0.045f;   // _stretchAmount
         public const float StretchLimit = 3.5f;      // _stretchLimit
 
-        // ================= 心跳(诊断) =================
+        // 心跳(诊断)
 
         /// <summary>实例 OnPreCull 累计触发次数 —— 心跳:验证实例回调真的在跑。</summary>
         public static int PreCullCalls;
@@ -90,8 +56,6 @@ namespace Volken.Tests
         /// <summary>每粒子退化分类:0=正常 1=横块(长≈0) 2=细线(宽≈0)。</summary>
         public static readonly int[] DegenerateA = new int[10];
         public static readonly int[] DegenerateB = new int[10];
-
-        // ================= 内部 =================
 
         private Camera _cam;
         private Mesh _mesh;
@@ -118,14 +82,14 @@ namespace Volken.Tests
             new Vector3(0f, 0f, 11f),
         };
 
-        // ================= 挂载(幂等) =================
+        // 挂载(幂等)
 
         /// <summary>把探针挂到目标相机物体上(已有则返回现有实例)。</summary>
         public static RainAxisProbe Attach(Camera cam)
         {
             if (cam == null)
             {
-                // ⚠️ 诊断:挂载收到 null 相机 —— 之前这里是静默返回,导致"命令开了但什么都不画、零日志"。
+                // ⚠️ 相机为 null 必须留日志:静默返回会导致"命令开了但什么都不画、零日志"。
                 Mod.Diag("RainAxis: attach skipped — camera is null");
                 return null;
             }
@@ -203,7 +167,7 @@ namespace Volken.Tests
 
         public static void SetEnabled(int on)
         {
-            if (on != 0) AttachToCurrentView();   // 先确保挂载:只开开关而不挂载 = 静默无效果(上次的教训)
+            if (on != 0) AttachToCurrentView();   // 先确保挂载:只开开关不挂载 = 静默无效果
             Enabled = on != 0;
             Mod.Diag("RainAxis: enabled = {0}", Enabled);
         }
@@ -249,8 +213,6 @@ namespace Volken.Tests
                 default: return "ok";
             }
         }
-
-        // ================= 生命周期 =================
 
         private void Awake()
         {
@@ -302,8 +264,6 @@ namespace Volken.Tests
             return mat;
         }
 
-        // ================= 每帧 =================
-
         private void OnPreCull()
         {
             PreCullCalls++;
@@ -352,7 +312,7 @@ namespace Volken.Tests
             int count = Mathf.Clamp(ParticleCount, 1, 10);
             EnsureCapacity(count);
 
-            // 版本 A 每粒子基向量(屏幕平面构轴,教训 §3.1㈢)
+            // 版本 A 每粒子基向量(屏幕平面构轴)
             float ax = Vector3.Dot(airDir, camRight);
             float ay = Vector3.Dot(airDir, camUp);
             if (ax * ax + ay * ay < 1e-6f)
@@ -396,7 +356,7 @@ namespace Volken.Tests
                 _verts[i * 8 + 6] = centerB - fwdB * (halfLen * 2f) - sideB * halfWid;
                 _verts[i * 8 + 7] = centerB - fwdB * (halfLen * 2f) + sideB * halfWid;
 
-                // 屏幕空间诊断(只量屏幕,不量世界 —— 铁律 16)
+                // 屏幕空间诊断(只量屏幕,不量世界)
                 Measure(centerA, lw * (halfLen * 2f), wA * (halfWid * 2f), camFwd, camUp,
                         out TiltDegA[i], out AspectA[i], out DegenerateA[i]);
                 Measure(centerB, fwdB * (halfLen * 2f), sideB * (halfWid * 2f), camFwd, camUp,
@@ -424,11 +384,7 @@ namespace Volken.Tests
             LogHeartbeat(airDir, count);
         }
 
-        /// <summary>
-        /// 屏幕空间测量:把"长轴 dirL、宽轴 dirW(世界,未归一化,已含各自全长)"投到屏幕平面,
-        /// 量投影后的长度/宽度之比,以及长度轴与屏幕竖直方向的夹角。
-        /// 退化分类:len &lt; 0.1×wid → 横块(旧实现的死法);wid &lt; 0.1×len → 细线(SP2 的另一种死法)。
-        /// </summary>
+        /// <summary>把长轴/宽轴投到屏幕平面,量投影长宽比与长轴和屏幕竖直方向的夹角。</summary>
         private static void Measure(Vector3 center, Vector3 dirL, Vector3 dirW, Vector3 viewDir, Vector3 camUp,
                                     out float tiltDeg, out float aspect, out int degenerate)
         {
@@ -445,10 +401,7 @@ namespace Volken.Tests
             float len = Mathf.Sqrt(lenSq);
             aspect = wid < 1e-3f ? 999f : len / wid;
 
-            // 退化分类阈值(2026-09-29 修正):正常雨丝设计长宽比 = 2.5m/0.1m = **25**,
-            // 旧阈值 wid<0.1*len(aspect>10) 会把一切正常雨丝误标成"细线!"(实测误报)。
-            // 病理值量级:旧失败 = 长宽比 175(水平细条);横块 = 长投影→0(aspect→0)。
-            // 取 aspect<0.2 = 横块、aspect>50 = 细线,25 稳稳落在 ok。
+            // 退化阈值:正常雨丝设计长宽比 = 2.5m/0.1m = 25 → 取 aspect<0.2 = 横块、aspect>50 = 细线,25 稳落 ok。
             if (len < 0.2f * wid) degenerate = 1;        // 横块:长被压没,宽接管屏幕
             else if (wid < 0.02f * len) degenerate = 2;  // 细线:宽被压没
             else degenerate = 0;
@@ -510,9 +463,8 @@ namespace Volken.Tests
                 _trisA = new int[count * 6];
                 _trisB = new int[count * 6];
             }
-            // 三角形索引只依赖数量(与顶点数据无关),每次重填很便宜(≤10 粒子 = 120 个 int)。
-            // ⚠️ 必须在这里填而不是只在 resize 时:首次挂载时 EnsureCapacity 由 EnsureMesh 的数组
-            // 提前分配、又不触发 resize,若不重填则三角形恒为 0 → 什么都画不出来。
+            // ⚠️ 索引必须每次重填(不能只在 resize 时),否则三角形恒为 0 → 什么都画不出来;
+            // 索引只依赖数量、≤10 粒子 = 120 个 int,重填很便宜。
             for (int i = 0; i < count; i++)
             {
                 int v = i * 8;
@@ -524,10 +476,7 @@ namespace Volken.Tests
             }
         }
 
-        /// <summary>
-        /// 心跳日志(1s 节流):内部状态 + 屏幕空间量(铁律 17/19)。
-        /// 一行能看出:实例回调是否在跑(preCullCalls 是否增长)、气流方向、每粒子倾角/长宽比/退化分类。
-        /// </summary>
+        /// <summary>心跳日志(1s 节流):一行看出实例回调是否在跑、气流方向、每粒子倾角/长宽比/退化分类。</summary>
         private void LogHeartbeat(Vector3 airDir, int count)
         {
             if (Time.realtimeSinceStartup - _lastDiagTime < 1f) return;

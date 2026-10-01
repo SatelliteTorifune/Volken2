@@ -7,28 +7,9 @@ using UnityEngine;
 namespace Volken.Weather
 {
     
-    /// <summary>
-    /// 天气面板 —— 加到 Volken 检查器里的一组控件。
-    ///
-    /// 【分组结构:与 <see cref="VolkenWeatherConfig"/> 的节点一一对应】
-    ///   天气(根,已并入"总体")
-    ///     ├─ 状态(只读:行星 / 天气值 / 运行状态 / 海拔 / 太阳时)
-    ///     ├─ 总体          —— 总开关 / 动态天气 / 天气节奏(直接挂在根组,无独立子组)
-    ///     ├─ 配置管理       —— 天气**自己的**预设(独立于云层):当前配置 / 保存 / 另存为新配置 / 加载配置(下拉) / 重置
-    ///     ├─ 云层联动       —— 机制窗口(**整组禁用**,字段占位,默认全 0 = 恒等)
-    ///     ├─ 雨             —— 占位(**整组禁用**,实现已移除)
-    ///     ├─ 雾             —— 占位(**整组禁用**,实现已移除)
-    ///     └─ 雷             —— 唯一可调的子系统
-    ///
-    /// 【设计取向(与云设置面板一致)】
-    ///   - 面板直接操作**清单里那条记录上的天气参数实例本身**(不是副本),
-    ///     改完点"保存当前配置"才落盘 —— 与云配置管理完全一样的语义;
-    ///   - 滑块的生效时机是**下一帧**(<c>VolkenWeather.Tick</c> 每帧读 Config),调参实时;
-    ///   - 雨/雾两组是**只读占位**:控件照结构铺出来但禁用,避免"改了没反应"的困惑。
-    ///
-    /// 【为什么不做成独立面板】Volken 已经有 <c>IInspectorPanel</c>,再开一个会得到两个
-    /// 浮动窗口互相遮挡;天气与云也该在同一处调,才是"一套观感参数"。
-    /// </summary>
+    /// <summary>天气面板,追加到 Volken 检查器里(不另开浮动窗口,否则两个面板会互相遮挡);分组 = 状态(只读)/ 总体(总开关、天气值、节奏)/ 配置管理(天气**自己的**预设,与云互不干扰)/ 雨 / 雾 / 雷,
+    /// 与 <see cref="VolkenWeatherConfig"/> 的 XML 节点一一对应。</summary>
+    /// <remarks>面板直接改**清单里那条记录上的参数实例本身**(不是副本),点"保存当前配置"才落盘;滑块下一帧生效(<see cref="VolkenWeather.Tick"/> 每帧读 Config)。</remarks>
     public static class WeatherPanel
     {
         /// <summary>往检查器里追加天气分组(无参数:换配置不需要重建面板)。</summary>
@@ -49,7 +30,6 @@ namespace Volken.Weather
             BuildStatusGroup(root, weather);
             BuildOverallGroup(root, weather);
             BuildConfigManagementGroup(root, weather);
-            BuildCloudLinkageGroup(root, weather);
             BuildRainGroup(root, weather);
             BuildFogGroup(root, weather);
             BuildLightningGroup(root, weather);
@@ -57,15 +37,12 @@ namespace Volken.Weather
             inspector.AddGroup(root);
         }
 
-        // ======================= 状态(只读) =======================
+        // 状态(只读)
 
         private static void BuildStatusGroup(GroupModel parent, VolkenWeather weather)
         {
             parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherPlanet"),
                 () => string.IsNullOrEmpty(weather.CurrentPlanet) ? "—" : weather.CurrentPlanet));
-
-            parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherValue"),
-                () => $"{weather.WeatherValue:F2} ({weather.WeatherName})"));
 
             parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherActive"),
                 () => weather.IsActive
@@ -77,11 +54,10 @@ namespace Volken.Weather
                       $"   solar {weather.LocalSolarHour:F1}h   cloudFade {weather.CameraCloudFade:F2}"));
         }
 
-        // ======================= 总体(并入"天气"根组) =======================
+        // 总体(并入"天气"根组)
 
         private static void BuildOverallGroup(GroupModel parent, VolkenWeather weather)
         {
-            // 行星级总开关(在 UI 里调,保存进 PlanetConfigList.xml 的 <Overall enabled>)
             parent.Add(new ToggleModel(Locale.GetString("Volken.UI.WeatherEnabled"),
                 () => weather.Config?.overall?.enabled ?? false, v =>
                 {
@@ -91,66 +67,18 @@ namespace Volken.Weather
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                         Locale.GetString(v ? "Volken.UI.WeatherEnabledOn" : "Volken.UI.WeatherEnabledOff"));
                 }));
-
-            parent.Add(new ToggleModel(Locale.GetString("Volken.UI.WeatherDynamic"),
-                () => weather.Config?.overall?.dynamicWeather ?? false, v =>
-                {
-                    if (weather.Config?.overall == null) return;
-                    weather.Config.overall.dynamicWeather = v;
-                    if (!v) weather.SetTargetWeatherValue(weather.Config.overall.fixedWeatherValue);
-                }));
-
-            // 手动天气值(dev/调参用):直接强制,不走随机状态机
-            // 范围 = [0-1, 配置的取值上限] —— 原先写死 SP2 的 [Foggy, Heavy] = [-1, 2.75]
-            float ceiling = Mathf.Max(0.5f, weather.Config?.overall?.maxWeatherValue ?? 3f);
-            var manual = new SliderModel(Locale.GetString("Volken.UI.WeatherManualValue"),
-                () => VolkenWeather.Instance?.WeatherValue ?? 0f,
-                v => VolkenWeather.Instance?.ForceWeatherValue(v),
-                -1f, ceiling, false);
-            manual.ValueFormatter = f => $"{f:F2} ({VolkenWeather.DescribeWeatherValue(f)})";
-            parent.Add(manual);
-
-            // ---- 天气节奏(同属"总体":状态机的时间常数) ----
-            parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherTiming"), () => "—"));
-            AddSlider(parent, "Volken.UI.WeatherMinDuration",
-                () => weather.Config?.overall?.minDuration ?? 480f,
-                v => Set(c => c.overall.minDuration = v), 10f, 3600f, 0);
-            AddSlider(parent, "Volken.UI.WeatherMaxDuration",
-                () => weather.Config?.overall?.maxDuration ?? 960f,
-                v => Set(c => c.overall.maxDuration = v), 10f, 7200f, 0);
-            AddSlider(parent, "Volken.UI.WeatherFadeSpeed",
-                () => weather.Config?.overall?.fadeSpeed ?? 0.001f,
-                v => Set(c => c.overall.fadeSpeed = v), 0.0001f, 0.02f, 5);
-            AddSlider(parent, "Volken.UI.WeatherTimeScaleFollow",
-                () => weather.Config?.overall?.timeScaleFollow ?? 1f,
-                v => Set(c => c.overall.timeScaleFollow = v), 0f, 10f, 2);
-
-            parent.Add(new ToggleModel(Locale.GetString("Volken.UI.WeatherFoggyDawn"),
-                () => weather.Config?.overall?.foggyDawn ?? false,
-                v => Set(c => c.overall.foggyDawn = v)));
         }
 
-        // ======================= 配置管理(布局与云层配置管理一致) =======================
+        // 配置管理(布局与云层配置管理一致)
 
-        /// <summary>
-        /// 天气的"配置管理"。**布局与云层配置管理一致,但两边完全独立**:
-        /// 当前配置(只读) → 保存 → 另存为新配置 → 加载配置(下拉) → 重置为默认。
-        ///
-        /// 天气预设是**自己的一套名字**(<c>PlanetConfig.WeatherConfigName</c>,文件在
-        /// <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c>),与云的预设名/预设列表
-        /// **互不干扰** —— 这里换天气预设不会动云,反之亦然(就像两个云层各自的预设)。
-        /// 下拉列表来自天气自己的目录(<see cref="VolkenWeather.AvailableConfigs"/>)。
-        /// 没有"试试另一个配置":那是云层专有的(它会生成一套随机的云参数)。
-        /// </summary>
+        /// <summary>天气的"配置管理":当前配置(只读) → 保存 → 另存为新配置 → 加载配置(下拉) → 重置;用的是天气**自己**的预设名与目录,与云的预设列表互不干扰。</summary>
         private static void BuildConfigManagementGroup(GroupModel parent, VolkenWeather weather)
         {
             var group = new GroupModel(Locale.GetString("Volken.UI.ConfigManagement"));
 
-            // 只读:当前天气预设名(独立于云层预设名)
             group.Add(new TextModel(Locale.GetString("Volken.UI.CurrentConfig"),
                 () => string.IsNullOrEmpty(weather.CurrentConfigName) ? "—" : weather.CurrentConfigName));
 
-            // 保存:把当前内存里的天气参数写回**本预设的天气文件**
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.SaveCurrentConfig"), _ =>
             {
                 try
@@ -167,7 +95,7 @@ namespace Volken.Weather
                 }
             }));
 
-            // 另存为新配置:问名字 → 写成新的天气预设 + 切过去(纯天气操作,不建任何云配置)
+            // 另存为新配置:问名字 → 写新的天气预设并切过去(纯天气操作,不建任何云配置)
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.SaveAsNewConfig"), _ =>
             {
                 try
@@ -234,7 +162,7 @@ namespace Volken.Weather
                 },
                 weather.AvailableConfigs));
 
-            // 重置:只改内存(需再点"保存"才落盘),与云层"重置为默认"同语义
+            // 重置:只改内存(需再点"保存"才落盘)
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.ResetCurrentToDefault"), _ =>
             {
                 weather.ResetCurrentConfigToDefault();
@@ -244,37 +172,9 @@ namespace Volken.Weather
 
             parent.Add(group);
         }
-        // ======================= 云层联动(占位) =======================
+        // 雨(实时控制)
 
-        /// <summary>
-        /// 天气 → 云 的联动机制窗口。**整组禁用**:字段与分组结构保留(默认 0 = 恒等),
-        /// 但当前实现里没有消费者(2026-09-27 决定"天气不联动云层",理由见 <see cref="VolkenWeather"/>)。
-        /// </summary>
-        private static void BuildCloudLinkageGroup(GroupModel parent, VolkenWeather weather)
-        {
-            var group = new GroupModel(Locale.GetString("Volken.UI.WeatherCloudLinkage"));
-
-            group.Add(new TextModel(Locale.GetString("Volken.UI.WeatherNotImplemented"), () => "—"));
-
-            AddDisabledToggle(group, "Volken.UI.CloudLinkageEnabled",
-                () => weather.Config?.cloudLinkage?.enabled ?? false);
-            AddDisabledSlider(group, "Volken.UI.CloudLinkageCoverage", 0f, 1f, 2,
-                () => weather.Config?.cloudLinkage?.coverageGain ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.CloudLinkageDarken", 0f, 1f, 2,
-                () => weather.Config?.cloudLinkage?.darkenGain ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.CloudLinkageWind", 0f, 1f, 2,
-                () => weather.Config?.cloudLinkage?.windGain ?? 0f);
-
-            parent.Add(group);
-        }
-
-        // ======================= 雨(实时控制) =======================
-
-        /// <summary>
-        /// 雨参数组(**2026-09-29 起为实时控制**:阶段 3 正式雨滴已落地)。
-        /// 参数改完立刻推给 <see cref="RainParticles.ApplyConfig"/>(容量 → 重建 buffer、雨丝长宽 → 重建网格);
-        /// 持续型参数由 RainParticles 每帧读取静态字段。SP2 出厂值见计划 §10.15。
-        /// </summary>
+        /// <summary>雨参数组:改动立刻推给 <see cref="RainParticles.ApplyConfig"/>(容量/雨丝长宽会触发重建);持续型参数由 RainParticles 每帧读静态字段。</summary>
         private static void BuildRainGroup(GroupModel parent, VolkenWeather weather)
         {
             var group = new GroupModel(Locale.GetString("Volken.UI.WeatherRain"));
@@ -287,7 +187,6 @@ namespace Volken.Weather
                     RainParticles.SetEnabled(v ? 1 : 0);   // 内含 AttachToCurrentView
                 }));
 
-            // 状态行(与雷电组同风格:实时数值)
             group.Add(new TextModel(Locale.GetString("Volken.UI.RainStats"),
                 () => RainParticles.StatsLine()));
 
@@ -327,7 +226,7 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.stretchAmount ?? 0.045f,
                 v => ApplyRain(c => c.rain.stretchAmount = v), 0f, 0.3f, 3);
 
-            // 拉伸上限(雨丝最长 = 长度 × 本值;治"太长像面条")
+            // 拉伸上限:雨丝最长 = 长度 × 本值(治"太长像面条")
             AddSlider(group, "Volken.UI.RainStretchLimit",
                 () => weather.Config?.rain?.stretchLimit ?? 3.5f,
                 v => ApplyRain(c => c.rain.stretchLimit = v), 1f, 12f, 2);
@@ -352,17 +251,12 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.streamMode ?? true,
                 v => ApplyRain(c => c.rain.streamMode = v)));
 
-            // 出域处置(SP2 风格 = 镜像重生,从边界进入,近旁不爆闪)
+            // 出域处置(SP2 风格 = 镜像重生:从边界进入,近旁不爆闪)
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRespawnMirror"),
                 () => weather.Config?.rain?.respawnMirror ?? true,
                 v => ApplyRain(c => c.rain.respawnMirror = v)));
 
-            // 阶段 6 才接天气状态机:阈值现在就可调(手动场景下先看效果)
-            AddSlider(group, "Volken.UI.RainTriggerValue",
-                () => weather.Config?.rain?.triggerValue ?? 2.25f,
-                v => Set(c => c.rain.triggerValue = v), 0f, 10f, 2);
-
-            // ==== 海拔闸门(必需:JNO 镜头能缩到整颗星球,不限制会在太空下雨)====
+            // 海拔闸门(必需:JNO 镜头能缩到整颗星球,不限制会在太空下雨)
             AddSlider(group, "Volken.UI.RainCeilingAltitude",
                 () => weather.Config?.rain?.ceilingAltitude ?? 0f,
                 v => ApplyRain(c => c.rain.ceilingAltitude = v), 0f, 200000f, 0, true);
@@ -370,14 +264,13 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.ceilingBand ?? 0.4f,
                 v => ApplyRain(c => c.rain.ceilingBand = v), 0.05f, 1f, 2);
 
-            // 阶段 4 实现前禁用:域半径随相机速度自适应
+            // 域半径随相机速度自适应:尚未实现,禁用
             AddDisabledToggle(group, "Volken.UI.RainAdaptiveDomain",
                 () => weather.Config?.rain?.adaptiveDomain ?? true);
 
-            // ==== 开发自检(原控制台指令的 UI 化:2026-09-29 删除 volkenRainP2* 系列)====
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainDumpLog"), _ =>
             {
-                RainParticles.DiagStatus();   // 把完整状态写进 Player.log(方便发日志排查)
+                RainParticles.DiagStatus();   // 完整状态写进 Player.log(方便发日志排查)
                 Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.RainDumped"));
             }));
 
@@ -391,7 +284,6 @@ namespace Volken.Weather
             parent.Add(group);
         }
 
-        /// <summary>雨的 setter:写配置 + 立刻推给运行时(UI → 系统)。</summary>
         private static void ApplyRain(Action<VolkenWeatherConfig> mutate)
         {
             var cfg = VolkenWeather.Instance?.Config;
@@ -400,9 +292,9 @@ namespace Volken.Weather
             RainParticles.ApplyConfig(cfg.rain);
         }
 
-        // ======================= 雾(占位) =======================
+        // 雾(占位)
 
-        /// <summary>雾的参数组 —— **整组禁用**,理由同 <see cref="BuildRainGroup"/>。</summary>
+        /// <summary>雾的参数组 —— **整组禁用**(雾未落地)。</summary>
         private static void BuildFogGroup(GroupModel parent, VolkenWeather weather)
         {
             var group = new GroupModel(Locale.GetString("Volken.UI.WeatherFog"));
@@ -411,6 +303,8 @@ namespace Volken.Weather
 
             AddDisabledToggle(group, "Volken.UI.FogEnabled",
                 () => weather.Config?.fog?.enabled ?? false);
+            AddDisabledToggle(group, "Volken.UI.FogDawnFog",
+                () => weather.Config?.fog?.dawnFog ?? false);
             AddDisabledSlider(group, "Volken.UI.FogBaseHeight", -500f, 20000f, 0,
                 () => weather.Config?.fog?.baseHeight ?? 0f);
             AddDisabledSlider(group, "Volken.UI.FogHeight", 1f, 20000f, 0,
@@ -429,7 +323,7 @@ namespace Volken.Weather
             parent.Add(group);
         }
 
-        // ======================= 雷(唯一可调) =======================
+        // 雷(唯一可调)
 
         private static void BuildLightningGroup(GroupModel parent, VolkenWeather weather)
         {
@@ -443,7 +337,7 @@ namespace Volken.Weather
                     weather.RefreshActiveState();
                 }));
 
-            // 立即劈一道(唯一有副作用的按钮;方便不用等 6~45 秒的随机间隔)
+            // 立即劈一道(唯一有副作用的按钮;省得等 6~45 秒的随机间隔)
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.LightningTriggerNow"), _ =>
             {
                 VolkenWeather.Instance?.TriggerLightning();
@@ -456,15 +350,8 @@ namespace Volken.Weather
                 {
                     var lm = weather.Lightning;
                     if (lm == null) return Locale.GetString("Volken.UI.LightningInactive");
-                    float storm = weather.Config?.lightning?.stormValue ?? 2.5f;
-                    return $"bolts {lm.BoltCount}   next {lm.TimeToNextStrike:F1}s   " +
-                           $"value {weather.WeatherValue:F2} (needs ≥ {storm:F2})";
+                    return $"bolts {lm.BoltCount}   next {lm.TimeToNextStrike:F1}s";
                 }));
-
-            // 触发阈值:与"逐项设置"的取向一致,做成可调(原先写死 SP2 的 Stormy = 2.5)
-            AddSlider(group, "Volken.UI.LightningStormValue",
-                () => weather.Config?.lightning?.stormValue ?? 2.5f,
-                v => Set(c => c.lightning.stormValue = v), 0f, 10f, 2);
 
             AddSlider(group, "Volken.UI.LightningMinDelay",
                 () => weather.Config?.lightning?.minDelay ?? 6f,
@@ -509,9 +396,8 @@ namespace Volken.Weather
                 () => weather.Config?.lightning?.thunderDistanceAttenuation ?? 1f,
                 v => Set(c => c.lightning.thunderDistanceAttenuation = v), 0f, 1f, 2);
 
-            // ==== 雷声真实化(2026-09-28):距离 → 声速延迟 → near/far 阈值 ====
-            // 三个新参数放在一起,方便对照调:阈值决定"听哪一组",声速决定"延迟多久",
-            // 混合比例决定"远雷的延迟要不要按云底那一段缩短"。
+            // 雷声:距离 → 声速延迟 → near/far 阈值
+            // 阈值决定"听哪一组",声速决定"延迟多久",混合比例决定远雷要不要按云底那段缩短。
             AddSlider(group, "Volken.UI.ThunderNearDistance",
                 () => weather.Config?.lightning?.thunderNearDistance ?? 2000f,
                 v => Set(c => c.lightning.thunderNearDistance = v), 100f, 20000f, 0);
@@ -525,9 +411,6 @@ namespace Volken.Weather
             parent.Add(group);
         }
 
-        // ======================= 小工具 =======================
-
-        /// <summary>把 setter 收敛成"对当前配置实例的某个字段赋值",统一处理 null。</summary>
         private static void Set(Action<VolkenWeatherConfig> mutate)
         {
             var cfg = VolkenWeather.Instance?.Config;
@@ -544,7 +427,6 @@ namespace Volken.Weather
             group.Add(model);
         }
 
-        /// <summary>禁用滑块(雨/雾/云层联动的占位组用)。</summary>
         private static void AddDisabledSlider(GroupModel group, string localeKey,
             float min, float max, int decimals, Func<float> getter)
         {
@@ -556,7 +438,6 @@ namespace Volken.Weather
             group.Add(model);
         }
 
-        /// <summary>禁用开关(占位组用)。</summary>
         private static void AddDisabledToggle(GroupModel group, string localeKey, Func<bool> getter)
         {
             group.Add(new ToggleModel(Locale.GetString(localeKey), getter, _ => { })

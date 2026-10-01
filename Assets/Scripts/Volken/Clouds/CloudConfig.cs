@@ -11,7 +11,6 @@ using Volken.Core;
 namespace Volken.Clouds
 {
    
-
     public enum CompositeMode
     {
         Additive,  // 加法合成: result.rgb += cloudColor (零视觉干扰, 默认)
@@ -24,7 +23,6 @@ namespace Volken.Clouds
         public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
         private const string DEFAULT_CONFIG_NAME = "Default";
 
-
         #region parameter
         public CompositeMode compositeMode = CompositeMode.Additive;
         public bool enabled;
@@ -35,10 +33,6 @@ namespace Volken.Clouds
         public float shapeScale;
         public float detailScale;
         public float detailStrength;
-
-
-
-
 
         [XmlIgnore]
         public Vector4 phaseParameters;
@@ -100,6 +94,36 @@ namespace Volken.Clouds
             set => layerStrengths = value.ToVector4();
         }
 
+        /// <summary>
+        /// 云层高度带 [底, 顶](米, ASL):取所有 <c>layerStrengths &gt; 0</c> 的层,求 <c>layerHeights ± layerSpreads</c> 的并集;无有效层时 false。
+        /// 【唯一实现】不要再为它加接口/值对象/注册表层(天气侧曾各抄两份导致静默不一致)。
+        /// ⚠️ topAsl 是"最高层的顶",<b>不是</b> <see cref="maxCloudHeight"/>(后者是 raymarch 步进上限,语义不同)。
+        /// </summary>
+        public bool TryGetBand(out float bottomAsl, out float topAsl)
+        {
+            bottomAsl = 0f;
+            topAsl = 0f;
+
+            float lo = float.MaxValue, hi = float.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                float strength = i == 0 ? layerStrengths.x : i == 1 ? layerStrengths.y : i == 2 ? layerStrengths.z : layerStrengths.w;
+                if (strength <= 0f) continue;
+
+                float h = i == 0 ? layerHeights.x : i == 1 ? layerHeights.y : i == 2 ? layerHeights.z : layerHeights.w;
+                float spread = i == 0 ? layerSpreads.x : i == 1 ? layerSpreads.y : i == 2 ? layerSpreads.z : layerSpreads.w;
+
+                lo = Mathf.Min(lo, h - spread);
+                hi = Mathf.Max(hi, h + spread);
+            }
+
+            if (lo > hi) return false;
+
+            bottomAsl = lo;
+            topAsl = hi;
+            return true;
+        }
+
         public float maxCloudHeight;
         public float resolutionScale;
         public float stepSize;
@@ -116,45 +140,36 @@ namespace Volken.Clouds
 
         public float nearThreshold = 1e5f;
 
-        // === 时序超采样(方案 C) ===
         // 每帧只步进 1/(upscaleX*upscaleY) 的低清像素(按最优采样序列取格),其余像素由历史累积补齐。
-        // 默认关闭 → 走现状路径,行为与之前逐字节一致。
         public bool useTemporalUpscale = false;   // 总开关
         public int upscaleX = 3;                  // 采样格网宽(N=upscaleX*upscaleY)
         public int upscaleY = 3;                  // 采样格网高
 
-        // === 游戏自带云作为全球分布形状(方案 B) ===
-        // 全部为新字段;旧 XML 无这些节点时保留默认值 → 行为与之前一致。
+        // 游戏自带云作为全球分布形状
+        // 均为新字段;旧 XML 无这些节点时保留默认值 → 回退程序化分布。
         public bool useStockCloudMap = false;   // 总开关:用游戏 Clouds cubemap 替代 PlanetMapTex 做全球分布
-        public float stockMapStrength = 1f;     // 0..1 混合强度(eff=0 时与现状逐字节一致)
+        public float stockMapStrength = 1f;     // 0..1 混合强度
         public float stockMaskInfluence = 1f;   // 0..1 纬度/行星遮罩(A 通道)影响
         public float stockAlignSign = 1f;       // ±1 对齐旋转方向(镜像/方向反了翻号)
         public float stockAlignAngleOffset = 0f;// 度,一次性对齐微调角
-        public int stockMapLayer = 3;           // 用游戏哪一层云作为分布:0=低云(R), 1=中云(G), 2=高云(B), 3=按层对应(默认)
+        public int stockMapLayer = 3;           // 用哪一层:0=低云(R), 1=中云(G), 2=高云(B), 3=按层对应
 
-        // === 方案 A:自带云"区域内密度缩放"(2026-09-06,修正版) ===
-        // 默认 1 → 恒等 → 与现状逐字节一致(零回归)。只缩放自带云足迹内的附加密度层,
-        // 形状门(dist)仍用未缩放的 stockBand → 足迹边缘保留;scale 下调 → 附加密度地板下降,
-        // 3D 形状能把密度压到覆盖阈值以下 → 内部出现空洞,化解"一大片实心云"。
-        // 只作用于自带云足迹内,全局 coverage(planetMap 基线)不受影响。
-        public float stockDensityScale = 1f;    // 区域内密度缩放 0..1(1=恒等/现状)
+        // 自带云"区域内密度缩放":只缩放自带云足迹内的附加密度层,形状门(dist)仍用未缩放的 stockBand,故足迹边缘保留;默认 1 = 恒等
+        public float stockDensityScale = 1f;    // 0..1(1=恒等)
 
-        // === 轨道云(2D 壳着色)+ 过渡带交叉淡入(2026-08-27) ===
-        // 高空(轨道)视角用廉价 2D 壳着色替代体积 raymarch;过渡带内与体积云按海拔交叉淡入。
-        // 默认关闭(useOrbitClouds=false)→ orbitFade=0 → 行为与之前完全一致,零回归。
-        // 旧 XML 无这些节点时保留默认值 → 行为与之前一致。
+        // 轨道云(2D 壳着色)+ 过渡带交叉淡入
+        // 高空视角用廉价 2D 壳着色替代体积 raymarch,过渡带内按海拔与体积云交叉淡入。默认关闭 → orbitFade=0 → 行为与之前一致。
         public bool useOrbitClouds = false;              // 总开关:开启后按海拔在体积云/2D 轨道云间分派
         public float orbitTransitionStartAltitude = 25000f;  // 过渡带起点(米):低于此 → 纯体积云
         public float orbitTransitionEndAltitude = 100000f;   // 过渡带终点(米):高于此 → 纯 2D 轨道云(跳过体积 raymarch)
         public float orbitSampleAltitude = 0f;           // 2D 采样高度(0=自动:按层强度加权层高)
-        public float orbitDensityBoost = 1f;             // 光学厚度乘数(2D 已按体积云同源 Beer 积分;1=与体积云一致)
+        public float orbitDensityBoost = 1f;             // 光学厚度乘数(1=与体积云一致)
         public float orbitBrightness = 0.7f;             // 2D 亮度缩放(与体积云 Additive 合成强度对齐)
-        // KSA 2D 云参考改进(2026-08-27):它的 2D 云 = 烘焙颜色贴图 + 法线贴图 Lambertian + 半清。
-        // 我们无预烘焙贴图,改用【程序化同源等效】:
-        public float orbitReliefStrength = 1.5f;         // 密度梯度法线浮雕强度(KSA normal-map 等效;0=关)
+        // 程序化同源等效(替代 KSA 的烘焙颜色贴图 + 法线贴图):
+        public float orbitReliefStrength = 1.5f;         // 密度梯度法线浮雕强度(0=关)
         public float orbitDetailStrength = 0.4f;         // detail 噪声作为云内"纹理"明暗变化强度(0=关)
-        public float orbitResolutionScale = 0.5f;        // 2D 轨道云渲染分辨率(相对屏幕;0.5=半清+双线性软化)
-        public float orbitDebugMode = 0f;                // 调试:0=关;1=左右分屏对比 2D/体积云覆盖(红=不透明度,绿=光学厚度足迹)
+        public float orbitResolutionScale = 0.5f;        // 2D 渲染分辨率(相对屏幕;0.5=半清+双线性软化)
+        public float orbitDebugMode = 0f;                // 调试:0=关;1=左右分屏对比 2D/体积云覆盖
 
         [XmlIgnore]
         public Vector3 customWavelengths = new Vector3(680f, 550f, 450f);
@@ -169,7 +184,6 @@ namespace Volken.Clouds
         public float forwardScatteringBias = 0.85f;
 
         #endregion
-
 
         public static string GetConfigFolderPath(string planetName)
         {
@@ -224,7 +238,6 @@ namespace Volken.Clouds
             }
         }
 
-
         public static CloudConfig LoadFromFile(string planetName,string configName)
         {
             string filePath = GetConfigPath(planetName, configName);
@@ -244,13 +257,11 @@ namespace Volken.Clouds
                 {
                     CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
 
-                    // Migration: Old configs only had Vector2 (x,y) for layer params.
-                    // Vector4 z/w default to 0. If all z/w are 0, it's an old config.
-                    // Set Layer3/4 strength to 0 so they contribute no density.
+                    // 旧配置只有 Vector2(x,y) 层参数,z/w 默认为 0。
+                    // 若 z/w 全为 0 视为旧配置:关掉 Layer3/4 强度,并把 spreads 补为 1(避免 shader 除零)。
                     if (config.layerStrengths.z == 0f && config.layerStrengths.w == 0f)
                     {
                         Mod.Log("Volken: Detected legacy config, disabling Layer3/4");
-                        // Ensure spreads are safe (avoid division by zero in shader)
                         if (config.layerSpreads.z == 0f) config.layerSpreads.z = 1f;
                         if (config.layerSpreads.w == 0f) config.layerSpreads.w = 1f;
                     }
@@ -268,7 +279,7 @@ namespace Volken.Clouds
 
         public static CloudConfig CreateDefault()
         {
-            // 默认参数来源:UserData/VolkenConfig/Droo/NewDefault.xml(2026-09 调校基准)
+            // 默认参数来源:UserData/VolkenConfig/Droo/NewDefault.xml(调校基准)
             return new CloudConfig
             {
                 compositeMode = CompositeMode.Additive,
@@ -332,7 +343,7 @@ namespace Volken.Clouds
         }
         public static CloudConfig CreateAnotherDefault()
         {
-            // 默认参数来源:UserData/VolkenConfig/Droo/AnotherNewDefault.xml(2026-09 调校基准)
+            // 默认参数来源:UserData/VolkenConfig/Droo/AnotherNewDefault.xml(调校基准)
             return new CloudConfig
             {
                 compositeMode = CompositeMode.Additive,

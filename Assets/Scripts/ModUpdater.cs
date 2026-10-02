@@ -25,6 +25,7 @@ namespace Assets.Scripts
             "https://raw.githubusercontent.com/SatelliteTorifune/Volken2/main/version.txt";
 
         private const string SkippedVersionPrefKey = "Volken.UpdateReminder.SkippedVersion";   // "不再提醒"记住的版本(key 带 Mod 名防冲突)
+        private const float MenuPollInterval = 0.5f;   // 秒:等主菜单的轮询间隔(见 FetchRoutine)
 
         private static bool _startedThisSession;   // 一次游戏会话只检查一次(static 跨实例)
 
@@ -107,12 +108,24 @@ namespace Assets.Scripts
             }
 
             // 等进入主菜单再弹,避免在飞行/设计场景打断玩家(想换场景就改 InMenuScene 判定)。
-            while (Game.Instance == null || !Game.Instance.SceneManager.InMenuScene)
+            // ⚠️ 不要改回 yield return null:这条协程挂在常驻宿主上,每帧判定会在所有场景里一直空转
+            while (!IsInMenuScene())
             {
-                yield return null;
+                yield return new WaitForSecondsRealtime(MenuPollInterval);
             }
 
             ShowUpdateDialog(latest);
+        }
+
+        /// <summary>是否已在主菜单;取不到游戏实例时返回 false(继续等)。</summary>
+        private static bool IsInMenuScene()
+        {
+            try
+            {
+                var game = Game.Instance;
+                return game != null && game.SceneManager != null && game.SceneManager.InMenuScene;
+            }
+            catch { return false; }
         }
 
         /// 抓取 URL 并解析版本号;超过 deadline 主动 Abort(onSuccess / onFail 由两个通道共用)。

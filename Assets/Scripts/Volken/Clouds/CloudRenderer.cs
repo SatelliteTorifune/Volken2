@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Assets.Scripts;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
@@ -27,7 +26,14 @@ namespace Volken.Clouds
         // 本相机的远相机深度源(主视角 = 游戏 FarCamera;PIP = 与克隆主相机共享 targetTexture 的更低 depth 相机)
         public FarCameraScript farDepthSource;
 
+        private float _nextFarDepthSearchTime = -1f;   // 秒:解析失败后的下次重试时刻(见 TryResolveFarDepthSource)
+
         private readonly Dictionary<CloudLayer, CloudLayerView> _views = new Dictionary<CloudLayer, CloudLayerView>();
+
+        // 每帧复用的扫描缓冲:渲染路径每相机每帧都跑,不许在这里 new List / LINQ
+        private readonly List<CloudLayer> _activeLayers = new List<CloudLayer>();
+        private readonly List<CloudLayer> _staleViewKeys = new List<CloudLayer>();
+        private readonly List<CloudLayerView> _activeViews = new List<CloudLayerView>();
 
         // 本相机本帧的线性场景深度(远+近合并后的 RFloat,单位 = LinearEyeDepth 米);雨软粒子等消费者直接取
         public RenderTexture LinearSceneDepth => combinedDepthTex;
@@ -109,14 +115,21 @@ namespace Volken.Clouds
 
         private void BuildViews()
         {
-            if (Volken.Clouds.VolkenClouds.Instance == null) return;
-            var stale = _views.Keys.Where(k => !Volken.Clouds.VolkenClouds.Instance.layers.Contains(k)).ToList();
-            foreach (var k in stale)
+            var clouds = Volken.Clouds.VolkenClouds.Instance;
+            if (clouds == null) return;
+
+            // 先收集再删,避免边遍历 _views.Keys 边 Remove(不用 LINQ:本方法每帧被调)
+            _staleViewKeys.Clear();
+            foreach (var key in _views.Keys)
+            {
+                if (!clouds.layers.Contains(key)) _staleViewKeys.Add(key);
+            }
+            foreach (var k in _staleViewKeys)
             {
                 _views[k].ReleaseRenderTextures();
                 _views.Remove(k);
             }
-            foreach (var layer in Volken.Clouds.VolkenClouds.Instance.layers)
+            foreach (var layer in clouds.layers)
             {
                 if (layer != null && !_views.ContainsKey(layer)) _views[layer] = new CloudLayerView(layer);
             }
@@ -197,6 +210,12 @@ namespace Volken.Clouds
         public void TryResolveFarDepthSource()
         {
             if (farDepthSource != null) return;
+
+            // OnRenderImage 每帧都会调到这里:解析不出来时(该相机没有可用的远深度相机)把重试压到 1s 一次,
+            // 否则每帧都在做 GetComponentsInChildren + 全场景找相机
+            if (Time.realtimeSinceStartup < _nextFarDepthSearchTime) return;
+            _nextFarDepthSearchTime = Time.realtimeSinceStartup + 1f;
+
             try
             {
                 Camera spaceCam = null;
@@ -214,7 +233,7 @@ namespace Volken.Clouds
                 }
                 if (spaceCam == null && cam != null && cam.targetTexture != null)
                 {
-                    foreach (Camera other in UnityEngine.Object.FindObjectsOfType<Camera>())
+                    foreach (Camera other in Camera.allCameras)
                     {
                         if (other == null || other == cam) continue;
                         if (other.targetTexture == cam.targetTexture && other.depth < cam.depth)
@@ -638,7 +657,9 @@ namespace Volken.Clouds
                     return;
                 }
 
-                var activeLayers = Volken.Clouds.VolkenClouds.Instance.ActiveLayers.ToList();
+                // 本帧渲染层走复用缓冲(判据仍是 VolkenClouds 那一份,不在这里另写一遍)
+                Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
+                var activeLayers = _activeLayers;
                 if (activeLayers.Count == 0)
                 {
                     Graphics.Blit(source, destination);
@@ -703,8 +724,13 @@ namespace Volken.Clouds
                         view.ClearHistory();
                     view.orbitOnlyLastFrame = orbitOnly;
                 }
-                var activeViews = activeLayers.Select(l => GetView(l)).Where(v => v != null).ToList();
-                LogOrbitDiagnostics(activeViews, camAlt, orbitPass);
+                _activeViews.Clear();
+                for (int i = 0; i < activeLayers.Count; i++)
+                {
+                    var v = GetView(activeLayers[i]);
+                    if (v != null) _activeViews.Add(v);
+                }
+                LogOrbitDiagnostics(_activeViews, camAlt, orbitPass);
 
                 AdvanceGlobalCloudState();   // 全球风/自转:本帧只推进一次
 
@@ -822,7 +848,7 @@ namespace Volken.Clouds
                     {
                         Vector3 probeCenter = probeCraft.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
                         float probeRadius = (float)probeCraft.Parent.PlanetData.Radius;
-                        LogCloudCoverage(activeViews, camAlt, probeCenter, probeRadius);
+                        LogCloudCoverage(_activeViews, camAlt, probeCenter, probeRadius);
                     }
                 }
                 catch { }

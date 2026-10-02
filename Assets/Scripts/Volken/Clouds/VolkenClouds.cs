@@ -24,8 +24,20 @@ namespace Volken.Clouds
         public CloudLayer MainLayer => layers.Count > 0 ? layers[0] : null;
 
         // 本帧真正参与渲染的云层。⚠️ 所有渲染/反射路径都要用它,不要直接看 config.enabled(漏掉环境抑制)
-        public IEnumerable<CloudLayer> ActiveLayers =>
-            layers.Where(l => l?.config != null && l.config.enabled && !l.EnvironmentSuppressed);
+        public IEnumerable<CloudLayer> ActiveLayers => layers.Where(IsActiveLayer);
+
+        /// <summary>把本帧渲染层填进调用方自带的缓冲;渲染 / 反射路径每帧都取一次,别再 LINQ + 临时 List。</summary>
+        public void FillActiveLayers(List<CloudLayer> into)
+        {
+            into.Clear();
+            for (int i = 0; i < layers.Count; i++)
+            {
+                if (IsActiveLayer(layers[i])) into.Add(layers[i]);
+            }
+        }
+
+        private static bool IsActiveLayer(CloudLayer l) =>
+            l != null && l.config != null && l.config.enabled && !l.EnvironmentSuppressed;
 
         public CloudRenderer cloudRenderer;
         public FarCameraScript farCam;

@@ -31,6 +31,10 @@ namespace Volken.Core
         {
             Instance = this;
             DontDestroyOnLoad(this);
+            // ⚠️ 订阅放 Awake 而非 Start:必须早于 VolkenClouds(它也在 OnModLoaded 里订阅 SceneLoaded),
+            // 因为别家 mod 的处理器抛异常会中断整条链,排在后面的订阅者会被静默跳掉
+            try { Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded; }
+            catch (Exception ex) { Mod.Log("Volken: SceneLoaded subscribe failed: " + ex.Message); }
         }
 
         // 额外摄像机(PIP 等)体积云自动挂载
@@ -47,24 +51,22 @@ namespace Volken.Core
                 _nextExtraCameraScanTime = Time.realtimeSinceStartup + 1f;
 
                 bool wantExtra = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
+                if (!wantExtra)
+                {
+                    return;
+                }
                 var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
-                foreach (var cam in UnityEngine.Object.FindObjectsOfType<Camera>())
+                // 只扫启用中的相机:FindObjectsOfType<Camera> 是每秒一次的全场景扫描,而禁用相机不渲染,也不需要云渲染器
+                foreach (var cam in Camera.allCameras)
                 {
                     if (cam == null) continue;
                     if (gameCam != null &&
                         (cam == gameCam.NearCamera || cam == gameCam.FarCamera)) continue;
 
                     var cr = cam.GetComponent<CloudRenderer>();
-                    if (wantExtra)
+                    if (cr == null && IsExtraWorldCamera(cam))
                     {
-                        if (cr == null && IsExtraWorldCamera(cam))
-                        {
-                            cam.gameObject.AddComponent<CloudRenderer>();
-                        }
-                    }
-                    else if (cr != null)
-                    {
-                        UnityEngine.Object.Destroy(cr);
+                        cam.gameObject.AddComponent<CloudRenderer>();
                     }
                 }
             }
@@ -101,7 +103,6 @@ namespace Volken.Core
 
         private void Start()
         {
-            Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded;
             Game.Instance.UserInterface.AddBuildUserInterfaceXmlAction(UserInterfaceIds.Flight.NavPanel, OnBuildFlightUI);
         }
 

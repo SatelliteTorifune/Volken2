@@ -8,14 +8,17 @@ namespace Volken.Water
     public class ForceSetting : MonoBehaviourBase
     {
         private float checkInterval = 2f;
-        private void OnEnable()
+        // 先排程再调 base:base 会 Register 进游戏循环,它若抛异常也不该让计时器没排上
+        protected override void OnEnable()
         {
             InvokeRepeating(nameof(CheckWaterTransparency), checkInterval, checkInterval);
+            base.OnEnable();
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
-            CancelInvoke(nameof(CheckWaterTransparency));  
+            CancelInvoke(nameof(CheckWaterTransparency));
+            base.OnDisable();
         }
 
         private void CheckWaterTransparency()

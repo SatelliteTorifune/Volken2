@@ -217,6 +217,10 @@ namespace Volken.Weather
         {
             try
             {
+                // 常驻宿主:飞行外只有"还在淡出"或"素材还没加载完"才需要每帧跑 → 其余时间整体停表;编辑器预览台(独立模式)不受影响
+                if (!RainParticles.StandaloneMode && !Game.InFlightScene && _fade <= 0f
+                    && (_loadAttempts >= MaxLoadAttempts || AllClipsLoaded)) return;
+
                 Tick(Time.unscaledDeltaTime);
             }
             catch (Exception ex)

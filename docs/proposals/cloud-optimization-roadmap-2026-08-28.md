@@ -74,6 +74,7 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 - **改动点**:
   - Clouds.shader 的 SampleLightRay:步长与 stepSize 解耦,新增 lightStepSize / lightMarchDistance,样本数取 min(numLightSamplePoints, ...)。
   - CloudConfig.cs:CreateDefault() 里 numLightSamplePoints = 50 → 6。
+  - ⚠️ **2026-10-02 更正**:上面**第一条已在位** —— `Clouds.shader:290-291` / `:567-568` 已是独立步长 + 按壳内长度自适应样本数,`CloudLayer.cs:85-87` 负责上传;`CreateDefault()` 的默认值是 **25**(不是 50)。本条只剩「改默认值 + 老配置迁移」,代价见 [hotpath 清单](hotpath-optimization-backlog-2026-10-02.md) §4.2 / §5。
 
 ### 次选:#2 远距离淡出 / LOD 分级
 

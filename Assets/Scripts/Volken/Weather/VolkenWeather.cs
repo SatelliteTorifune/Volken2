@@ -54,6 +54,7 @@ namespace Volken.Weather
         private bool _initialized;
 
         private GameObject _host;                   // 承载子系统 MonoBehaviour 的临时物体
+        private WeatherTicker _ticker;
         private LightningModule _lightning;
         private Shader _boltShader;
         private bool _boltShaderTried;
@@ -83,9 +84,11 @@ namespace Volken.Weather
             {
                 _host = new GameObject("VolkenWeather");
                 UnityEngine.Object.DontDestroyOnLoad(_host);
-                _host.AddComponent<WeatherTicker>();
+                _ticker = _host.AddComponent<WeatherTicker>();
                 RainAudio.Ensure(_host);   // 雨声:挂常驻 host(全局唯一,不随相机切换重建);它自己读 RainParticles 做门控
                 _host.SetActive(true);
+                // 常驻宿主 → 非飞行场景整体停表,别只在 Update 里早退(放最后:别让这一步的失败带掉上面的装配)
+                _ticker.enabled = Game.InFlightScene;
             }
             catch (Exception ex)
             {
@@ -111,6 +114,9 @@ namespace Volken.Weather
         {
             try
             {
+                // 唯一的启停点:相机指标只在飞行场景有意义,常驻宿主的每帧回调按同一个信号关掉
+                if (_ticker != null) _ticker.enabled = env.InFlight;
+
                 if (!env.InFlight)
                 {
                     // 离开飞行场景 → 停掉天气(不做卸载,配置留着)
@@ -371,7 +377,10 @@ namespace Volken.Weather
         {
             UpdateCameraMetrics(deltaTime);
 
-            // 子系统各自按自己的配置跑(雨由面板开关驱动、雷暴节奏由 LightningModule 自己管),这里不喂。
+            // 雨挂在场景相机上(随 Flight 场景卸载就没了)→ 每个飞行场景都要按配置重挂;不新增 SceneLoaded 订阅者,由这条每帧门控承担
+            RainParticles.SyncToCurrentView();
+
+            // 子系统各自按自己的配置跑(雷暴节奏由 LightningModule 自己管),这里不喂。
             if (!IsActive) return;
 
             var cfg = Config;

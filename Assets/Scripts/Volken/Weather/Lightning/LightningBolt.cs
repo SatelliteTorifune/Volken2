@@ -48,6 +48,28 @@ namespace Volken.Weather
         private static readonly System.Collections.Generic.List<LightningBolt> ActiveBolts =
             new System.Collections.Generic.List<LightningBolt>();
 
+        /// <summary>当前参考系纪元:SR2 每次**浮动原点重定位**就 +1(由 <see cref="LightningModule"/> 检测后调
+        /// <see cref="DestroyStale"/> 推进)。本道闪电记住出生时的纪元,纪元一变就自毁。</summary>
+        public static int FrameIndex { get; private set; }
+
+        /// <summary>推进纪元并清掉属于旧纪元的闪电。纪元只有"相等 / 不相等"两种含义,不做 &lt;/&gt; 比较。
+        /// 一行完成"推进 + 清理",免得调用方顺序写错(先清理后推进会把新纪元的雷也清掉)。返回清掉的条数。</summary>
+        public static int DestroyStale()
+        {
+            int killed = 0;
+            // 倒序 + 判空:Destroy 是帧末生效,列表里可能有已销毁(== null)的条目
+            for (int i = ActiveBolts.Count - 1; i >= 0; i--)
+            {
+                var b = ActiveBolts[i];
+                if (b == null) { ActiveBolts.RemoveAt(i); continue; }
+                if (b._bornFrameIndex == FrameIndex) continue;
+                b.Finish();
+                killed++;
+            }
+            FrameIndex++;
+            return killed;
+        }
+
         public static void DestroyAll()
         {
             // 倒序 + 判空:Destroy 是帧末生效,列表里可能有已销毁(== null)的条目
@@ -94,6 +116,9 @@ namespace Volken.Weather
         private float _bornTime;
         private float _phaseElapsed;
 
+        // 出生时的参考系纪元(见 FrameIndex):纪元变了 = 这道雷的线段/落点闪光/点光源坐标已经作废
+        private int _bornFrameIndex;
+
         // Grow
         private int _arcIndex;
         private float _arcTimer;
@@ -117,6 +142,7 @@ namespace Volken.Weather
             bolt.targetCamera = cam;
             bolt.Build(boltShader, flashShader);
             bolt._bornTime = GamePause.Now;
+            bolt._bornFrameIndex = FrameIndex;   // 记下这道雷属于哪个参考系纪元
             ActiveBolts.Add(bolt);
             return bolt;
         }
@@ -442,6 +468,44 @@ namespace Volken.Weather
             }
         }
 
+        /// <summary>暂停期间的"闪光收光"开关(见 <see cref="BeginFlashSuppression"/>)。</summary>
+        private bool _flashSuppressed;
+
+        /// <summary>暂停时把闪光的**亮态**收掉,只留静止的线段与闪光球几何。
+        /// 为什么必须收:亮/灭的切换**只发生在 <see cref="StepFlash"/> 里**,而它被 <c>!GamePause.IsPaused</c> 挡在门外;
+        /// 计时又用 <see cref="GamePause.Now"/>(排除暂停时长),所以暂停中卡在"亮"那一帧的雷:
+        /// ① 点光源与加色闪光材质保持全亮的**最终值**;② <c>_phaseElapsed</c> 与 <c>_bornTime</c> 同时停表,<c>HardLifetime</c> 永远不会到期。
+        /// 合计 = 一盏**永久**挂在落点、穿地形绘制(ZTest Always)的灯 —— 正是"固定位置的射灯"。暂停本身会冻住动画,
+        /// 但"冻住一束强光"不是可接受的表现:闪光本来就只该是一瞬。</summary>
+        private void BeginFlashSuppression()
+        {
+            if (_flashSuppressed || _phase != Phase.Flash) return;
+            _flashSuppressed = true;
+
+            if (_flashState != 0)
+            {
+                _flashState = 0;
+                if (_flashMat != null) _flashMat.SetFloat("_Intensity", 0f);
+                if (_light != null) _light.enabled = false;
+            }
+            // 线段压回基础强度:暂停时别留一根"永远最亮"的主干
+            if (_boltMat != null) _boltMat.SetFloat("_Intensity", baseIntensity);
+
+            // 留证据:症状(固定位置射灯)若是这条路,日志里就会出现它,且落点/相机距离可复核
+            var cam = targetCamera != null ? targetCamera : Camera.main;
+            float camDist = cam != null ? Vector3.Distance(cam.transform.position, Target) : -1f;
+            Mod.Log($"Volken:LightningBolt pause froze flash — light+additive flash turned off " +
+                    $"(landing=({Target.x:F0},{Target.y:F0},{Target.z:F0}) camDist={camDist:F0}m phaseElapsed={_phaseElapsed:F3}s)");
+        }
+
+        /// <summary>恢复:清掉抑制标记,并把亮/灭状态标成"未知",让 <see cref="StepFlash"/> 下一次按 <c>_phaseElapsed</c> 重算。
+        /// 无条件清(不看 <c>_phase</c>):若暂停期间相位已推进到 Flash 之外,标记也必须归零,否则会锁死后续判断。</summary>
+        private void EndFlashSuppression()
+        {
+            _flashSuppressed = false;
+            _flashState = -1;
+        }
+
         private void StepFade(float dt)
         {
             _fadeTimer = Mathf.Lerp(_fadeTimer, 0f, 10f * Mathf.Max(0f, dt));
@@ -522,8 +586,14 @@ namespace Volken.Weather
             Vector3 targetPos = UnityEngine.Random.insideUnitSphere * 500f + from + toTarget * 500f;
 
             // 折线点一次性算完(不逐点延迟):视觉差异不可辨,却彻底移除了"协程静默失败"这个故障源。
-            const int splitPoints = 7;   // i = 1..7
+            const int splitPoints = 7;   // 段数;i = 0..7,共 8 个点
             sr.positionCount = splitPoints + 1;
+
+            // ⚠️ 第 0 个点必须**显式**写:positionCount 只是把新点初始化成 (0,0,0),而 useWorldSpace = true 时
+            // (0,0,0) 就是**世界原点**。少这一行 → 每条分叉都从世界原点拉出来;SR2 的浮动原点又把原点重定位到飞船处,
+            // 于是 (arcs-3)×(splits+1) 条分叉全部从**观测者**身上呈扇形射出 —— 看上去就是一把"射灯",而不是雷劈。
+            sr.SetPosition(0, from);
+
             Vector3 lastPoint = from;
             float dist = Vector3.Distance(from, targetPos);
             float arcDist = dist / splitPoints;
@@ -557,7 +627,7 @@ namespace Volken.Weather
             return dir;
         }
 
-        /// 动画与**自毁**的唯一推进点。三条独立销毁路径(正常播完 / 连续不可见过久 / 硬性寿命上限),任一失效都不会留下残留。
+        /// 动画与**自毁**的唯一推进点。五条独立销毁/收尾路径(正常播完 / 连续不可见过久 / 硬性寿命上限 / 参考系重定位 / 暂停收光),任一失效都不会留下残留。
         private void Update()
         {
             // 连续不可见时长 = 现在 − **最近一次还在 Update 的时刻**(该时刻随时间前移)。
@@ -567,6 +637,15 @@ namespace Volken.Weather
 
             if (_phase != Phase.Done)
             {
+                // 参考系重定位:本道雷的坐标全在旧世界里(线段是 world space、闪光球/点光源按落点摆好),
+                // 留到下个纪元就变成"固定在世界某处的一束亮光/射灯"。见 FrameIndex / LightningModule.BeginFrameGuard。
+                if (_bornFrameIndex != FrameIndex)
+                {
+                    Mod.Log($"Volken:LightningBolt frame recentered mid-bolt (epoch {_bornFrameIndex}→{FrameIndex}, phase={_phase}) — cleaning up");
+                    Finish();
+                    return;
+                }
+
                 if (hiddenFor > MaxHiddenSeconds)
                 {
                     Mod.Log($"Volken:LightningBolt hidden for {hiddenFor:F1}s (phase={_phase}) — cleaning up");
@@ -576,6 +655,7 @@ namespace Volken.Weather
 
                 if (!GamePause.IsPaused)   // 暂停时冻住动画,与同样冻住的雷声保持同步
                 {
+                    EndFlashSuppression();   // 恢复:由 StepFlash 按时间表重算该亮还是该灭
                     switch (_phase)
                     {
                         case Phase.Grow:
@@ -589,6 +669,10 @@ namespace Volken.Weather
                             StepFade(Time.deltaTime);
                             break;
                     }
+                }
+                else
+                {
+                    BeginFlashSuppression();   // 暂停:把"闪光的亮态"收掉(见该方法说明)
                 }
             }
 

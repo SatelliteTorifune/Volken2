@@ -146,6 +146,9 @@ namespace Volken.Weather
         /// 天气 / 行星变化时由 <c>VolkenWeather</c> 调用,按需起停雷暴循环。
         public void SetActive(bool active)
         {
+            // 常驻宿主:不跑雷暴时把 Update 也停掉(本组件会长久留在宿主上,不停就在所有场景里每帧空转)
+            enabled = active;
+
             if (active == _running) return;
             _running = active;
 
@@ -164,6 +167,13 @@ namespace Volken.Weather
                 }
                 TimeToNextStrike = 0f;
 
+                // 连同还没响完的雷声一起停:Update 停了之后没人再兜底暂停/收尾,残留排程会在关闭雷电或离场后继续响
+                StopThunderVoices();
+
+                // Update 停表后没人再检测参考系重定位;清掉状态,下次启用时重新标定(否则把"停用那段时间的位移"误判成一次重定位)
+                _paused = GamePause.IsPaused;
+                ReleaseFrameGuard();
+
                 // 停用时把在播的闪电一起清掉,否则残留物可能被带到下一个场景。
                 int before = LightningBolt.ActiveCount;
                 LightningBolt.DestroyAll();
@@ -172,9 +182,92 @@ namespace Volken.Weather
             }
         }
 
+        /// <summary>停掉全部雷声通道并清空排程 / 暂停状态(调用方随后会停掉 <c>Update</c>,所以必须在这里收干净)。</summary>
+        private void StopThunderVoices()
+        {
+            _paused = GamePause.IsPaused;
+            if (_thunderVoices == null) return;
+
+            for (int i = 0; i < _thunderVoices.Length; i++)
+            {
+                try { if (_thunderVoices[i] != null) _thunderVoices[i].Stop(); } catch { }
+                _voiceStartDsp[i] = 0.0;
+                _voicePending[i] = 0f;
+                _voicePaused[i] = false;
+            }
+        }
+
+        // ---- 参考系重定位(浮动原点)防护 ----
+        // SR2 会在"离帧中心 >5000m / 帧速 >1000m/s / 时间加速 / 表面锁定切换"时把整个世界平移 positionDelta。
+        // 雷的线段(LineRenderer world space)、落点闪光球、点光源全部在**铸造那一刻**按世界坐标摆好,之后只播动画
+        // (Grow→Flash→Fade 约 0.2s,硬寿命上限 3.5s)。世界一旦平移,这些坐标就停在一个固定的世界位置上不动,
+        // 而飞船/相机已经跳走 —— 看上去就是"某处凭空挂着一束亮光/射灯",而不是一道雷劈下来。
+        //
+        // 判据照抄 RainParticles.DetectRecenterJump(那里已验证过):飞行器是"世界物体",换帧时它的**帧位置**整体跳变
+        // (自己没动)。跳变 > max(100m, 自身本帧运动×3 + 30m) → 判为重定位;只比阈值,不比较 delta 的方向/符号。
+        //
+        // 为什么不订阅 IGameView.ReferenceFrameRecentered:RainParticles 的实测注释写明"本 mod 环境下该事件不触发,
+        // 兜底才是主力"。这里同样以跳变检测为主,不新增一条不可靠的订阅链。
+        private const float FrameJumpMinThreshold = 100f;   // 米:低于它一律不算重定位(避免把抖动/瞬移判成换帧)
+        private const float FrameJumpMotionFactor = 3f;     // 自身运动的上限倍数(帧率抖动 + 加速度裕量)
+        private const float FrameJumpMotionSlack = 30f;     // 米:静止时的固定裕量
+
+        private Vector3 _lastCraftFramePos;
+        private bool _hasLastCraftFramePos;
+
+        /// <summary>每帧标定飞行器的帧位置;判到重定位就把纪元 +1 并清掉属于旧纪元的闪电。取不到飞行器则暂不判定(不猜)。</summary>
+        private void BeginFrameGuard()
+        {
+            Vector3 craftFramePos;
+            float selfSpeed;
+            try
+            {
+                var cr = Game.Instance?.FlightScene?.CraftNode?.CraftScript;
+                if (cr == null)
+                {
+                    // 取不到飞行器 → 本次不判定,并且**丢掉基准**:否则"飞行器消失一阵又在别处出现"会被当成一次重定位
+                    ReleaseFrameGuard();
+                    return;
+                }
+                craftFramePos = cr.FramePosition;
+                selfSpeed = cr.FrameVelocity.magnitude;
+            }
+            catch { ReleaseFrameGuard(); return; }
+
+            if (!_hasLastCraftFramePos)
+            {
+                _lastCraftFramePos = craftFramePos;
+                _hasLastCraftFramePos = true;
+                return;
+            }
+
+            Vector3 jump = craftFramePos - _lastCraftFramePos;
+            _lastCraftFramePos = craftFramePos;
+
+            float jumpMag = jump.magnitude;
+            if (jumpMag < 0.01f) return;
+
+            float selfMotion = selfSpeed * Mathf.Max(0f, Time.deltaTime);   // 本帧飞行器自身运动上限
+            float threshold = Mathf.Max(FrameJumpMinThreshold, selfMotion * FrameJumpMotionFactor + FrameJumpMotionSlack);
+            if (jumpMag <= threshold) return;
+
+            int killed = LightningBolt.DestroyStale();   // 推进纪元 + 清掉旧纪元的雷
+            Mod.Log($"Volken:LightningModule frame recentered (jump={jumpMag:F1}m threshold={threshold:F0}m " +
+                    $"selfSpd={selfSpeed:F1}m/s dt={Time.deltaTime:F4}s) → epoch={LightningBolt.FrameIndex} {killed} bolt(s) dropped");
+        }
+
+        /// <summary>停止标定(停用/销毁时调):下次启用第一帧重新取基准,不要跨停用区间比对。</summary>
+        private void ReleaseFrameGuard()
+        {
+            _hasLastCraftFramePos = false;
+            _lastCraftFramePos = Vector3.zero;
+        }
+
         /// <summary>暂停状态每帧检查一次:暂停时冻住雷声(在播的 Pause、未到点的停掉记剩余延迟),恢复时接着播/按剩余延迟重排。</summary>
         private void Update()
         {
+            BeginFrameGuard();
+
             bool paused = GamePause.IsPaused;
             if (paused == _paused) return;
             _paused = paused;

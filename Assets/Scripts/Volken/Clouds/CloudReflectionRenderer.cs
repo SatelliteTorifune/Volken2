@@ -48,6 +48,7 @@ namespace Volken.Clouds
         private static RenderTexture _cloudTex;
         private static Mesh _fullscreenTriangle;
         private static readonly Dictionary<CloudLayer, Material> _materials = new Dictionary<CloudLayer, Material>();
+        private static readonly List<CloudLayer> _activeLayers = new List<CloudLayer>();
         private static bool _diagnosed;
         private static bool _loggedFirst;
 
@@ -77,7 +78,9 @@ namespace Volken.Clouds
             RenderTexture rt = cam.targetTexture;
             if (rt == null || rt.width <= 0 || rt.height <= 0) return;
 
-            var activeLayers = Volken.Clouds.VolkenClouds.Instance.ActiveLayers.ToList();
+            // 复用缓冲:本方法每次水面反射都调,不用 LINQ + 临时 List
+            Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
+            var activeLayers = _activeLayers;
             if (activeLayers.Count == 0) return;
 
             // ⚠️ 反射相机基向量必须从 worldToCameraMatrix 提取(transform 朝向与视图不对齐):三行分别 = 相机空间的 right / up / -fwd

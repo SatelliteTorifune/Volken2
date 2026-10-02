@@ -32,6 +32,8 @@
 | 天气母计划(决策沿革 + 素材底账,已转 proposals) | `docs/proposals/sp2-weather-port-2026-09-27.md` |
 | 雷声真实化(已转 proposals,待打包) | `docs/proposals/thunder-realism-2026-09-28.md` |
 | **雨 / 雷性能审计(C# 侧已改,GPU 侧未排期)** | `docs/proposals/rain-lightning-perf-audit-2026-10-02.md` |
+| **高开销剩余四组清单 + D 各方案代价(未排期;A 组已决定不改)** | `docs/proposals/hotpath-optimization-backlog-2026-10-02.md` |
+| **MonoBehaviour 场景门控 + 每帧热点(已改,待真机验收)** | `docs/monobehaviour-scene-gate-2026-10-02.md` |
 | 本机路径映射(真实值,**仅本地**) | `docs/LOCAL_PATHS.md`(已被 `.gitignore` 排除) |
 | 游戏运行日志 | `<USERPROFILE>\AppData\LocalLow\Jundroo\SimpleRockets 2\Player.log` |
 | 反编译游戏源码(只读)/ 解包工程 / JNO 联机 mod | `<JNO_CODE>` · `<JNO_D2>` · `<JNO_MP>` |
@@ -97,6 +99,7 @@
 - **诊断必须量你关心的那个量所在的轴**(屏幕问题就量屏幕空间),并同时输出**当前值 + 内部状态**,才能区分"从没触发"与"触发后被重置"。
 - **日志按消息去重后再统计次数**(同一条 Unity shader 错误会对 N 个 kernel × M 个平台各报一遍);优先用**累计计数器**而非节流日志。
 - **先标定数量级,再调观感**:密度(个/m³)、域半径、停留时长(域直径 / 相机速度)要同时满足;`GraphicsBuffer.GetData` 是同步回读,不可常驻。
+- **天气数据的唯一权威来源 = 预设 XML**(`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`):面板未保存的改动**不跨场景保留**,进飞行场景 / 换行星一律重读文件(开关"自己变回文件里的值"= 预期)。**不要**为了"记住面板改动"去缓存或回写 `Config`,也不要改 `ApplyPlanet` 的同行星早退判据(Flight→Flight 快速读档/回退发射保留内存状态属**正常**,不用管)。
 
 **坐标原点重置(浮动原点)**
 - SR2 会 `RecenterReferenceFrame`(离帧中心 > 5000m / 帧速 > 1000m/s / 时间加速每帧 / 表面锁定切换)→ 世界坐标整体平移 → 时序历史失效。
@@ -105,6 +108,8 @@
 **冲突 / 兼容**
 - JNO 联机 mod 的 `MultiPlayerUI.OnSceneLoaded` 曾在 `inspectorPanel == null` 时抛 NRE、中断 `SceneLoaded` 事件链 → Volken `OnSceneLoaded` 被跳过(看不到云、自带云开关锁死);JNO 侧空值护栏已手动应用,Volken 侧自愈已撤除(纯事件驱动)。
 - Mods 目录勿同时放 `Volken.sr2-mod` 与 `Volken-R.sr2-mod`(同名程序集冲突)。
+- **每帧回调的场景边界**:挂在相机 / 场景物体上的组件(`CloudRenderer` / `FarCameraScript` / `RainParticles`)随 Flight 场景卸载,天然只在飞行场景;常驻(`DontDestroyOnLoad`)组件(天气 ticker / `RainAudio` / `LightningModule` / `VolkenUserInterface`)必须按 `VolkenClouds.PlanetChanged` 的 `InFlight` 停表 —— 新增每帧组件照此办理,见 [场景门控](monobehaviour-scene-gate-2026-10-02.md) §0~§2。
+- **相机上组件的实例资源不得用 `static` 门控**:换场景 = 组件销毁 + 新实例,而 compute / shader / material / buffer 都在实例上;`static` 就绪标志会让新实例跳过加载并**永久 NOT READY**(雨视觉"换场景后打不开"就是这样),且静态开关会让雨声照响 → 表现为"只有视觉死"。见 [雨开关](rain-toggle-scene-switch-2026-10-02.md) §0。
 - ~~`CloudConfig.low/mid/highAltitudeThreshold` 是死配置但不可删除~~ → **⚠️ 已更正(2026-10-01)**:这三个字段早在 `fe87e59` 就删掉了(全仓库 0 命中),**且没有任何反序列化问题** —— `XmlSerializer` 对未知节点默认忽略、不抛异常。**结论:`CloudConfig` 里废弃字段可以放心删**;归档文档里"不可删除"的旧说法是未经验证的推测,勿再引用。
 
 ## 4. 游戏 API 关键入口(反编译确认 / ModApi)

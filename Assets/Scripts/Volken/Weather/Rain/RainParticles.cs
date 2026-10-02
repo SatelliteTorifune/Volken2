@@ -88,11 +88,11 @@ namespace Volken.Weather
         public static float LastCamSpeed;          // 最近一次相机速度
         public static float LastStretch = 1f;      // 最近一帧雨丝拉伸倍率
         public static bool SoftDepthReady;         // 本相机能不能取到 CloudRenderer.LinearSceneDepth(取不到 → _InvFade=0 退化)
-        public static bool AssetsReady;            // compute/shader 是否加载到
 
-        public static string AssetsStatus = "未加载";
+        public static string AssetsStatus = "未加载";   // 诊断:最近一次资产加载结果(门控用 **实例** 字段,见 _assetsReady)
 
         private Camera _cam;
+        private bool _assetsReady;          // ⚠️ 不要改成 static:雨挂在场景相机上,换场景 = 组件销毁 + 新实例;static 会让新实例跳过 EnsureAssets → compute/shader 永远为空
         private ComputeShader _compute;
         private Shader _shader;
         private Material _mat;
@@ -107,6 +107,8 @@ namespace Volken.Weather
         private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // 诊断计数(回读后清零重启累计)
         private const float ReadbackInterval = 10f;                  // GPU 回读周期(秒)
         private const float ShaderBuild = 3f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
+        private const float AssetRetryInterval = 5f;                 // 资产加载重试间隔(秒)
+        private const int AssetMaxRetries = 6;                       // 资产加载最多重试次数(Awake 那一刻资源加载器可能还没就绪)
 
         private int _kernelRandomize = -1;
         private int _kernelPositioning = -1;
@@ -133,6 +135,8 @@ namespace Volken.Weather
         private bool _hasLastCraftFramePos;
         private float _lastAltSkipLog = -999f;    // 海拔闸门抑制日志节流
         private float _lastAltWarnLog = -999f;    // 海拔取不到时的警告节流
+        private int _assetRetries;                // 资产加载已重试次数(重试耗尽后只留 NOT READY 心跳)
+        private float _nextAssetRetry;            // 下一次资产加载重试时间点
         private Vector3 _lastReadbackPos0;        // 诊断:上次回读的 pos[0](算位移 → 判断下落是否在积分)
         private bool _hasLastReadbackPos0;
 
@@ -199,7 +203,7 @@ namespace Volken.Weather
 
         private void EnsureAssets()
         {
-            if (AssetsReady) return;
+            if (_assetsReady) return;
             try
             {
                 _compute = Mod.LoadVolkenAsset<ComputeShader>("Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.compute");
@@ -230,7 +234,7 @@ namespace Volken.Weather
                 BuildStreakTexture();
                 if (_streakTex != null) _mat.SetTexture("_MainTex", _streakTex);   // 柔边雨丝贴图
                 _mat.renderQueue = 4000;
-                AssetsReady = true;
+                _assetsReady = true;
                 AssetsStatus = "ok(compute+shader+kernels)";
                 Mod.Diag("Volken:RainParticles assets ready: {0}", AssetsStatus);
             }
@@ -244,7 +248,7 @@ namespace Volken.Weather
         private void EnsureBuffers()
         {
             if (_positions != null) return;   // 已建;容量变更走 RebuildBuffers
-            if (!AssetsReady || _compute == null || _mat == null) return;   // 资产未就绪时静默(修复 Awake 竞态 NRE)
+            if (!_assetsReady || _compute == null || _mat == null) return;   // 资产未就绪时静默(修复 Awake 竞态 NRE)
             int cap = Mathf.Max(1, Capacity);
             _positions = new ComputeBuffer(cap, 16);                          // float4
             _randomData = new ComputeBuffer(cap, 16);                         // float4
@@ -345,6 +349,25 @@ namespace Volken.Weather
 
         // 挂载(幂等)
 
+        private static RainParticles _current;   // 最近挂上的实例;相机随 Flight 场景卸载 → 该引用在 Unity 语义下比较 == null
+        private static float _nextAttachTry;     // 未挂上时的重试时间点(相机可能还没建好)
+
+        /// <summary>取当前视图相机:游戏近相机;独立模式(编辑器预览)或取不到时回退 <see cref="Camera.main"/>。</summary>
+        private static Camera ResolveViewCamera()
+        {
+            Camera cam = null;
+            if (!StandaloneMode)
+            {
+                try { cam = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera; }
+                catch { }
+            }
+            if (cam == null)
+            {
+                try { cam = Camera.main; } catch { }
+            }
+            return cam;
+        }
+
         public static RainParticles Attach(Camera cam)
         {
             if (cam == null)
@@ -355,8 +378,9 @@ namespace Volken.Weather
             try
             {
                 var existing = cam.GetComponent<RainParticles>();
-                if (existing != null) return existing;
+                if (existing != null) { _current = existing; return existing; }
                 var probe = cam.gameObject.AddComponent<RainParticles>();
+                _current = probe;
                 Mod.Diag("RainParticles: attached to camera '{0}'", cam.name);
                 return probe;
             }
@@ -369,18 +393,14 @@ namespace Volken.Weather
 
         public static void AttachToCurrentView()
         {
+            AttachToCurrentView(ResolveViewCamera());
+        }
+
+        /// <summary>挂到指定相机并按配置套参(<paramref name="cam"/> 为 null 时只留一行诊断,不抛)。</summary>
+        private static void AttachToCurrentView(Camera cam)
+        {
             try
             {
-                Camera cam = null;
-                if (!StandaloneMode)
-                {
-                    try { cam = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera; }
-                    catch { }
-                }
-                if (cam == null)
-                {
-                    try { cam = Camera.main; } catch { }
-                }
                 Attach(cam);
                 // 配置驱动初始状态:rain.enabled=true 时自动开雨并套参(⚠️ ApplyConfig 不回调 AttachToCurrentView,否则递归)
                 try { ApplyConfig(VolkenWeather.Instance?.Config?.rain); }
@@ -392,6 +412,28 @@ namespace Volken.Weather
             }
         }
 
+        /// <summary>
+        /// 按配置把雨挂到当前视图相机(幂等),由常驻天气 tick 每帧调用 —— 相机会随 Flight 场景卸载,而雨的资产/缓冲全是实例字段,
+        /// 所以**换场景后必须重挂**;命中缓存时开销 = 一次静态引用判空。
+        /// </summary>
+        public static void SyncToCurrentView()
+        {
+            var cfg = VolkenWeather.Instance?.Config?.rain;
+            if (cfg == null) return;
+            if (!cfg.enabled)
+            {
+                Enabled = false;   // 配置关着:清掉上一场景遗留的静态开关(雨声门控与面板状态都读它)
+                return;
+            }
+            if (_current != null) return;
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextAttachTry) return;   // 相机还没建好 → 别每帧穿透 GameCamera 链
+            _nextAttachTry = now + 0.5f;
+            var cam = ResolveViewCamera();
+            if (cam == null) return;            // 静默留到下个窗口,不刷 attach skipped 诊断
+            AttachToCurrentView(cam);
+        }
+
         // 状态输出(面板按钮调用)
 
         /// <summary>把完整状态写进 Player.log(天气面板「把雨状态写入日志」按钮),便于用户直接发日志排查。</summary>
@@ -399,13 +441,7 @@ namespace Volken.Weather
         {
             try
             {
-                Camera cam = null;
-                if (!StandaloneMode)
-                {
-                    try { cam = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera; }
-                    catch { }
-                }
-                if (cam == null) cam = Camera.main;
+                var cam = ResolveViewCamera();
                 if (cam != null) Attach(cam);
                 Mod.Diag("RainParticles STATUS: enabled={0} testRow={1} cap={2} R={3:F0} score={4:F4}/m³ calls={5} draws={6} lastInstanceCount={7}",
                     Enabled, TestRow, Capacity, DomainRadius, DensityPerM3(), PreCullCalls, DrawCalls, LastInstanceCount);
@@ -492,7 +528,7 @@ namespace Volken.Weather
             if (StandaloneMode) return null;   // 独立模式:不查游戏相机(避免触发游戏侧半初始化)
             try
             {
-                var cam = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera;
+                var cam = ResolveViewCamera();
                 if (cam != null) return cam.GetComponent<RainParticles>();
             }
             catch { }
@@ -533,7 +569,8 @@ namespace Volken.Weather
             {
                 if (meshChanged) inst.RebuildMesh();
                 if (capChanged) inst.RebuildBuffers();
-                inst.EnsureBuffers();   // 资产晚到时补建(幂等;不调 AttachToCurrentView,避免与本方法互相递归)
+                inst.EnsureAssets();    // 资产晚到时补加载(幂等;不调 AttachToCurrentView,避免与本方法互相递归)
+                inst.EnsureBuffers();
             }
             Mod.Diag("RainParticles ApplyConfig: enabled={0} cap={1}{2} R={3:F0} fall={4:F1} len={5:F2}{6} w={7:F3} stretch={8:F3} edge={9:F2} soft={10:F2} stream={11} ceil={12} density={13:F4}/m³ strength={14:F2} rainVol={15:F2}",
                 Enabled, Capacity, capChanged ? "(重建)" : "",
@@ -694,11 +731,12 @@ namespace Volken.Weather
             BuildMesh();
             EnsureAssets();
             HookRecenter();                     // 换帧原点重定位(世界系下落必须同步平移)
-            if (AssetsReady) EnsureBuffers();   // 资产未就绪时留到 OnPreCull 的 NOT READY 心跳里等(修复场景切换瞬间 NRE)
+            if (_assetsReady) EnsureBuffers();  // 资产未就绪时留到 OnPreCull 的 NOT READY 里限次重试(修复场景切换瞬间 NRE)
         }
 
         private void OnDestroy()
         {
+            if (_current == this) _current = null;   // 相机随场景卸载 → 下一个飞行场景必须能重新挂上
             UnhookRecenter();
             ReleaseBuffers();
             if (_mesh != null) Destroy(_mesh);
@@ -720,11 +758,20 @@ namespace Volken.Weather
             }
             if (_cam == null || _compute == null || _positions == null || _args == null)
             {
-                if (Time.realtimeSinceStartup - _lastAliveLogTime > 5f)
+                // 资产/缓冲可能晚到或上一次尝试失败 → 自己限次重试:否则本实例会永久 NOT READY(面板开关怎么拨都没雨)
+                float now = Time.realtimeSinceStartup;
+                if (_assetRetries < AssetMaxRetries && now >= _nextAssetRetry)
                 {
-                    _lastAliveLogTime = Time.realtimeSinceStartup;
-                    Mod.Diag("RainParticles: enabled but NOT READY — cam={0} compute={1} positions={2} args={3}",
-                        _cam != null, _compute != null, _positions != null, _args != null);
+                    _assetRetries++;
+                    _nextAssetRetry = now + AssetRetryInterval;
+                    if (!_assetsReady) EnsureAssets();   // 资产就绪但建 buffer 失败(设备丢失/容量异常)时也要能恢复
+                    EnsureBuffers();
+                }
+                if (now - _lastAliveLogTime > 5f)
+                {
+                    _lastAliveLogTime = now;
+                    Mod.Diag("RainParticles: enabled but NOT READY — cam={0} compute={1} positions={2} args={3} retries={4}",
+                        _cam != null, _compute != null, _positions != null, _args != null, _assetRetries);
                 }
                 return;
             }

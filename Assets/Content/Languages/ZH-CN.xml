@@ -229,4 +229,7 @@
     <s id="Volken.UI.UpdateDownload">立刻更新</s>
     <s id="Volken.UI.UpdateLater">稍后再说</s>
     <s id="Volken.UI.UpdateDismiss">不再提醒</s>
+    <!--Misc-->
+    <s id="Volken.VolkenCloud.MainLayerName">主云层</s>
+    <s id="Volken.VolkenCloud.ExtraLayerName">附加云层</s>
 </Strings>

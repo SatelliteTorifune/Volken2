@@ -228,4 +228,8 @@
     <s id="Volken.UI.UpdateDownload">Download</s>
     <s id="Volken.UI.UpdateLater">Later</s>
     <s id="Volken.UI.UpdateDismiss">Don't Remind Again</s>
+    
+    <!--Misc-->
+    <s id="Volken.VolkenCloud.MainLayerName">Main</s>
+    <s id="Volken.VolkenCloud.ExtraLayerName">Extra</s>
 </Strings>

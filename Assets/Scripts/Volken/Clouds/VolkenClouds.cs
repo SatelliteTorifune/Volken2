@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Assets.Scripts;
+using ModApi;
 using ModApi.Craft;
 using ModApi.Flight.Sim;
 using ModApi.Scenes.Events;
@@ -120,7 +121,7 @@ namespace Volken.Clouds
         {
             var main = new CloudLayer
             {
-                layerIndex = 0, displayName = "Main",
+                layerIndex = 0, displayName = Locale.GetString("Volken.VolkenCloud.MainLayerName"),
                 noise = new CloudNoise(seed: UnityEngine.Random.Range(1, 99999)),
             };
             main.material = new Material(_cloudShader);
@@ -131,7 +132,7 @@ namespace Volken.Clouds
 
             var extra1 = new CloudLayer
             {
-                layerIndex = 1, displayName = "Extra 1",
+                layerIndex = 1, displayName = Locale.GetString("Volken.VolkenCloud.ExtraLayerName"),
                 noise = new CloudNoise(seed: UnityEngine.Random.Range(1, 99999)),
             };
             extra1.material = new Material(_cloudShader);

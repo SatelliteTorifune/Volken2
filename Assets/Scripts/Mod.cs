@@ -150,24 +150,8 @@ namespace Assets.Scripts
         #region ASSET LOADING
 
         /// <summary>资源加载台账(dev 命令 <c>volkenAssets</c>)。新增资产不会自动进包,缺失 = 功能静默失效。</summary>
-        private static readonly System.Collections.Generic.Dictionary<string, string> _assetLedger =
-            new System.Collections.Generic.Dictionary<string, string>();
-
-        public static void LogVolkenAssets()
-        {
-            if (_assetLedger.Count == 0)
-            {
-                Diag("AssetLedger: (还没有请求过任何资源)");
-                return;
-            }
-            var sb = new System.Text.StringBuilder("AssetLedger:");
-            foreach (var kv in _assetLedger)
-            {
-                sb.Append("\n  ").Append(kv.Value.PadRight(20)).Append(kv.Key);
-            }
-            Diag(sb.ToString());
-        }
-
+        private static readonly System.Collections.Generic.Dictionary<string, string> _assetLedger = new();
+        
         /// <summary>
         /// 从 bundle 载入资源;**用 <c>LoadAsset&lt;T&gt;</c> 而不是 <c>Load&lt;T&gt;</c>**(后者读不到 mod bundle)。
         /// 失败记日志并返回 null。

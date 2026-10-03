@@ -97,7 +97,7 @@ namespace Volken.Clouds
         /// <summary>
         /// 云层高度带 [底, 顶](米, ASL):取所有 <c>layerStrengths &gt; 0</c> 的层,求 <c>layerHeights ± layerSpreads</c> 的并集;无有效层时 false。
         /// 【唯一实现】不要再为它加接口/值对象/注册表层(天气侧曾各抄两份导致静默不一致)。
-        /// ⚠️ topAsl 是"最高层的顶",<b>不是</b> <see cref="maxCloudHeight"/>(后者是 raymarch 步进上限,语义不同)。
+        ///  topAsl 是"最高层的顶",<b>不是</b> <see cref="maxCloudHeight"/>(后者是 raymarch 步进上限,语义不同)。
         /// </summary>
         public bool TryGetBand(out float bottomAsl, out float topAsl)
         {

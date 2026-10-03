@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 /// <summary>
 /// 单个 (CloudRenderer 实例 × CloudLayer) 的渲染状态:属于【某个相机】的那一份渲染目标 + 时序/TSS 状态 + 云空间重投影状态。
-/// ⚠️ 每份只属于一台相机、与其它相机(主视角 / PIP)完全隔离,多相机同帧互不踩坏 RT / 历史 / 时序状态。
+///  每份只属于一台相机、与其它相机(主视角 / PIP)完全隔离,多相机同帧互不踩坏 RT / 历史 / 时序状态。
 /// 全局配置/噪声/材质与风、自转累积量留在 CloudLayer(所有相机共享)。
 /// </summary>
 
@@ -48,7 +48,7 @@ namespace Volken.Clouds
 
         /// <summary>
         /// 按【本相机输出尺寸】(renderW×renderH)创建全部 RT。
-        /// ⚠️ 不能再按 Screen.width/Height —— 额外相机的输出远小于屏幕,会造出大小错配的中间纹理(云不显示)。
+        ///  不能再按 Screen.width/Height —— 额外相机的输出远小于屏幕,会造出大小错配的中间纹理(云不显示)。
         /// </summary>
         public void CreateRenderTextures(int renderW, int renderH)
         {

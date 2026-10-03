@@ -12,8 +12,8 @@ namespace Volken.Weather
 {
     /// <summary>
     /// 雨粒子:手写 compute(Randomize/Positioning/FillArgs/TranslateFixed)+ 实例化雨丝 shader,经 Graphics.RenderMeshIndirect 绘制。
-    /// ⚠️ 雨丝朝向必须**世界系**:C# 每帧算世界旋转矩阵 _RotationMatrix 传给材质 —— 不要用屏幕平面投影(贴相机,垂直看会糊成横块)。
-    /// ⚠️ 本游戏编译器**没有** RWByteAddressBuffer 的 4 参 InterlockedAdd,必须用带下标的 RWStructuredBuffer&lt;uint&gt; 2/3 参形式;一个 kernel 编译失败会毒掉整个 compute。
+    ///  雨丝朝向必须**世界系**:C# 每帧算世界旋转矩阵 _RotationMatrix 传给材质 —— 不要用屏幕平面投影(贴相机,垂直看会糊成横块)。
+    ///  本游戏编译器**没有** RWByteAddressBuffer 的 4 参 InterlockedAdd,必须用带下标的 RWStructuredBuffer&lt;uint&gt; 2/3 参形式;一个 kernel 编译失败会毒掉整个 compute。
     /// 设计沿革与九轮踩坑见 docs/sp2-rain-particledomain-port-2026-09-28.md §10。
     /// </summary>
     public class RainParticles : MonoBehaviour
@@ -41,7 +41,7 @@ namespace Volken.Weather
         public static float Brightness = 0f;         // 亮度增益(= shader _Emission)
 
         // 海拔闸门(JNO 镜头能缩到整颗星球,不加限制会在太空里下雨)
-        // ⚠️ 上限是**雨自己的独立配置项**:不与云层联动,不去读 CloudConfig.maxCloudHeight(少一层耦合、行为可预测)。
+        //  上限是**雨自己的独立配置项**:不与云层联动,不去读 CloudConfig.maxCloudHeight(少一层耦合、行为可预测)。
         public static float CeilingAltitude = 12000f;   // 米;0 = 关闭闸门(不限制)
         public static float CeilingBand = 0.4f;         // 上限处的淡出带宽(占上限比例;0.4 = 顶部 40% 渐隐到 0)
 
@@ -50,7 +50,7 @@ namespace Volken.Weather
         public static float Volume = 0.5f;              // 雨声音量(0 = 静音)
 
         // ★ 默认 false = **域内随机重生**(体积均匀、避开镜头近旁 0.15R);随机化 = 持续混合 = 连续雨帘。
-        // ⚠️ true = 确定性镜像重生会让整片雨**零混合**:每簇粒子同速下落 → 周期性团块("像下面条一样集中一股脑下降"),只用于对照实验。
+        //  true = 确定性镜像重生会让整片雨**零混合**:每簇粒子同速下落 → 周期性团块("像下面条一样集中一股脑下降"),只用于对照实验。
         public static bool RespawnMirror = false;
 
         /// <summary>编辑器预览用:强制指定相机海拔(米;NaN = 用真实值)。</summary>
@@ -92,7 +92,7 @@ namespace Volken.Weather
         public static string AssetsStatus = "未加载";   // 诊断:最近一次资产加载结果(门控用 **实例** 字段,见 _assetsReady)
 
         private Camera _cam;
-        private bool _assetsReady;          // ⚠️ 不要改成 static:雨挂在场景相机上,换场景 = 组件销毁 + 新实例;static 会让新实例跳过 EnsureAssets → compute/shader 永远为空
+        private bool _assetsReady;          //  不要改成 static:雨挂在场景相机上,换场景 = 组件销毁 + 新实例;static 会让新实例跳过 EnsureAssets → compute/shader 永远为空
         private ComputeShader _compute;
         private Shader _shader;
         private Material _mat;
@@ -158,7 +158,7 @@ namespace Volken.Weather
                 0, 1, 2, 0, 2, 3,
                 4, 5, 6, 4, 6, 7,
             };
-            // ⚠️ uv 全 0..1 不平铺(长度由矩阵列1 表达);uv.y 0=头(亮)→1=尾(淡),头 = +局部 y = +矩阵列1 = 相对运动前方,所以 +hl 顶点取 uv.y=0。
+            //  uv 全 0..1 不平铺(长度由矩阵列1 表达);uv.y 0=头(亮)→1=尾(淡),头 = +局部 y = +矩阵列1 = 相对运动前方,所以 +hl 顶点取 uv.y=0。
             _mesh.uv = new[]
             {
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f), new Vector2(0f, 0f),
@@ -168,7 +168,7 @@ namespace Volken.Weather
             _mesh.UploadMeshData(false);
         }
 
-        // 程序化雨丝贴图。⚠️ uv.y=0 = 头(+轴/相对运动前方);Texture2D 的 y=0 是底行,所以底行放亮的头。
+        // 程序化雨丝贴图。 uv.y=0 = 头(+轴/相对运动前方);Texture2D 的 y=0 是底行,所以底行放亮的头。
         private void BuildStreakTexture()
         {
             if (_streakTex != null) return;
@@ -182,7 +182,7 @@ namespace Volken.Weather
             };
             var px = new Color[W * H];
             // 软 blob 的长条化:横向满宽软板条(中段 45% 满不透明),纵向快速收尾(亮芯靠头、尾端收尖)。
-            // ⚠️ 中心亮线 profile(有效宽度只剩 ~40%)或纵向近乎满长亮度,拉伸后都会读成"面条"而不是雨丝。
+            //  中心亮线 profile(有效宽度只剩 ~40%)或纵向近乎满长亮度,拉伸后都会读成"面条"而不是雨丝。
             const float EdgeStart = 0.45f;
             for (int y = 0; y < H; y++)
             {
@@ -255,7 +255,7 @@ namespace Volken.Weather
             _diag = new ComputeBuffer(4, sizeof(uint));                       // 诊断计数
             _args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, sizeof(uint));
             _args.SetData(ArgsReset);   // 置 indexCount = 12(Tick 里每帧只复位 instanceCount)
-            // ⚠️ 关键绑定:shader 顶点着色器按 SV_InstanceID 读 _Positions —— 必须绑到**材质**上;
+            //  关键绑定:shader 顶点着色器按 SV_InstanceID 读 _Positions —— 必须绑到**材质**上;
             // RenderMeshIndirect 不会自动把 compute 的 buffer 带给材质(不绑 → 全部画在原点)。
             _mat.SetBuffer("_Positions", _positions);
             // 首次分配:随机化(只跑一次,绝不每帧重跑)
@@ -402,7 +402,7 @@ namespace Volken.Weather
             try
             {
                 Attach(cam);
-                // 配置驱动初始状态:rain.enabled=true 时自动开雨并套参(⚠️ ApplyConfig 不回调 AttachToCurrentView,否则递归)
+                // 配置驱动初始状态:rain.enabled=true 时自动开雨并套参( ApplyConfig 不回调 AttachToCurrentView,否则递归)
                 try { ApplyConfig(VolkenWeather.Instance?.Config?.rain); }
                 catch { }
             }
@@ -548,7 +548,7 @@ namespace Volken.Weather
             Capacity = newCap;
             DomainRadius = Mathf.Clamp(cfg.domainRadius, 10f, 400f);
             FallSpeed = Mathf.Clamp(cfg.fallSpeed, 0.1f, 200f);
-            StretchAmount = Mathf.Clamp(cfg.stretchAmount, 0f, 1f);   // ⚠️ 不要改回 cfg.streakLength —— 会把雨丝长度当拉伸系数(拉伸恒撞上限、该滑块失效)
+            StretchAmount = Mathf.Clamp(cfg.stretchAmount, 0f, 1f);   //  不要改回 cfg.streakLength —— 会把雨丝长度当拉伸系数(拉伸恒撞上限、该滑块失效)
             StretchLimit = Mathf.Clamp(cfg.stretchLimit, 1f, 20f);
             InvFade = Mathf.Max(0f, cfg.softParticles);
             EdgeFade = Mathf.Clamp(cfg.edgeFade, 0f, 0.5f);
@@ -624,7 +624,7 @@ namespace Volken.Weather
 
         /// <summary>
         /// 换帧原点重定位事件:位置存在帧空间坐标里,参考系重定位时整个世界平移了 positionDelta,粒子不同步平移 → 整片雨相对世界"跳"走、批量重生。
-        /// ⚠️ 这里**只记录不应用**(调用方在 Tick 里统一应用一次,避免双重平移);⚠️ 实测本 mod 环境下该事件**不触发**,兜底才是主力。
+        ///  这里**只记录不应用**(调用方在 Tick 里统一应用一次,避免双重平移); 实测本 mod 环境下该事件**不触发**,兜底才是主力。
         /// </summary>
         private void OnReferenceFrameRecentered(IReferenceFrame referenceFrame, Vector3d positionDelta, Vector3d velocityDelta)
         {
@@ -809,7 +809,7 @@ namespace Volken.Weather
             CraftSample craft = StandaloneMode ? default(CraftSample) : SampleCraft(camPos);
 
             // 径向"下" = 指向行星中心(帧空间)= craft.GravityNormal。
-            // ⚠️ 世界(帧)空间是浮点原点 + 绕行星 Y 轴旋转 → 球面赤道处径向"下"≈世界水平,写死世界 (0,-1,0) 会下错方向。
+            //  世界(帧)空间是浮点原点 + 绕行星 Y 轴旋转 → 球面赤道处径向"下"≈世界水平,写死世界 (0,-1,0) 会下错方向。
             Vector3 down = (craft.HasScript && craft.Down.sqrMagnitude > 1e-6f) ? craft.Down : Vector3.down;
             down.Normalize();
             _lastDown = down;
@@ -844,7 +844,7 @@ namespace Volken.Weather
             }
             if (altFade <= 0.001f)
             {
-                // ⚠️ 抑制期间必须同步换帧状态:否则恢复下雨时,抑制期间累积的帧位置跳变会被 DetectRecenterJump 误判成一次换帧,整片雨被甩飞。
+                //  抑制期间必须同步换帧状态:否则恢复下雨时,抑制期间累积的帧位置跳变会被 DetectRecenterJump 误判成一次换帧,整片雨被甩飞。
                 if (hasCraftFramePos) { _lastCraftFramePos = craftFramePos; _hasLastCraftFramePos = true; }
                 _hasPendingRecenter = false;
                 _pendingRecenterDelta = Vector3.zero;
@@ -879,7 +879,7 @@ namespace Volken.Weather
             int amount = TestRow ? 20 : cap;   // 等距排只画一小排(20 粒,30m 外 3m 间距)
 
             // 1) 复位实例数(只写 args[1];args[0] = indexCount 建 buffer 时已置好,不必每帧上传整条)
-            // ⚠️ 暂停时三个 Dispatch/SetData 全部跳过:位置与实例数都保持上一帧的样子,于是**冻住的那片雨照画**(不是消失)。
+            //  暂停时三个 Dispatch/SetData 全部跳过:位置与实例数都保持上一帧的样子,于是**冻住的那片雨照画**(不是消失)。
             if (!paused) _args.SetData(ArgsReset, 1, 1, 1);
             // 注:诊断计数 _diag 不在这里清零 —— 累计到下一次回读(得到精确的"这 10s 重生多少次"),回读回调里再清零。
 
@@ -907,7 +907,7 @@ namespace Volken.Weather
             }
             if (!paused) _compute.Dispatch(_kernelPositioning, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
 
-            // 3) FillArgs:原子统计活跃数(复位已在 1)做完)。⚠️ 原子加只能用**带下标的** RWStructuredBuffer 2/3 参形式,见类注释。
+            // 3) FillArgs:原子统计活跃数(复位已在 1)做完)。 原子加只能用**带下标的** RWStructuredBuffer 2/3 参形式,见类注释。
             _compute.SetBuffer(_kernelFillArgs, "_ArgsBuffer", _args);
             _compute.SetInt("_amount", amount);
             if (!paused) _compute.Dispatch(_kernelFillArgs, Mathf.CeilToInt(amount / (float)ThreadGroupSize), 1, 1);

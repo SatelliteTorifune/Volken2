@@ -6,8 +6,8 @@ using UnityEngine;
 namespace Volken.Weather
 {
     /// <summary>雨声:两组循环素材(light/heavy)按雨量等功率交叉淡化,整体淡入淡出;输入取 <see cref="RainParticles"/> 静态字段,不自己读配置。</summary>
-    /// ⚠️ 循环靠两个 AudioSource 乒乓 + <c>PlayScheduled</c> 提前排段:只在**已停止**的那条上改 clip(改正在播的会立刻切歌 = 爆音);时间轴用 <c>AudioSettings.dspTime</c>。
-    /// ⚠️ 淡变只算**目标值**、<c>MoveTowards</c> 单调推进 —— 不在每帧路径里重置进度,否则淡入永远回 0。
+    ///  循环靠两个 AudioSource 乒乓 + <c>PlayScheduled</c> 提前排段:只在**已停止**的那条上改 clip(改正在播的会立刻切歌 = 爆音);时间轴用 <c>AudioSettings.dspTime</c>。
+    ///  淡变只算**目标值**、<c>MoveTowards</c> 单调推进 —— 不在每帧路径里重置进度,否则淡入永远回 0。
     public class RainAudio : MonoBehaviour
     {
         private const string LightPathFormat = "Assets/Scripts/Volken/Weather/Rain/Audio/volkenRain-light-{0}.wav";
@@ -324,7 +324,7 @@ namespace Volken.Weather
                 altFade = Mathf.Clamp01(RainParticles.LastAltitudeFade);   // 高度闸门:雨被压掉时声音一起走
                 if (altFade <= 0.001f) gateOpen = false;
 
-                // ⚠️ 不要读一次就缓存 —— 离场要停、回场要能再起;独立模式(编辑器预览)没有天气系统,跳过
+                //  不要读一次就缓存 —— 离场要停、回场要能再起;独立模式(编辑器预览)没有天气系统,跳过
                 if (gateOpen && !RainParticles.StandaloneMode)
                 {
                     var w = VolkenWeather.Instance;

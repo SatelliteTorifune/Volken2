@@ -111,7 +111,7 @@ if (cr != null) depthTex = cr.LinearSceneDepth;   // CloudRenderer.cs:69
 
 ## 2. 目标依赖图
 
-> ⚠️ **【2026-10-01 修订】本节初版的"接口 + 值对象 + 推送"路线已被用户判定为过度抽象并回撤。** 现行规则见 §2.1,初版保留作决策记录。
+>  **【2026-10-01 修订】本节初版的"接口 + 值对象 + 推送"路线已被用户判定为过度抽象并回撤。** 现行规则见 §2.1,初版保留作决策记录。
 
 **初版规则(已放弃)**:跨模块只依赖**接口 + 值对象**,编排器推送、消费者不拉取单例;`Volken.Core` 订阅 `SceneLoaded` / SOI 并广播 `PlanetEnvironmentChanged`,向下 `push ICloudField`(→ `Volken.Clouds`)、`push IWeatherState`(→ `Volken.Weather`);`CloudBand` 唯一实现 + `IViewDepthSource`(线性深度);共用 `Volken.Environment` 的 `CameraAltitude` / `PlanetFrame` 快照(C4 归位)。
 
@@ -142,7 +142,7 @@ VolkenClouds.Instance.MainLayer.config / .planetConfigList / .LinearSceneDepth
 
 **验收**:同配置下 `volkenWeather` 的 `cloudFade`、雷的 `cloudBottom/Top`、雨的 `LastAltitude` 与改前**逐值一致**(回滚 = 纯删除)。
 
-### 3.2 阶段 B —— 依赖反演(行为等价)【风险:低】—— ⚠️ **2026-10-01 已实施后又回撤**
+### 3.2 阶段 B —— 依赖反演(行为等价)【风险:低】——  **2026-10-01 已实施后又回撤**
 
 | 步骤 | 内容 | 结局 |
 |---|---|---|
@@ -186,7 +186,7 @@ VolkenClouds.Instance.MainLayer.config / .planetConfigList / .LinearSceneDepth
 - 雨/云**订阅**该事件、自定用法;天气**不去改**任何云配置(README 决策速查第 85 行);
 - 面板必须是"可明确关掉、且默认关"的显式选项(`README.md` 第 73 行已确立此约定)。
 
-> ⚠️ 与 C6 的区别:这里是**事件通道**,不是复活 `CloudLinkageSection` 的三个 gain;若真做建议**新增**字段(旧 gain 语义"从基线纯函数重算"已被否,见 `VolkenWeather.cs:461-473`)。
+>  与 C6 的区别:这里是**事件通道**,不是复活 `CloudLinkageSection` 的三个 gain;若真做建议**新增**字段(旧 gain 语义"从基线纯函数重算"已被否,见 `VolkenWeather.cs:461-473`)。
 
 ---
 
@@ -254,13 +254,13 @@ VolkenClouds.Instance.MainLayer.config / .planetConfigList / .LinearSceneDepth
 | ~~`Volken.Core.ICloudBandSource` + `CloudBand` + `CloudBandRegistry`~~ | **已删除(同日回撤 —— 过度抽象,见下)** |
 | ~~`Volken.Core.SceneDepthRegistry`~~ | **已删除(同日回撤)** |
 
-机械改名 **261 处 / 18 个文件**;⚠️ 无脑替换误改磁盘目录字面量 `UserData/VolkenWeatherConfig/` → `VolkenWeatherSettings`(`VolkenWeatherSettings.CONFIG_FOLDER`),已单独回退该路径串(共 6 个文件)。**教训:改类名前 grep 该标识符是否同被用作字符串/路径。**
+机械改名 **261 处 / 18 个文件**; 无脑替换误改磁盘目录字面量 `UserData/VolkenWeatherConfig/` → `VolkenWeatherSettings`(`VolkenWeatherSettings.CONFIG_FOLDER`),已单独回退该路径串(共 6 个文件)。**教训:改类名前 grep 该标识符是否同被用作字符串/路径。**
 
 **结构:行星生命周期收成一处(C8)**(初版抽 `Core.SceneOrchestrator`,同日**撤销**,解析改由 `VolkenClouds` 承担):`VolkenClouds` 订阅 `SceneLoaded`/`PlayerChangedSoi`,解析 `PlanetEnvironment`、广播 `PlanetChanged`,持有 `planetConfigList`(`VolkenUserInterface` 仅留 `SceneLoaded` 建面板);`VolkenWeather` 改订阅 `VolkenClouds.PlanetChanged`;原先分居 `OnSceneLoaded`/`OnPlayerChangedSoi` 的**两份不一致**装配逻辑合并(取 SOI 语义:绕恒星 / 无大气行星);`VolkenMod.cs` 两处 `RainParticles.AttachToCurrentView()` 删除;`VolkenUserInterface.OnPlayerChangedSoi`(**第四份**重复行星解析 + 大气门控 + 渲染器装配,~50 行)**整体删除**;`CloudRenderer` 改订阅 `PlanetChanged` 并在 `OnDestroy` **退订**。
 
 **解耦(C1 / C2 / C3)**:云层高度带遍历**只剩 `CloudConfig.TryGetBand()` 一处**(`VolkenWeather` 与 `LightningModule` 的副本删除,两者**直接读** `VolkenClouds.Instance?.MainLayer?.config`);雨的软粒子直接 `_cam.GetComponent<CloudRenderer>().LinearSceneDepth`。
 
-**⚠️ 同日回撤(【决策:2026-10-01】用户:不必过度抽象)**:初版"接口 + 值对象 + 注册表"的 B 阶段整体撤掉:
+** 同日回撤(【决策:2026-10-01】用户:不必过度抽象)**:初版"接口 + 值对象 + 注册表"的 B 阶段整体撤掉:
 
 | 撤掉的东西 | 替回的做法 |
 |---|---|
@@ -280,7 +280,7 @@ Weather/ VolkenWeather.cs / VolkenWeatherSettings.cs / WeatherPanel.cs   ← 域
   Fog/ 待实现(重做雾时新建)
 ```
 
-`.meta` 随文件搬(保 GUID,前提是搬的方式保住了 `.meta`)。⚠️ **`LoadVolkenAsset<T>` / `ResourceLoader.LoadAsset<T>` 按工程路径字符串读(不是 GUID)** —— 共 6 处已同步:`Clouds.shader`、`CloudNoiseCompute.compute`、`RainParticles.{compute,shader}`、`LightningBolt.shader`、`LightningFlash.shader`。
+`.meta` 随文件搬(保 GUID,前提是搬的方式保住了 `.meta`)。 **`LoadVolkenAsset<T>` / `ResourceLoader.LoadAsset<T>` 按工程路径字符串读(不是 GUID)** —— 共 6 处已同步:`Clouds.shader`、`CloudNoiseCompute.compute`、`RainParticles.{compute,shader}`、`LightningBolt.shader`、`LightningFlash.shader`。
 
 ### 2026-10-01(续)—— 用户把 shader 归入 `Shader/` 子目录后,踩到 GUID 陷阱
 

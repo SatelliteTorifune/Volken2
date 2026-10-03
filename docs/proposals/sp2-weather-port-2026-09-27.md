@@ -2,15 +2,15 @@
 
 > 状态:⏸ **已转 proposals(暂停 / 转参考)** —— 原状态:🚧 实施中且已大幅缩减范围(2026-09-27 末);**当前活跃工作已拆出**:雨重做见 [`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md),雷声收尾见 [`thunder-realism-2026-09-28.md`](thunder-realism-2026-09-28.md)。本文档继续作为**决策沿革 + 素材/反编译底账**使用。
 >
-> **⚠️ 当前实际范围:只做雷电。雨(阶段 2)与雾(阶段 3)的实现已整体移除,准备重做。**
+> ** 当前实际范围:只做雷电。雨(阶段 2)与雾(阶段 3)的实现已整体移除,准备重做。**
 > 保留:阶段 0 骨架 + 阶段 1 雷电 + 天气状态机。移除详情与原因见 **§10.5**。
 > 因此下文 §5.2/§5.3/§6.1/§7 阶段 2/3 的内容是**原始计划**,不是当前代码状态。
 >
-> **⚠️ 另一条作废路线:不移植 SP2 的天气标度/档位系统。**
+> ** 另一条作废路线:不移植 SP2 的天气标度/档位系统。**
 > SP2 的 `WeatherTypes`(Clear/Few/Rainy/Stormy… 全局预设,统一驱动云/雨/雾)已按用户决定**删除**;
 > Volken 改为**让玩家直接设置云/雨/雾/雷的逐项参数并序列化**。详见 **§10.6**。
 >
-> **⚠️ 天气配置形态(以本行为准;§10.6 里记载的两个早期方案均已被取代)**:天气参数**按预设名独立存**,
+> ** 天气配置形态(以本行为准;§10.6 里记载的两个早期方案均已被取代)**:天气参数**按预设名独立存**,
 > 与云层预设**完全独立、互不干扰** —— `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`;
 > 预设名记在 `<PlanetConfig WeatherConfigName>` 上,与 `CloudConfigName` 各不相干,
 > 可在天气面板**自由新建 / 保存 / 读取**(「另存为新配置」+「加载配置」下拉)。
@@ -46,7 +46,7 @@ SP2 主雨是 `Jundroo.Common.ParticleDomain`(游戏侧子类 `ParticleHandler`)
 - **渲染**:单一 ComputeShader(`BillboardParticles`,6 内核 `Positioning / Randomize / TranslateFixed / CullAndOccludePoints / CullPoints / FillArgs`)+ `Graphics.RenderMeshIndirect` 间接实例化;粒子 = 程序生成十字交叉雨丝网格(8 顶点/12 三角),billboard 纹理,沿「风 + 重力 15m/s + 玩家速度 − 相机速度」拉伸对齐;
 - **域**:以相机为 `Target` 的 50m 半径球域,默认 10 万粒子,随画质档缩放(0.25/0.5/1.0);
 - **遮挡**:`OcclusionDepthCam` 正交深度相机(256×256 Depth RT,从相机上方沿雨下落方向俯拍)+ **URP `RTCameraRendererFeature`**(`RTCameraRenderPass`,RenderGraph,`DepthOnly` pass,`AfterRenderingOpaques`)渲染深度,`CullAndOccludePoints` 用上一帧 VP 矩阵(`_previousOrthoVP`)采样 `_OcclusionDepth` 剔除被遮挡雨滴;
-  - ⚠️ **RTCamera 部分是 URP 专属,是移植到 BIRP 唯一必须重写的组件**;
+  -  **RTCamera 部分是 URP 专属,是移植到 BIRP 唯一必须重写的组件**;
 - **控制**(`ParticleHandler`):`WeatherValue > 2.25` 触发;AGL<100m 或座舱内 → 整体淡出;入水冻结;云内按 `CameraCloudFadeVal` 渐隐;上下地面切换 1s 快速重入;
 - 雨声:机舱雨声 `RainAircraft`(音量=Clamp01(weather−2.25)×云淡化,音调随空速)+ 环境雨声(音量∝1/离地高度^0.7)。
 
@@ -152,7 +152,7 @@ Weather/
 | `VolumetricEnvironment.prefab` | `Assets/Resources/environment/sky/` | 参考:weatherTypes/audio/lightning 配置值(不直接搬) |
 | `Rain.prefab` | `Assets/GameObject/` | 参考:水花/雨粒子参数(可选二期) |
 
-⚠️ 注意:sp2d4 是 SP2 的资产提取工程,其 Unity 版本也是 2022.3,compute shader 资产可直接拷入本工程重新编译;但**雨滴 shader 源码缺失**,需按 §5.2 重写。
+ 注意:sp2d4 是 SP2 的资产提取工程,其 Unity 版本也是 2022.3,compute shader 资产可直接拷入本工程重新编译;但**雨滴 shader 源码缺失**,需按 §5.2 重写。
 
 ## 7. 分阶段实施
 
@@ -208,7 +208,7 @@ Weather/
 
 ### 10.2 与原计划 · 与 SP2 的实测差异(逐条更正)
 
-> ⚠️ **整体性说明**:⑨~㉛、㉟~㊳ 与 §10.7 / §10.8 全部是"雨/雾实施期"的实测记录;雨与雾已于 §10.5 整体移除,这些记录是"重做时的参考资料",不是当前代码的说明。其中被删除的 API 名(`Rain.*`、`FogRenderer.*`、`RainParticles.*` 等)在工程里**已不存在**。
+>  **整体性说明**:⑨~㉛、㉟~㊳ 与 §10.7 / §10.8 全部是"雨/雾实施期"的实测记录;雨与雾已于 §10.5 整体移除,这些记录是"重做时的参考资料",不是当前代码的说明。其中被删除的 API 名(`Rain.*`、`FogRenderer.*`、`RainParticles.*` 等)在工程里**已不存在**。
 >
 > 📌 另 §2/§5 的"移植 SP2 天气标度(`WeatherTypes`)"路线**已作废**(该文件已删除),改为"各子系统参数由玩家逐项设置",见 §10.6。
 
@@ -259,10 +259,10 @@ Weather/
 **⑩ compute shader 没有 `_Time` 内置量**(编译报未定义)。回绕重生需掺入时间,故新增 `float _time` uniform 由 C# 每帧传 `Time.time`。
 
 **⑪ 雨的绘制必须放在渲染回调里,且回调类型是 `Camera.CameraCallback`。** 在 `Update` 里调 `Graphics.RenderMeshIndirect` 会得到"帧开始前的游离渲染命令";雨是独立网格,需排进该相机的透明队列。另 .NET 4.x 下 `Action<Camera>` **不能**隐式转成 `Camera.CameraCallback`(CS0029)。
-⚠️ **真机更正(2026-09-27):`Camera.onPreCull` 这个静态委托在本工程里从未被调用**(证据:前置条件全满足 `populated=True active=50000 pendingDraw=True`、fade 爬到 0.765,但 `draws/s` 恒 0、`everDrew=False`,且 `RenderForCamera` 里三条 `LogThrottled` 一条没打)。→ 主路径改为 **`RainCameraRenderer : MonoBehaviour` 的实例 `OnPreCull`**(挂游戏相机上),静态订阅保留作双保险;心跳新增 `renderer: host= preCullCalls=`。
+ **真机更正(2026-09-27):`Camera.onPreCull` 这个静态委托在本工程里从未被调用**(证据:前置条件全满足 `populated=True active=50000 pendingDraw=True`、fade 爬到 0.765,但 `draws/s` 恒 0、`everDrew=False`,且 `RenderForCamera` 里三条 `LogThrottled` 一条没打)。→ 主路径改为 **`RainCameraRenderer : MonoBehaviour` 的实例 `OnPreCull`**(挂游戏相机上),静态订阅保留作双保险;心跳新增 `renderer: host= preCullCalls=`。
 
 **⑫ 实例索引用 `SV_InstanceID`,不要用 UNITY_VERTEX_INPUT_INSTANCE_ID 那一套。** `Graphics.RenderMeshIndirect` + 结构化 buffer 与"带实例属性的传统 Instancing"不是同一条路径,`unity_InstanceID` / `UNITY_SETUP_INSTANCE_ID` 混用易拿到恒 0 的实例号。`SV_InstanceID` 与 `_CulledPositions` 的原子累加写入顺序一一对应。
-⚠️ **这一条是推断 + 设计选择,尚未在游戏里跑过**(见 §10.7)。
+ **这一条是推断 + 设计选择,尚未在游戏里跑过**(见 §10.7)。
 
 **⑬ 雨丝 UV 不做平铺。** 长度已由 `AlignStreaks` 的基向量列 1(`dir × stretch × streakLength`)表达,贴图纵向本身是"头亮尾淡"渐变;再按拉伸量平铺会在 `wrapMode = Clamp` 下夹到边缘形成糊块。故 UV 直接用网格 UV。
 
@@ -335,7 +335,7 @@ if (_activeCount <= 0 || !_isPopulated || _fadeMultiplier <= 0.001f) return;  //
 
 **㉟ 【真机踩坑】`RWStructuredBuffer<uint>` 既没有 `InterlockedAdd` 也没有 `Load4/Store4` —— 计数器与间接参数 buffer 都必须是 `RWByteAddressBuffer`。** compute 编译直接失败,是两个独立的错:`RWStructuredBuffer<uint> object does not have method 'InterlockedAdd' at RainParticles.compute(243) (on d3d11)`、`... method 'Load4' at RainParticles.compute(308) (on d3d11)`。结构化 buffer 只支持元素级 `[]` 访问,`Interlocked*` / `Load/Store/Load4/Store4` 只对 `RWByteAddressBuffer` 可用。
 → `_CulledCount` 与 `_ArgsBuffer` 两个都改成 `RWByteAddressBuffer`:`_CulledCount.InterlockedAdd(0, 1u, slot)` 不变(0 是字节偏移);`_CulledCount[0]` → `_CulledCount.Load(0)`;`_ArgsBuffer.Load4/Store4(0, …)` 不变。C# 侧无需改动(`new GraphicsBuffer(Target.Structured, count, stride)` 对两者都兼容)。
-⚠️ **教训(这条最值钱)**:两个错是同一根因的两次发作,只修 `InterlockedAdd` 会紫色照旧。**正确做法:一次性把该类资源的所有用法都换成同一套语义**,并把日志里的错误**按消息去重**(`Group-Object`)—— 4728 行同一条错误会把别的错误淹掉。
+ **教训(这条最值钱)**:两个错是同一根因的两次发作,只修 `InterlockedAdd` 会紫色照旧。**正确做法:一次性把该类资源的所有用法都换成同一套语义**,并把日志里的错误**按消息去重**(`Group-Object`)—— 4728 行同一条错误会把别的错误淹掉。
 
 **㊱ 【真机踩坑】compute 编译失败的连带后果:品红 + 严重掉帧。** `FillArgs` 是唯一写 `_ArgsBuffer.instanceCount` 的地方,它一失败:间接绘制参数停留在 C# 初始化时写的值 = 容量 → 每帧硬画 `容量 × 12` 个顶点(实测容量 400000 → **480 万顶点/帧**);剔除结果 buffer 未被写入 → 顶点着色器读到垃圾/零位置 → 退化几何 + 品红。
 → **看到"能画但品红 + 掉帧",先查 compute 编译错误**,`Editor.log` 里搜 `Shader error` 一次即可定性,**并且一定要按消息去重**(同一错误对 6 个 kernel × 4 个平台各报一遍,实测最多 4728 行)。
@@ -414,7 +414,7 @@ OBJECT
 
 **修正与验收**
 
-- ⚠️ **修正(2026-09-27)**:"闪断"归因后来被密度标定修正为**主因是密度不足**(固定 10000 粒子在自适应放大的域里密度低到 EVE 的 1/3500);两个原因都真实存在,所以两处都修了(半径自适应 + 密度补偿指数提到 r^2.5)。
+-  **修正(2026-09-27)**:"闪断"归因后来被密度标定修正为**主因是密度不足**(固定 10000 粒子在自适应放大的域里密度低到 EVE 的 1/3500);两个原因都真实存在,所以两处都修了(半径自适应 + 密度补偿指数提到 r^2.5)。
 - `0.6` 的来历:`直径/速度 = 2r/(r/0.6) = 1.2s`,保证停留 ≥ 1 秒级;另一处日志注释写作 `// 0.6 → 停留约 1.6s,不再闪断`(实测以 1.2s 为准)。
 - 密度用 **r²** 而不是 r³:粒子只填相机前方的一个视锥壳层,可见数量 ∝ 屏幕覆盖 ∝ r²(经验折中)。
 - **`MaxParticleAmount` 从 50000 提到 200000**:高速时半径 200m+ 会算出十几万粒子,上限太小会**静默截断**并表现成"雨突然变稀";性能改由**画质档**(`ModSettings.RainQuality` 的 0.25/0.5/1.0)显式控制,而不是靠隐藏钳制;撞上限时打一条明确日志(否则"雨变稀"没有线索)。
@@ -443,7 +443,7 @@ windDir     = normalize(cos(dir)·north + sin(dir)·east)
 
 **C. 风量级的换算原本没有依据,且会把雨吹成水平。** 旧代码 `windSpeed = cloudCfg.windSpeed * 4000f`(这个 4000 是编的);`windSpeed` 到 0.01 量级就得到 40 m/s 侧风,**与下落速度同量级**,雨丝自然接近水平。→ 改为 `× 1000` 并**硬钳到 25 m/s**:0.01 → 10 m/s。原则:**下落方向必须是雨丝的主方向,风只负责让雨丝倾斜**。
 
-**D. 【已被 I 条修正】"朝向不能掺速度"曾经是错的结论 —— 但"两个速度要分开"这个结论是对的。** ⚠️ 本条最初写的是"雨丝朝向绝不能掺入相机/飞船速度",**这个结论后来被推翻了**:按 SP2 权威源码,朝向**应该**减**玩家速度**(见 I 条);保留本条是因为其中"两个速度各司其职"的拆解仍然有效,而且记录了一次错误判断的来龙去脉。
+**D. 【已被 I 条修正】"朝向不能掺速度"曾经是错的结论 —— 但"两个速度要分开"这个结论是对的。**  本条最初写的是"雨丝朝向绝不能掺入相机/飞船速度",**这个结论后来被推翻了**:按 SP2 权威源码,朝向**应该**减**玩家速度**(见 I 条);保留本条是因为其中"两个速度各司其职"的拆解仍然有效,而且记录了一次错误判断的来龙去脉。
 
 当时现象:旧代码 `AlignStreaks(_combinedVel - _spectatorVel)`,而 `_spectatorVel` 来自 `Camera.velocity` —— **相机被瞬移/跟随时它会给出不真实的值**,导致雨丝乱摆;据此误判为"任何速度都不能掺",实际根因是**用错了速度源**(该用玩家速度,不是相机速度)。
 
@@ -520,11 +520,11 @@ other      = cam.transform.up                           // 第二片,构成真�
 | **雨丝朝向** | `_combinedVel − 玩家速度` | SP2 `ParticleHandler.GetPlayerVelocity()` → JNO 对应 `ICraftNode.Velocity` |
 | **粒子在域内平移** | `_combinedVel − 相机速度` | 域是相机相对的,不减相机速度粒子会被甩出域 |
 
-⚠️ `Camera.velocity` **不能**当玩家速度用:相机被瞬移/跟随时它会给出不真实的值(实测导致雨丝乱摆)。
+ `Camera.velocity` **不能**当玩家速度用:相机被瞬移/跟随时它会给出不真实的值(实测导致雨丝乱摆)。
 
 **为什么不能照搬 SP2 的世界空间方向**:`风+重力−玩家速度` 在 100 m/s 前飞时几乎水平(与竖直约 67°,**物理正确**);但把这个方向投影到屏幕平面后,竖直分量只剩 ~1/10 → 屏幕上就是"横向雨"。**观感由投影决定,不由世界空间几何决定**(这是 H 条的结论)。
 
-**折中实现**(`Rain.LeanGain`,默认 **0.5**,dev 命令 `volkenRainLean` 可实调):⚠️ **第一版数学写错了,而且真机表现极具迷惑性**:写成 `hUp·dot(rel,hUp) + hRight·dot(rel,hRight) + hFwd·(dot(rel,hFwd)·g)`;因为 `hUp/hRight/hFwd` 是**一组正交基**,前两项加上 `hFwd·dot(rel,hFwd)` 恒等于 `rel` —— **那个增益根本没抑制前后分量**,方向仍然是 `normalize(rel)`。后果:`rel = 风+重力−玩家速度` 在高速飞行时几乎**沿视线**,于是所有雨丝都指向同一个消失点,屏幕上呈现**从中心径向爆散的星芒**(用户截图确认,第一眼会被误当成"横向")。
+**折中实现**(`Rain.LeanGain`,默认 **0.5**,dev 命令 `volkenRainLean` 可实调): **第一版数学写错了,而且真机表现极具迷惑性**:写成 `hUp·dot(rel,hUp) + hRight·dot(rel,hRight) + hFwd·(dot(rel,hFwd)·g)`;因为 `hUp/hRight/hFwd` 是**一组正交基**,前两项加上 `hFwd·dot(rel,hFwd)` 恒等于 `rel` —— **那个增益根本没抑制前后分量**,方向仍然是 `normalize(rel)`。后果:`rel = 风+重力−玩家速度` 在高速飞行时几乎**沿视线**,于是所有雨丝都指向同一个消失点,屏幕上呈现**从中心径向爆散的星芒**(用户截图确认,第一眼会被误当成"横向")。
 
 **正确的拆法**(屏幕内竖直 / 屏幕内横向**按原值**,前后分量**单独乘增益**):
 
@@ -564,33 +564,33 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 
 **移除原因(2026-09-27,用户决定)**:多轮真机调试后雨的方向问题(横向 / 径向爆散 / 随视角漂移)始终未能收敛 → 移除雨与雾的**全部组件**,只保留雷电,准备重新开始。
 
-**已删除的文件**(⚠️ **2026-10-02 更正:stash 位置 `%TEMP%\volken-rain-fog-stash` 已被清理、不存在**(见雨计划 §10);下表仅作历史记录):`Assets/Scripts/Volken/Weather/Rain.cs`(雨系统主体,约 2000 行,含 GPU 粒子域/间接绘制/淡变/风/密度自适应)、`Assets/Scripts/Volken/Weather/RainParticles.compute`(6 内核计算管线)、`Assets/Scripts/Volken/Weather/RainParticles.shader`(雨丝 billboard,程序化绘制)、`Assets/Scripts/Volken/Weather/FogRenderer.cs`(全屏高度雾)、`Assets/Scripts/Volken/Weather/HeightFog.shader`(高度雾解析积分)、`Assets/Scripts/Volken/Weather/Audio/enviro_rain_1~3.ogg`(环境雨声)。
+**已删除的文件**( **2026-10-02 更正:stash 位置 `%TEMP%\volken-rain-fog-stash` 已被清理、不存在**(见雨计划 §10);下表仅作历史记录):`Assets/Scripts/Volken/Weather/Rain.cs`(雨系统主体,约 2000 行,含 GPU 粒子域/间接绘制/淡变/风/密度自适应)、`Assets/Scripts/Volken/Weather/RainParticles.compute`(6 内核计算管线)、`Assets/Scripts/Volken/Weather/RainParticles.shader`(雨丝 billboard,程序化绘制)、`Assets/Scripts/Volken/Weather/FogRenderer.cs`(全屏高度雾)、`Assets/Scripts/Volken/Weather/HeightFog.shader`(高度雾解析积分)、`Assets/Scripts/Volken/Weather/Audio/enviro_rain_1~3.ogg`(环境雨声)。
 
-**被清理的引用**:`Assets/ModData.asset`(打包清单权威来源,最关键、容易漏)—— `ModTools` 的 `ModData._otherAssets` 存**资产 GUID 列表**,删文件不会让 GUID 自动消失,实测删除后重生成的 manifest(`Temp\ModManifest.xml`、`ModAssetBundles\StandaloneWindows64\volken.manifest`)里**仍带这 6 条**:`enviro_rain_1/2/3.ogg`、`HeightFog.shader`、`RainParticles.shader`、`RainParticles.compute`(GUID `f34a10ca…` / `ce009423…` / `98bbe0bd…` / `f0ec7a8f…` / `9e3e2564…` / `f4593250…`);已手工从 `_otherAssets` 删除这 6 条,`_otherAssets` 现为 **20 项**、每个 GUID 都能在 `Assets/` 解析到真实文件(0 个悬空);⚠️ 重做雨/雾时**要把 GUID 加回来**。其余:`Mod.cs`(移除 `volkenRainProbe`/`volkenRainAxis`/`volkenRainLean`/`volkenRainAuto` 四个 dev 命令与 `SetRainAuto`/`SetRainLean`;`WeatherStatus` 去掉 rain/fog 两行)、`ModSettings.cs`(`RainQuality`/`FogEnabled` 与 `FormatRainQuality`)、`WeatherConfig.cs`(全部 rain*/fog* 字段共 21 个及 `ClampAll`/`CopyFrom` 条目)、`WeatherPanel.cs`(`BuildRainGroup`/`BuildFogGroup`)、`VolkenMod.cs`(`MountFogRenderer` 与两处调用)、三语言文件(`RainQuality`/`FogEnabled` 设置文案与 `Rain*`/`Fog*` 面板文案,各约 30 行);`CloudRenderer.LinearSceneDepth` —— **保留但已无消费者**(当初为雾加的,注释已说明)。
+**被清理的引用**:`Assets/ModData.asset`(打包清单权威来源,最关键、容易漏)—— `ModTools` 的 `ModData._otherAssets` 存**资产 GUID 列表**,删文件不会让 GUID 自动消失,实测删除后重生成的 manifest(`Temp\ModManifest.xml`、`ModAssetBundles\StandaloneWindows64\volken.manifest`)里**仍带这 6 条**:`enviro_rain_1/2/3.ogg`、`HeightFog.shader`、`RainParticles.shader`、`RainParticles.compute`(GUID `f34a10ca…` / `ce009423…` / `98bbe0bd…` / `f0ec7a8f…` / `9e3e2564…` / `f4593250…`);已手工从 `_otherAssets` 删除这 6 条,`_otherAssets` 现为 **20 项**、每个 GUID 都能在 `Assets/` 解析到真实文件(0 个悬空); 重做雨/雾时**要把 GUID 加回来**。其余:`Mod.cs`(移除 `volkenRainProbe`/`volkenRainAxis`/`volkenRainLean`/`volkenRainAuto` 四个 dev 命令与 `SetRainAuto`/`SetRainLean`;`WeatherStatus` 去掉 rain/fog 两行)、`ModSettings.cs`(`RainQuality`/`FogEnabled` 与 `FormatRainQuality`)、`WeatherConfig.cs`(全部 rain*/fog* 字段共 21 个及 `ClampAll`/`CopyFrom` 条目)、`WeatherPanel.cs`(`BuildRainGroup`/`BuildFogGroup`)、`VolkenMod.cs`(`MountFogRenderer` 与两处调用)、三语言文件(`RainQuality`/`FogEnabled` 设置文案与 `Rain*`/`Fog*` 面板文案,各约 30 行);`CloudRenderer.LinearSceneDepth` —— **保留但已无消费者**(当初为雾加的,注释已说明)。
 
-**保留的东西**:**雷电全链路** `LightningBolt.cs` / `LightningModule.cs` / `LightningBolt.shader` / 5 条雷声;**天气状态机**(`VolkenWeather` + `WeatherConfig` + `WeatherTypes`;其中 `WeatherTypes` 后由 ㊿ 整个删除,见 §10.6)。`WeatherTypes.RainTrigger` / `IsRaining` / `foggyDawn`(黎明起雾)**现在没有渲染消费者**,只是天气标度里的分档与状态机行为,保留是因为它们是天气系统的一部分且重做雨/雾时是最自然的触发判据(SP2 也是 2.25);⚠️ 别误以为"改了 `foggyDawn` 会起雾" —— 雾的渲染已删除。
+**保留的东西**:**雷电全链路** `LightningBolt.cs` / `LightningModule.cs` / `LightningBolt.shader` / 5 条雷声;**天气状态机**(`VolkenWeather` + `WeatherConfig` + `WeatherTypes`;其中 `WeatherTypes` 后由 ㊿ 整个删除,见 §10.6)。`WeatherTypes.RainTrigger` / `IsRaining` / `foggyDawn`(黎明起雾)**现在没有渲染消费者**,只是天气标度里的分档与状态机行为,保留是因为它们是天气系统的一部分且重做雨/雾时是最自然的触发判据(SP2 也是 2.25); 别误以为"改了 `foggyDawn` 会起雾" —— 雾的渲染已删除。
 
 **经验教训**:完整复盘已成文 [`../archive/weather-rain-fog-postmortem-2026-09-27.md`](../archive/weather-rain-fog-postmortem-2026-09-27.md)(4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线 / 重做起步清单),重做雨/雾前必读;三条通用结论:**观感由投影决定,不由世界空间几何决定**(细长 billboard 的"长"必须在屏幕平面内表达);**"长度/朝向"轴只由物理量决定,"宽度"轴由视线决定**;**每帧都会调到的路径里禁止出现"重置动画进度"的副作用**(重入守卫只能看目标值)。
 
 ### 10.6 天气配置沿革:多预设 → 并入 PlanetConfig → 删除全局档位
 
 > 本节按时间顺序记三个阶段:**多预设方案(㊴~㊸,已被取代)** → **并入 `PlanetConfig`(㊹~㊾,后被取代)** → **删除全局档位(㊿,现行方向)**。
-> ⚠️ 现在**现行**的形态是"**天气参数按预设名独立存**"(`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`,见文首),㊹~㊾ 记载的内联 `<Weather>` 形态也已作废 —— 但三阶段的经验(尤其 ㊽ 那个真 bug 与 ㊾ 的兼容兜底)仍然有效。
+>  现在**现行**的形态是"**天气参数按预设名独立存**"(`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`,见文首),㊹~㊾ 记载的内联 `<Weather>` 形态也已作废 —— 但三阶段的经验(尤其 ㊽ 那个真 bug 与 ㊾ 的兼容兜底)仍然有效。
 
 - **㊴【重构(已部分撤销)】天气配置的落盘方案一度换成云层那一套。** 改后与云层一一对应:配置类 `VolkenWeatherConfig`、清单类 `PlanetWeatherConfigList`(已删除)、清单文件 `UserData/VolkenWeatherConfig/PlanetWeatherConfigList.xml` 与预设文件 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`(已不读不写)、默认预设名 `Default`(已不存在)、`VolkenWeatherConfig.GetAllConfigNames(planet)` 与 `SaveToFile(planet, name)`/`LoadFromFile(planet, name)`、`VolkenWeather.CurrentConfigName`(均已删除);面板「配置管理」曾与云层同形,现只保留 **保存 / 重置 / 路径**。改前形态是每行星固定一份 `UserData/VolkenConfig/{行星}/weather.xml`(与云配置共用目录、**没有清单文件、没有多预设**)。当时另开 `VolkenWeatherConfig/` 的理由:云与天气都"按文件名枚举预设",同目录会让两套预设名互相污染(给云起名 `Stormy` 会出现在天气下拉框里,反之亦然)。**→ 后续结论:只要天气不再有自己的预设名,这个问题就自动消失。**
-- **㊵【重构】配置类按「5 个 Section」组织,XML 节点 = 面板分组 = 数据块,三者同名同序。** `<Overall>`(① 总体:总开关/动态天气/天气节奏/黎明起雾)、`<CloudLinkage>`(② 云层联动机制,占位,默认全 0 = 恒等)、`<Rain>`(③ 雨,占位;实现已移除)、`<Fog>`(④ 雾,占位;实现已移除)、`<Lightning>`(⑤ 雷,唯一在跑的子系统);每块是一个 `[Serializable]` **嵌套类**(`OverallSection`/`CloudLinkageSection`/`RainSection`/`FogSection`/`LightningSection`),各自带一个 `CopyFrom(同类)`,好处是"新增一个字段要同步改哪些地方"收在离字段最近的一处。⚠️ `CopyFrom` 用**逐块委派**而不是 `MemberwiseClone`:嵌套类实例是**引用**,浅拷贝会让新旧配置共享同一个 Section 对象,`CopyFrom` 之后改一个等于改两个。
+- **㊵【重构】配置类按「5 个 Section」组织,XML 节点 = 面板分组 = 数据块,三者同名同序。** `<Overall>`(① 总体:总开关/动态天气/天气节奏/黎明起雾)、`<CloudLinkage>`(② 云层联动机制,占位,默认全 0 = 恒等)、`<Rain>`(③ 雨,占位;实现已移除)、`<Fog>`(④ 雾,占位;实现已移除)、`<Lightning>`(⑤ 雷,唯一在跑的子系统);每块是一个 `[Serializable]` **嵌套类**(`OverallSection`/`CloudLinkageSection`/`RainSection`/`FogSection`/`LightningSection`),各自带一个 `CopyFrom(同类)`,好处是"新增一个字段要同步改哪些地方"收在离字段最近的一处。 `CopyFrom` 用**逐块委派**而不是 `MemberwiseClone`:嵌套类实例是**引用**,浅拷贝会让新旧配置共享同一个 Section 对象,`CopyFrom` 之后改一个等于改两个。
 - **㊶【重构】面板与配置保持一致的分组,雨/雾/云层联动三组整组禁用。** 面板顺序 = XML 节点顺序:状态(只读:行星/天气值/运行状态/海拔+太阳时,~~预设名~~ 已撤销)、① 总体(活)、配置管理(活 → 最终只保留 **保存当前 / 重置为默认 / 配置路径(只读)**)、② 云层联动(未实现,`enabled`/`coverageGain`/`darkenGain`/`windGain`,默认 0)、③ 雨(已移除占位,10 个参数:数量/域半径/自适应/落速/强度/风影响/雨丝长宽/雨声音量)、④ 雾(已移除占位,8 个参数:底高/厚度/密度/高度衰减/最大不透明度/起雾距离/雾色混合)、⑤ 雷(原有 15 个参数 + 立刻劈一道 + 落雷状态)。**为什么"禁用"而不"隐藏"**:用户明确要求雨雾保留占位,且 `ItemModel.Enabled = false`(**基类属性**,`TextModel`/`SliderModel`/`ToggleModel` 都有)比"不画这一组"更诚实,每组第一行是灰字说明("雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果")。
 - **㊷【API(本节方案;多预设相关的几个后来被裁掉)】** ❌ 已删:`static PlanetWeatherConfigList ConfigList`、`CurrentConfigName`/`AvailableConfigs`、`LoadConfigPresetInPlace(name, resetState)`、`SaveConfigAs(newName)`;✅ `SaveCurrentConfig()` **保留**;✅ `ResetCurrentConfigToDefault()` **新增**(为"就地重置"补的);✅ `PlanetConfigList.GetWeather(planet)` **新增**(取/补这条记录的天气参数);`ApplyPlanet` 改为"从清单那条记录上取 `Weather` 引用";面板侧 `WeatherPanel.Build(inspectorModel)` —— 最终形态**去掉了第二个 `Action` 参数**。
-- **㊸ 旧文件无兼容负担 —— 但这是"运气",不是"设计"。** `VolkenConfig/{行星}/weather.xml`(旧方案)在真机上**从未产生过**(改之前一次都没落盘,实测 `Get-ChildItem -Recurse -Filter weather.xml` 零命中),因此本次重构**不需要迁移逻辑**;⚠️ 但这也意味着**没有任何东西验证过"旧扁平 XML 能否被新嵌套类读出来"** —— 若真有玩家手上有旧的扁平 `weather.xml`,症状会是 `XmlSerializer` 把整段当未知元素忽略、所有字段回落到默认值(全部关闭),**不会报错**。编译验证:`dotnet build Volken.csproj -t:Rebuild` → **0 错误**(6 个既有警告);`WeatherPanel` 引用的 **88 个本地化 key 在 EN-US / ZH-CN / RU-RU 三份文件里全部存在**。
-- **㊹【当时的最终方案】天气参数内联进 `PlanetConfig`,与云层共用一份清单文件。** `UserData/VolkenConfig/PlanetConfigList.xml` 是唯一的行星配置文件:`<PlanetConfig PlanetName="Droo" CloudConfigName="Default" ExtraCloudConfigName="Atmospheric">` 内的 `<Weather>` 子树含 `<Overall>`/`<CloudLinkage>`/`<Rain>`/`<Fog>`/`<Lightning>`;云层参数本体仍是 `UserData/VolkenConfig/{行星}/{预设名}.xml`(保持不变)。职责划分:云层**参数本体** = 独立文件 `{行星}/{预设名}.xml`(一层可有多套具名预设);云层**用哪套预设** = `PlanetConfig` 的属性(`CloudConfigName`/`ExtraCloudConfigName`);天气**参数本体** = **内联在 `PlanetConfig.Weather`**(当时认为一颗行星只有一套天气)。⚠️ **此形态后来又被取代** —— 现行是天气自己的预设文件(见文首)。
-- **㊺ 类型与文件的重排**:`Core/PlanetConfig.cs` **删除**(其内容 `PlanetConfig` 类并入下者);`Core/PlanetConfigList.cs` **新增**(`PlanetConfigList` + `PlanetConfig` 同处一个文件,因为"一份记录同时记云与天气"必须在一处才看得清);`Weather/VolkenWeatherConfig.cs` **删除**(内容并入 `Core/PlanetConfigList.cs`,仍保留 `VolkenMod.Weather` 命名空间);`Weather/WeatherConfigList.cs` **删除**(`PlanetWeatherConfigList`/`PlanetWeatherConfig` 整套作废);`UserData/VolkenWeatherConfig/` 当时**不再创建、不再读取**。(⚠️ 最后一个后来又被翻回来:现行正是用 `VolkenWeatherConfig/` 目录。)
+- **㊸ 旧文件无兼容负担 —— 但这是"运气",不是"设计"。** `VolkenConfig/{行星}/weather.xml`(旧方案)在真机上**从未产生过**(改之前一次都没落盘,实测 `Get-ChildItem -Recurse -Filter weather.xml` 零命中),因此本次重构**不需要迁移逻辑**; 但这也意味着**没有任何东西验证过"旧扁平 XML 能否被新嵌套类读出来"** —— 若真有玩家手上有旧的扁平 `weather.xml`,症状会是 `XmlSerializer` 把整段当未知元素忽略、所有字段回落到默认值(全部关闭),**不会报错**。编译验证:`dotnet build Volken.csproj -t:Rebuild` → **0 错误**(6 个既有警告);`WeatherPanel` 引用的 **88 个本地化 key 在 EN-US / ZH-CN / RU-RU 三份文件里全部存在**。
+- **㊹【当时的最终方案】天气参数内联进 `PlanetConfig`,与云层共用一份清单文件。** `UserData/VolkenConfig/PlanetConfigList.xml` 是唯一的行星配置文件:`<PlanetConfig PlanetName="Droo" CloudConfigName="Default" ExtraCloudConfigName="Atmospheric">` 内的 `<Weather>` 子树含 `<Overall>`/`<CloudLinkage>`/`<Rain>`/`<Fog>`/`<Lightning>`;云层参数本体仍是 `UserData/VolkenConfig/{行星}/{预设名}.xml`(保持不变)。职责划分:云层**参数本体** = 独立文件 `{行星}/{预设名}.xml`(一层可有多套具名预设);云层**用哪套预设** = `PlanetConfig` 的属性(`CloudConfigName`/`ExtraCloudConfigName`);天气**参数本体** = **内联在 `PlanetConfig.Weather`**(当时认为一颗行星只有一套天气)。 **此形态后来又被取代** —— 现行是天气自己的预设文件(见文首)。
+- **㊺ 类型与文件的重排**:`Core/PlanetConfig.cs` **删除**(其内容 `PlanetConfig` 类并入下者);`Core/PlanetConfigList.cs` **新增**(`PlanetConfigList` + `PlanetConfig` 同处一个文件,因为"一份记录同时记云与天气"必须在一处才看得清);`Weather/VolkenWeatherConfig.cs` **删除**(内容并入 `Core/PlanetConfigList.cs`,仍保留 `VolkenMod.Weather` 命名空间);`Weather/WeatherConfigList.cs` **删除**(`PlanetWeatherConfigList`/`PlanetWeatherConfig` 整套作废);`UserData/VolkenWeatherConfig/` 当时**不再创建、不再读取**。( 最后一个后来又被翻回来:现行正是用 `VolkenWeatherConfig/` 目录。)
 - **㊻ 去掉的东西(㊴ 里加过、当时全部撤销)**:`PlanetWeatherConfigList` / `PlanetWeatherConfig` 两个类;`VolkenWeather.ConfigList`(静态清单)、`CurrentConfigName`、`AvailableConfigs`;`LoadConfigPresetInPlace` / `SaveConfigAs`;面板上的「当前配置」只读行 /「保存为新配置」按钮 /「加载配置」下拉框;`VolkenWeatherConfig` 上的 `CONFIG_FOLDER` / `DefaultFileName` / `SaveToFile` / `LoadFromFile` / `GetConfigPath` / `GetAllConfigNames`(**落盘职责移交 `PlanetConfigList`**);三语言里的 `Volken.UI.WeatherPreset`。**当时留下的**:面板「配置管理」组只剩 **「保存当前配置」/「重置为默认」/「配置路径(只读)」** —— 与云层语义一致(**改内存 → 手动保存**)。
-- **㊼ `VolkenWeather.Config` 是「清单里那条记录上的实例本身」(引用,不是副本)。** `VolkenWeather.ApplyPlanet` 里 `Config = list.GetWeather(planetName);`;`PlanetConfigList.GetWeather(planetName)` 会**就地补全**(没这条记录 → 建一条 `CloudConfigName = "Default"`;记录没有 `<Weather>` 节点 → 挂一份默认(全关)),它**不落盘**,落盘只发生在两处:玩家点"保存当前配置",或云层的 `AddConfig`/`SetConfig` 顺带写整份清单。⚠️ 代价:面板一改就**立刻改了清单内存对象**,所以「重置为默认」必须显式实现,`ResetCurrentConfigToDefault()` 用 `CopyFrom(CreateDefault())` **就地写**而不是换引用 —— 换引用会让 `Config` 指向一个游离对象,与清单脱钩。
-- **㊽ `PlanetConfigList.AddConfig` 顺带修掉一个真 bug(合并后才会发作)。** 原实现是**无条件** `configList.Add(new PlanetConfig(...))`,对已存在的行星会**追加第二条同行星记录**;云的调用点都先用 `ExistsInConfig` 挡了所以一直没暴露,但天气合并进来后一条记录里带着整份天气参数,**再来一条同行星记录就会把天气参数分叉成两份**(改一条、读另一条 → 症状是"我的天气设置时不时自己变回去")。→ 改成已有记录就**只更新预设名**(`SetConfigName`)、不再 `Add`;只影响"已存在的行星再 AddConfig"这一种情形,而那种情形在改前是 bug,所以没有兼容负担。⚠️ **这条结论与现行形态无关,依然有效。**
-- **㊾ 旧记录兼容:`<Weather>` 节点不存在时会怎样?** 改前实测(这台机器的 `UserData/VolkenConfig/PlanetConfigList.xml`,16 条记录):**没有 `<Weather>` 的记录是自闭合标签**(`… />`)而不是带子节点的元素;`XmlSerializer` 对缺失元素是"不碰"而非"置 null",但**不去赌** —— `PlanetConfigList.LoadFromFile` 里加了显式兜底(缺失就补一份默认 + `EnsureSections` + `ClampAll`),老玩家的清单不会读坏,只是天气部分是默认关闭。而且**实际会自愈**:进一次飞行场景,这份文件就会被重写成带 `<Weather>` 的形态,但**第一次进场景的那一瞬间**必须靠上面的兜底才不出 NRE。⚠️ **同一条思路现行仍适用**:读配置一律"缺就补默认 + 兜底",不依赖 `XmlSerializer` 的行为细节。编译验证:`dotnet build Volken.csproj -t:Rebuild` → **0 错误**;三语言文件用 `XmlReader` 严格校验**全部 well-formed**;面板/清单/状态机引用的本地化 key 在三份文件里全部存在。
+- **㊼ `VolkenWeather.Config` 是「清单里那条记录上的实例本身」(引用,不是副本)。** `VolkenWeather.ApplyPlanet` 里 `Config = list.GetWeather(planetName);`;`PlanetConfigList.GetWeather(planetName)` 会**就地补全**(没这条记录 → 建一条 `CloudConfigName = "Default"`;记录没有 `<Weather>` 节点 → 挂一份默认(全关)),它**不落盘**,落盘只发生在两处:玩家点"保存当前配置",或云层的 `AddConfig`/`SetConfig` 顺带写整份清单。 代价:面板一改就**立刻改了清单内存对象**,所以「重置为默认」必须显式实现,`ResetCurrentConfigToDefault()` 用 `CopyFrom(CreateDefault())` **就地写**而不是换引用 —— 换引用会让 `Config` 指向一个游离对象,与清单脱钩。
+- **㊽ `PlanetConfigList.AddConfig` 顺带修掉一个真 bug(合并后才会发作)。** 原实现是**无条件** `configList.Add(new PlanetConfig(...))`,对已存在的行星会**追加第二条同行星记录**;云的调用点都先用 `ExistsInConfig` 挡了所以一直没暴露,但天气合并进来后一条记录里带着整份天气参数,**再来一条同行星记录就会把天气参数分叉成两份**(改一条、读另一条 → 症状是"我的天气设置时不时自己变回去")。→ 改成已有记录就**只更新预设名**(`SetConfigName`)、不再 `Add`;只影响"已存在的行星再 AddConfig"这一种情形,而那种情形在改前是 bug,所以没有兼容负担。 **这条结论与现行形态无关,依然有效。**
+- **㊾ 旧记录兼容:`<Weather>` 节点不存在时会怎样?** 改前实测(这台机器的 `UserData/VolkenConfig/PlanetConfigList.xml`,16 条记录):**没有 `<Weather>` 的记录是自闭合标签**(`… />`)而不是带子节点的元素;`XmlSerializer` 对缺失元素是"不碰"而非"置 null",但**不去赌** —— `PlanetConfigList.LoadFromFile` 里加了显式兜底(缺失就补一份默认 + `EnsureSections` + `ClampAll`),老玩家的清单不会读坏,只是天气部分是默认关闭。而且**实际会自愈**:进一次飞行场景,这份文件就会被重写成带 `<Weather>` 的形态,但**第一次进场景的那一瞬间**必须靠上面的兜底才不出 NRE。 **同一条思路现行仍适用**:读配置一律"缺就补默认 + 兜底",不依赖 `XmlSerializer` 的行为细节。编译验证:`dotnet build Volken.csproj -t:Rebuild` → **0 错误**;三语言文件用 `XmlReader` 严格校验**全部 well-formed**;面板/清单/状态机引用的本地化 key 在三份文件里全部存在。
 - **㊿ 把 §2/§5 里"移植 SP2 天气标度"这条路线正式作废。** SP2 是一套**全局预设系统**:`WeatherTypes`(Clear / Few / Broken / Overcast / Rainy / Stormy / Heavy / Foggy)是**中间层**(天气档位先被统一决定,再由它去驱动云层、雨、雾各自的预设与阈值,玩家调的是"今天什么天气");Volken 去掉这个中间层 —— **每个子系统(云层 / 雨 / 雾 / 雷)的参数全部是玩家直接设置并序列化的数值**,面板上就是一堆直接的滑块;"天气值"这个连续量一度仍然存在(驱动状态机随机与淡变、各子系统自己的触发阈值),但**不再映射到任何档位、也不驱动任何"预设"**;云层**完全由 `CloudConfig` 决定,天气不碰**(见 §10.8 ㉔)。
   删除:`Weather/WeatherTypes.cs`(**整个文件**,连带 `.meta` 与 `.csproj` 条目);档位常量 `Foggy`/`Clear`/`Few`/`Broken`/`Overcast`/`Rainy`/`Stormy`/`Heavy`(不再需要,默认值改字面量);派生阈值 `RainTrigger`/`HeavyRainThreshold`/`LightRainCeiling`/`LightningTrigger`/`FogCeiling` → 变成配置字段;`Classify` → `VolkenWeather.DescribeWeatherValue(float)`(纯显示,无逻辑);`VolkenWeather.IsRaining` 里的 `RainTrigger` 常量 → 读 `Config.rain.triggerValue`。新增:`VolkenWeatherConfig.DefaultWeatherValue`(**常量**)`0.25f`(**没有档位含义**,原 `WeatherTypes.Few`)、`OverallSection.maxWeatherValue` `3f`(随机天气目标的**取值上限**,下限恒 0;原为 SP2 硬编码 `[0,3]`)、`RainSection.triggerValue` `2.25f`(原 `WeatherTypes.RainTrigger`)、`LightningSection.stormValue` `2.5f`(原 `WeatherTypes.Stormy` / `LightningTrigger`)。
-  ⚠️ 其中 `rain.triggerValue` / `lightning.stormValue` 与整个"天气值"标度**后来被整体删除**(各子系统只看自己的 `enabled` + 节奏参数;见 [`../weather-cloud-decoupling-2026-10-01.md`](../weather-cloud-decoupling-2026-10-01.md) §8)。保留 `VolkenWeather.DescribeWeatherValue` 时的判断依据是**它不驱动任何逻辑**(没有任何 `if (name == "Rainy")`),所以不构成"预设系统",只是个 `float → string` 的格式化函数;⚠️ **不要在它上面加逻辑** —— 那一步就等于把 SP2 的中间层又建回来了。细节:`PickRandomWeather` 的"晴后必转云"偏置从硬编码 `0.4f` 改成**按上限的比例**(`ceiling * 0.133f`);面板「天气值(强制)」滑块范围从写死的 `[-1, 2.75]` 改成 `[-1, ceiling]`。编译验证:`dotnet build -t:Rebuild` → **0 错误**;全工程 `WeatherTypes` **只剩文档注释里的历史说明**,零代码引用。
+   其中 `rain.triggerValue` / `lightning.stormValue` 与整个"天气值"标度**后来被整体删除**(各子系统只看自己的 `enabled` + 节奏参数;见 [`../weather-cloud-decoupling-2026-10-01.md`](../weather-cloud-decoupling-2026-10-01.md) §8)。保留 `VolkenWeather.DescribeWeatherValue` 时的判断依据是**它不驱动任何逻辑**(没有任何 `if (name == "Rainy")`),所以不构成"预设系统",只是个 `float → string` 的格式化函数; **不要在它上面加逻辑** —— 那一步就等于把 SP2 的中间层又建回来了。细节:`PickRandomWeather` 的"晴后必转云"偏置从硬编码 `0.4f` 改成**按上限的比例**(`ceiling * 0.133f`);面板「天气值(强制)」滑块范围从写死的 `[-1, 2.75]` 改成 `[-1, ceiling]`。编译验证:`dotnet build -t:Rebuild` → **0 错误**;全工程 `WeatherTypes` **只剩文档注释里的历史说明**,零代码引用。
 
 ### 10.7 待真机确认的开放问题(原 §10.3)
 
@@ -598,7 +598,7 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 
 1. **打包是所有天气功能的前置条件**:权威来源 `Assets/ModData.asset` 的 `_otherAssets`(GUID 列表),生成物 `Temp\ModManifest.xml` 与 `ModAssetBundles\…\volken.manifest`。缺 shader → 闪电静默失效并在日志打 `shader NOT FOUND` / `LoadVolkenAsset: '...' not found`;缺音频 → `loaded 0/5 thunder clips`。
 2. **局部太阳时无法区分日出侧的 6 点与日落侧的 18 点**(SR2 侧拿不到行星自转轴的可靠朝向,用本地"北"推断会随飞行翻转)→ 实现把 0~12 一律当"上行"。雾删除后它只影响天气标度的分档(`foggyDawn` 的黎明档),无渲染副作用,优先级最低(见 `VolkenWeather.ComputeLocalSolarHour` 注释)。
-3. **天气配置的 XML 往返** —— ⚠️ 现在是**独立预设文件**(`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`,见文首与 §10.6),本节早期记录的"内联 `<Weather>` 子树"形态**已被取代**。本工程**没有离线验证手段**(跑不了 `XmlSerializer`),失败是**静默回落默认(全关)且不报错** → "面板上的值没跟着 XML 变"本身就是失败信号,读写两个方向都要试,并回归云的「另存为 / 加载配置」不受影响。
+3. **天气配置的 XML 往返** ——  现在是**独立预设文件**(`UserData/VolkenWeatherConfig/{行星}/{预设}.xml`,见文首与 §10.6),本节早期记录的"内联 `<Weather>` 子树"形态**已被取代**。本工程**没有离线验证手段**(跑不了 `XmlSerializer`),失败是**静默回落默认(全关)且不报错** → "面板上的值没跟着 XML 变"本身就是失败信号,读写两个方向都要试,并回归云的「另存为 / 加载配置」不受影响。
 4. **落雷的地形贴合**按"行星半径的正球面"近似(忽略局部地形)→ 山峰上的落雷可能插进山体;方案 A 的可接受损失,二期可换 `Physics.Raycast`。
 5. **雷暴循环的时间基准**用 `Time.deltaTime`(受时间加速影响)而非 `unscaledDeltaTime`:与 SP2 的"游戏时间驱动"一致,但极高时间加速下雷击会密集,待实测确认是否加钳制。
 6. **`CloudRenderer.LinearSceneDepth` 现在没有消费者** —— 它是为雾加的公开属性(一行只读,零成本),雾删除后**保留**;重做雾时复用,或直接删掉。
@@ -615,7 +615,7 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 - Unity **只编译被素材引用**的 shader;未被引用的(如当时的 `RainParticles.shader`)只有 import 记录、没有 compile 记录 → 能不能过要等游戏里加载才见分晓;
 - `Camera` 相关 shader(`LightningBolt`)会因运行时 `Shader.Find` 被编译,所以有记录;
 - `UnityShaderCompiler.exe` 是**端口式 worker 进程**,不能命令行单独调用去校验某个 shader。
-- ⚠️ **错误必须按消息去重后再统计**(同一错误对 N 个 kernel × M 个平台各报一遍,实测最多 4728 行,会把第二条**不同的**错误完全淹没)。
+-  **错误必须按消息去重后再统计**(同一错误对 N 个 kernel × M 个平台各报一遍,实测最多 4728 行,会把第二条**不同的**错误完全淹没)。
 
 **③ 资源台账 `volkenAssets`** —— 打包清单是显式的,最容易出的问题是"资源没打进 bundle"。`Mod.LoadVolkenAsset<T>` 把每次加载结果记进一张表,`volkenAssets`(或 `volkenWeather`,它会顺带打印)输出形如 `ok …` / `MISSING(required) …` / `missing(optional) …`,**一条命令就能区分"代码 bug"和"打包漏了资源"**。
 
@@ -628,4 +628,4 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 | `> capacity` | 计数器或 buffer 绑定异常 |
 | `≈ active` | GPU 侧正常;若屏幕无雨 → 问题在**绘制/着色**(参数 buffer 没被 shader 用上 / 实例索引取错) |
 
-⚠️ 实现细节:`GraphicsBuffer.GetData` 是**同步**回读(会强制 CPU 等 GPU 跑完这一帧)→ 只在"正在下雨"时做、间隔 10 秒、且**不在下发绘制的同一帧读**(下一帧读,此时 GPU 已完成那一帧);**默认关闭**,需要时用 dev 命令开。
+ 实现细节:`GraphicsBuffer.GetData` 是**同步**回读(会强制 CPU 等 GPU 跑完这一帧)→ 只在"正在下雨"时做、间隔 10 秒、且**不在下发绘制的同一帧读**(下一帧读,此时 GPU 已完成那一帧);**默认关闭**,需要时用 dev 命令开。

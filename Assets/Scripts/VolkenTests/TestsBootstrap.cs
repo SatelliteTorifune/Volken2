@@ -33,7 +33,7 @@ namespace Volken.Tests
 
         /// <summary>
         /// 注册测试用命令/工具;返回 true = 全部完成(调用方随后自毁)。
-        /// ⚠️ 剖析器创建**不依赖**命令注册是否成功(两件事分开,互不拖累)。
+        ///  剖析器创建**不依赖**命令注册是否成功(两件事分开,互不拖累)。
         /// </summary>
         internal static bool TryRegister()
         {

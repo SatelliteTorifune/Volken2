@@ -108,7 +108,7 @@ namespace Assets.Scripts
             }
 
             // 等进入主菜单再弹,避免在飞行/设计场景打断玩家(想换场景就改 InMenuScene 判定)。
-            // ⚠️ 不要改回 yield return null:这条协程挂在常驻宿主上,每帧判定会在所有场景里一直空转
+            // 不要改回 yield return null:这条协程挂在常驻宿主上,每帧判定会在所有场景里一直空转
             while (!IsInMenuScene())
             {
                 yield return new WaitForSecondsRealtime(MenuPollInterval);

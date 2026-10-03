@@ -352,7 +352,7 @@ worldToCloudPrev = worldToCloud;   // 存给下帧
 | **KSA 完整结构(2026-08-25)** | `Clouds.shader` / `CloudRenderer.cs` / `CloudLayer.cs` | 低清每帧全量 raymarch + 全清时序上采样(行细节见下) |
 | Clouds pass = 纯 raymarch | `Clouds.shader` `Pass "Clouds"` | 每帧全量 raymarch(低清),MRT:颜色 + 云面距离 + 本帧运动矢量 `mv=reprojUV−i.uv`;已去掉 isFresh 子集 / !isFresh 历史路径 / fresh 格历史混合 |
 | DilateMV | `Clouds.shader` `Pass "DilateMV"` | 本帧 3×3 反距离加权膨胀 ×3 → 供同帧 Upscale 使用(**无 1 帧滞后**) |
-| **Upscale = KSA 时序核心** | `Clouds.shader` `Pass "Upscale"`(单目标颜色,走 Graphics.Blit) | TSS 开:新鲜格取本帧 raymarch;非新鲜格 `lerp(重投影历史, 本帧, tssBlend)`。**运动自适应(2026-08-26)**:`tssBlend = lerp(_TssBlend=0.5, 1.0, saturate(|MV|·200))`——快拖时非新鲜格取纯本帧(边缘不拖影),静止时回到 0.5 降噪。**本帧无云但历史有云 → `lerp(历史, 本帧, ≥0.85)` 收敛(不再整份保留旧云,消除快速拖动的边缘鬼影)**。历史接受:深度软过渡 + 历史处有云。TSS 关:运动残影 `lerp(本帧, 重投影历史, historyBlend=0.90)`。⚠ 曾用双 MRT+DrawMeshNow(0 深度)不渲染 → 改回 Blit |
+| **Upscale = KSA 时序核心** | `Clouds.shader` `Pass "Upscale"`(单目标颜色,走 Graphics.Blit) | TSS 开:新鲜格取本帧 raymarch;非新鲜格 `lerp(重投影历史, 本帧, tssBlend)`。**运动自适应(2026-08-26)**:`tssBlend = lerp(_TssBlend=0.5, 1.0, saturate(|MV|·200))`——快拖时非新鲜格取纯本帧(边缘不拖影),静止时回到 0.5 降噪。**本帧无云但历史有云 → `lerp(历史, 本帧, ≥0.85)` 收敛(不再整份保留旧云,消除快速拖动的边缘鬼影)**。历史接受:深度软过渡 + 历史处有云。TSS 关:运动残影 `lerp(本帧, 重投影历史, historyBlend=0.90)`。 曾用双 MRT+DrawMeshNow(0 深度)不渲染 → 改回 Blit |
 | 历史全清写回 | `CloudRenderer.OnRenderImage` | Upscale 输出 → `historyTex`;全清场景深度 → `historyDepthTex`;低清 `cloudDepthTex` Blit 上采样 → `historyCloudDepthTex`(云面距离历史) |
 | 低清 RT 布局 | `CloudLayer.CreateRenderTextures` | TSS 开:`cloudTex/cloudDepth/cloudMV` = 全清÷格网(ray 数≈原 1/N 子集,每帧全量);历史一律全清。TSS 关:cloudRes = 全清(基线),上采样即运动残影 |
 | **移除运动门控** | `CloudRenderer` | KSA 结构下每像素每帧都有本帧数据,运动由本帧 MV 重投影 + 本帧 lerp 处理;删除 `kMotionGateUv` 及 prevCamPos/prevCamRot 估计与 TSSMOTION 日志 |

@@ -9,9 +9,9 @@ using UnityEngine;
 /*
     水面反射合入云:Harmony postfix 到 WaterReflectionPlaneScript 的 3 参 UpdateReflections(position, normal, cam),此时反射场景已渲染进 cam.targetTexture。
     postfix 用反射相机参数跑一次低清粗步长 raymarch,把云 additively 叠进该 RT(主相机同帧稍后渲染水面时就会采样到云倒影)。
-    ⚠️ 反射相机只设了 position + worldToCameraMatrix、没设 rotation → 基向量必须从 worldToCameraMatrix 提取;postfix 不在相机渲染上下文内,_WorldSpaceCameraPos 不可用 → 用显式 _CamPos。
-    ⚠️ 走独立材质 clone + 独立 RT,不碰主相机共享的 layer.material / cloudTex / 历史;反射相机在水面(低空)→ _OrbitFade 恒 0。
-    ⚠️ Clouds pass 用 Graphics.SetRenderTarget + DrawMeshNow,不要用 RenderTexture.active(该组合在部分路径上不渲染)。
+     反射相机只设了 position + worldToCameraMatrix、没设 rotation → 基向量必须从 worldToCameraMatrix 提取;postfix 不在相机渲染上下文内,_WorldSpaceCameraPos 不可用 → 用显式 _CamPos。
+     走独立材质 clone + 独立 RT,不碰主相机共享的 layer.material / cloudTex / 历史;反射相机在水面(低空)→ _OrbitFade 恒 0。
+     Clouds pass 用 Graphics.SetRenderTarget + DrawMeshNow,不要用 RenderTexture.active(该组合在部分路径上不渲染)。
 */
 
 namespace Volken.Clouds
@@ -83,7 +83,7 @@ namespace Volken.Clouds
             var activeLayers = _activeLayers;
             if (activeLayers.Count == 0) return;
 
-            // ⚠️ 反射相机基向量必须从 worldToCameraMatrix 提取(transform 朝向与视图不对齐):三行分别 = 相机空间的 right / up / -fwd
+            //  反射相机基向量必须从 worldToCameraMatrix 提取(transform 朝向与视图不对齐):三行分别 = 相机空间的 right / up / -fwd
             Matrix4x4 w2c = cam.worldToCameraMatrix;
             Vector3 fwd = new Vector3(-w2c.m20, -w2c.m21, -w2c.m22);
             Vector3 right = new Vector3(w2c.m00, w2c.m01, w2c.m02);

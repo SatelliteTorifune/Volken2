@@ -38,7 +38,7 @@
 
 - `LightningBolt.cs` 全文件:`Recenter|ReferenceFrame|positionDelta` = **0 命中**;`LightningModule.cs` 的 `ReferenceFrame` 只有两处、用途是**取行星中心算径向**,与重定位无关(`:582-584` `GetRadialUp`、`:600-602` `GetGroundPosition`)。日志交叉验证:同一份日志里 `CloudRenderer` 与 `RainParticles` 都打了 recenter 行,`LightningModule` **一行都没有** → 日志期构建确实无防护。
 - 对比例的:`CloudRenderer.cs:85` 订阅事件清历史;`RainParticles.cs:592` 订阅 + `:611` `DetectRecenterJump` 兜底。
-- ⚠️ **纠正一条被本假设引用的证据**:`RainParticles.cs:590` 注释写"实测本 mod 环境下该事件**不触发**,兜底才是主力" —— 本日志直接反证:`[VolkenDiag]RainParticles RECENTER(event): delta=(167732.1,668407.3,-370666.5) |d|=782493.5m` 等 **3 条 event 行**确实触发了(另有 290 条 `Δ=0.0m` 的零位移事件)。守卫**不必**绕开订阅;但事件里有大量零位移噪声,所以用"跳变判据"过滤仍然是合理选择。
+-  **纠正一条被本假设引用的证据**:`RainParticles.cs:590` 注释写"实测本 mod 环境下该事件**不触发**,兜底才是主力" —— 本日志直接反证:`[VolkenDiag]RainParticles RECENTER(event): delta=(167732.1,668407.3,-370666.5) |d|=782493.5m` 等 **3 条 event 行**确实触发了(另有 290 条 `Δ=0.0m` 的零位移事件)。守卫**不必**绕开订阅;但事件里有大量零位移噪声,所以用"跳变判据"过滤仍然是合理选择。
 
 ### Q2 视觉元素是不是"铸造时写一次、之后只播动画"的世界坐标? → **CONFIRMED**
 

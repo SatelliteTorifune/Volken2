@@ -31,7 +31,7 @@ namespace Volken.Core
         {
             Instance = this;
             DontDestroyOnLoad(this);
-            // ⚠️ 订阅放 Awake 而非 Start:必须早于 VolkenClouds(它也在 OnModLoaded 里订阅 SceneLoaded),
+            //  订阅放 Awake 而非 Start:必须早于 VolkenClouds(它也在 OnModLoaded 里订阅 SceneLoaded),
             // 因为别家 mod 的处理器抛异常会中断整条链,排在后面的订阅者会被静默跳掉
             try { Game.Instance.SceneManager.SceneLoaded += OnSceneLoaded; }
             catch (Exception ex) { Mod.Log("Volken: SceneLoaded subscribe failed: " + ex.Message); }

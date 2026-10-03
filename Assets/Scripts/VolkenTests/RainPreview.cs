@@ -309,7 +309,7 @@ namespace Volken.Tests
             }
         }
 
-        // ⚠️ **不要用旧版 UnityEngine.Input.***:本工程 activeInputHandler = 1,旧 API 每次调用都抛异常、
+        //  **不要用旧版 UnityEngine.Input.***:本工程 activeInputHandler = 1,旧 API 每次调用都抛异常、
         //   Update 会在最前面中断(FPS 恒 0)。统一改用 IMGUI 事件(OnGUI 里的 Event.current)。
 
         private readonly HashSet<KeyCode> _keysHeld = new HashSet<KeyCode>();
@@ -398,7 +398,7 @@ namespace Volken.Tests
             string status = _updateAlive
                 ? string.Format("FPS {0:F0}   dt {1:F0} ms   相机 {2:F0} m/s{3}",
                     _fps, Time.unscaledDeltaTime * 1000f, RainParticles.LastCamSpeed,
-                    _fps > 0.01f && _fps < 10f ? "   ⚠ 很慢:把「粒子数量」降到 20000 试试(密度影响最大)" : "")
+                    _fps > 0.01f && _fps < 10f ? "    很慢:把「粒子数量」降到 20000 试试(密度影响最大)" : "")
                 : "⏸ Update 没在运行 = **编辑器处于暂停**(点 Editor 工具栏的 ▶ 继续;暂停时雨与相机都不会动,FPS 显示的是停住前的值)";
             if (!string.IsNullOrEmpty(_fatal)) status = "❌ " + _fatal;
             GUI.Label(new Rect(238f, 12f, 900f, 22f), status + "     右键拖拽转视角 / WASD QE 移动 / Shift 加速 / 滚轮调速");

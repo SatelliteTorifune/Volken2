@@ -5,11 +5,11 @@
 //   列1 承载网格局部 y(长轴)并已烘焙拉伸。雨丝朝向锁在**世界系**,与相机无关:
 //     · 转镜头/暂停/缩放都不改变雨丝朝向(不再是屏幕平面投影 → 不再"贴相机");
 //     · 垂直向下看时雨丝与视线近于平行 → 呈点状,不会糊满屏幕。
-//   ⚠️ 曾用的屏幕平面构轴(阶段 1 Version A)已废弃:世界系固定向量的屏幕投影随视角摆动,
+//    曾用的屏幕平面构轴(阶段 1 Version A)已废弃:世界系固定向量的屏幕投影随视角摆动,
 //     真机表现为"雨的朝向随摄像机角速度变 + 像贴在镜头上"。
 //
 // 【与阶段 2 骨架的关系】顶点路径不变(compute → RenderMeshIndirect → SV_InstanceID 读 _Positions)。
-// 【其余要点】① SP2 第一手属性名(_MainTex/_Emission/_MainColor/_InvFade,⚠️ 不叫 _Color);
+// 【其余要点】① SP2 第一手属性名(_MainTex/_Emission/_MainColor/_InvFade, 不叫 _Color);
 //   ② 软粒子(阶段 3.2):采样 CloudRenderer.LinearSceneDepth(RFloat,LinearEyeDepth 米,
 //      C# 每帧 SetTexture;深度图未就绪时 C# 置 _InvFade=0 关闭采样);
 //   ③ UV 不平铺(阶段 3.3):网格 UV 全 0..1,长度由矩阵列1 表达;uv.y 0=头(亮)→1=尾(淡),
@@ -90,7 +90,7 @@ Shader "Volken/RainParticles"
                 //   mul(UNITY_MATRIX_V, worldPos) 能正确带上平移(eyeDepth 实测正确)即佐证。
                 //   故 SetColumn(1, dir) 乘 v.y ✓。
                 float3 local = mul((float3x3)_RotationMatrix, v.vertex.xyz);
-                // ⚠️ w 必须为 1(是"位置"不是"方向"):UnityWorldToClipPos 内部会强制 w=1 所以
+                //  w 必须为 1(是"位置"不是"方向"):UnityWorldToClipPos 内部会强制 w=1 所以
                 //   w=0 时 clip 不炸,但 mul(UNITY_MATRIX_V, worldPos) 会丢掉平移 → eyeDepth 全错。
                 float4 worldPos = float4(_Positions[instanceID].xyz + local, 1.0);
 

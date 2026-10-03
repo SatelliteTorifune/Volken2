@@ -589,7 +589,7 @@ namespace Volken.Weather
             const int splitPoints = 7;   // 段数;i = 0..7,共 8 个点
             sr.positionCount = splitPoints + 1;
 
-            // ⚠️ 第 0 个点必须**显式**写:positionCount 只是把新点初始化成 (0,0,0),而 useWorldSpace = true 时
+            //  第 0 个点必须**显式**写:positionCount 只是把新点初始化成 (0,0,0),而 useWorldSpace = true 时
             // (0,0,0) 就是**世界原点**。少这一行 → 每条分叉都从世界原点拉出来;SR2 的浮动原点又把原点重定位到飞船处,
             // 于是 (arcs-3)×(splits+1) 条分叉全部从**观测者**身上呈扇形射出 —— 看上去就是一把"射灯",而不是雷劈。
             sr.SetPosition(0, from);

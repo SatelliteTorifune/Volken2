@@ -102,7 +102,7 @@ float c = flightData != null ? flightData.AtmosphereSample.SpeedOfSound : 0f;   
 
 结论:云底混合对**地面观测者不缩短**(云底比落点更远),对**云层高度附近的观测者缩短约 0.3 s(8%)**。修正幅度不大但方向正确(远雷该"先到"),且零额外代价 —— 保留,不是关键项。
 
-> ⚠️ 量的**水平/垂直分解必须沿地表法线**(`GetRadialUp`),不能拿 world Y/Z 当"水平" —— 参考系可能被旋转(行星坐标系里 Y 才是"上")。这是本题里最容易踩的一个坑。
+>  量的**水平/垂直分解必须沿地表法线**(`GetRadialUp`),不能拿 world Y/Z 当"水平" —— 参考系可能被旋转(行星坐标系里 Y 才是"上")。这是本题里最容易踩的一个坑。
 
 → **303/343 这种硬编码是错的**(Tydos 上差 2.7 倍)。现在的 `SpeedOfSound = 343f`(`LightningModule.cs:37`)要删掉,换成运行时取样 + **`c <= 1 m/s` 时回退 343(或配置值)**。
 
@@ -114,7 +114,7 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 
 现在 `thunderDistanceAttenuation = 0.6` 默认值会让延迟**只有真实值的 60%**(3 km 处 ≈5.3 s 而非 8.8 s),这正是"不够真实"的一个来源。**真实化 → 默认改成 1.0**,并把该字段在 UI 上说明是"0 = 原版 0.05 s 固定延迟"。曾考虑再加 `thunderMaxDelay`(秒,默认 20)封顶,实测不需要(见 §5.1),故未实现。
 
-### 2.4 ⚠️ 时间加速:唯一的解释器性风险
+### 2.4  时间加速:唯一的解释器性风险
 
 `LightningModule` 的协程用 `Time.deltaTime` + `WaitForSeconds`,而 `PlayScheduled` 用的是 **`AudioSettings.dspTime`(真实时间,不受 `Time.timeScale`/游戏倍速影响)**。
 
@@ -183,7 +183,7 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 | `thunderSourceBlend` | **0.5** ✅ | 落点距离 vs 云底声程混合(§1.3) | **新增** |
 | ~~`thunderMaxDelay`~~ | — | ❌ **实测不需要**:落点在 ≤3.6 km、最慢声速(Cylero 233 m/s)下延迟也只有 ~15 s,加封顶只会引入一个多余的旋钮 | 不新增 |
 
-⚠️ 按仓库兼容约定:新字段初始值必须 = 关闭/恒等,**否则会改变老玩家现有的听感**。上表 `thunderDistanceAttenuation` 的默认值变更**会**改变老玩家行为 —— 这是有意的(需求就是"更真实")。新增字段已同步补 `CopyFrom` + `ClampAll`。
+ 按仓库兼容约定:新字段初始值必须 = 关闭/恒等,**否则会改变老玩家现有的听感**。上表 `thunderDistanceAttenuation` 的默认值变更**会**改变老玩家行为 —— 这是有意的(需求就是"更真实")。新增字段已同步补 `CopyFrom` + `ClampAll`。
 
 ### 5.2 代码改动点(全部已完成 ✅)
 

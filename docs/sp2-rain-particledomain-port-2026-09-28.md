@@ -30,11 +30,11 @@
 |---|---|---|
 | 上次结果 | 雨(阶段 2)/雾(阶段 3)实现**整体移除**,当前只保留雷电 | [`README.md`](README.md) §四之三 |
 | 代价 | **8 轮迭代 / 27 条更正 / 约 150 KB 代码被弃**(`Rain.cs` 113 KB + `RainParticles.compute` 14 KB + `RainParticles.shader` 10.5 KB + 雾相关);3 条环境雨声一并弃用 | 教训 §2 |
-| 代码现状 | 全部 stash 在 `%TEMP%\volken-rain-fog-stash`,但 ⚠️ **该 stash 已被清理、不存在(2026-10-02 核实)** → 重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md) | 教训 §2 / 计划 §10.5 |
+| 代码现状 | 全部 stash 在 `%TEMP%\volken-rain-fog-stash`,但  **该 stash 已被清理、不存在(2026-10-02 核实)** → 重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md) | 教训 §2 / 计划 §10.5 |
 | 保留的净收益 | 教训清单(27 条)、诊断方法、量化基线;**配置层与 UI 占位已就位,重做时不用动** | 教训 结尾 / 计划 §10.6 ㊶ |
 | 失败的真正原因 | **不是代码不可修**(每轮都修对了当时认定的 bug),而是**诊断量错了对象**(用世界空间夹角当屏幕倾角)→ 信心被耗尽 → 在"两次修正之间没有任何一次可信改善信号"时被放弃 | 教训 §1 / §5.4 |
 
-> ⚠️ **本文档的存在意义就是把第 5 条堵死**:阶段 2 与阶段 4 之间必须出现一次**可信的屏幕空间改善信号**,否则**不许进入下一阶段**。
+>  **本文档的存在意义就是把第 5 条堵死**:阶段 2 与阶段 4 之间必须出现一次**可信的屏幕空间改善信号**,否则**不许进入下一阶段**。
 
 ---
 
@@ -71,7 +71,7 @@ SP2 是**世界空间长度轴 + 任意宽度轴** → 同一个坑。**退化�
 
 > 讽刺点:SP2 的 `Mathf.Abs(fwd.y) < 0.999f` 分支本意就是防退化,但它**只对世界 up 防退化,对"视线"毫无防备** —— 因为 `AlignStreaks` 在 CPU 侧**根本不知道相机朝哪**(它只拿到速度与相机位置,不拿相机基向量)。
 
-**⚠️ 已写入代码的推导(阶段 1 探针版本 B 负责实证)**:宽轴 `side = cross(up_or_forward, fwd)` 的退化条件不是"`fwd` 平行世界 up",而是 **`fwd` 平行于 `side` 的生成源**;真正决定屏幕观感的是 `fwd` 与**视线**的夹角。探针的"模式 2(朝相机,退化)"就是让版本 B 复现上述横块、同时验证版本 A 不退化。
+** 已写入代码的推导(阶段 1 探针版本 B 负责实证)**:宽轴 `side = cross(up_or_forward, fwd)` 的退化条件不是"`fwd` 平行世界 up",而是 **`fwd` 平行于 `side` 的生成源**;真正决定屏幕观感的是 `fwd` 与**视线**的夹角。探针的"模式 2(朝相机,退化)"就是让版本 B 复现上述横块、同时验证版本 A 不退化。
 
 **→ 移植决策(本文档的核心结论):不照抄 `AlignStreaks`,改用屏幕平面内构轴。**
 算法骨架来自教训 §3.1㈢(**该文档自注"尚未在真机验证",所以阶段 2 的全部意义就是验证它**):
@@ -117,7 +117,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 | `Custom/DropletInstancing`(实例化着色器) | 只有 DXBC;且 prefab 里 `_instancingShader` 引用为 **null**,全安装**无任何代码 `Shader.Find` 它** |
 | `Jundroo_ParticleConstantNormal_Soft.shader` | `//DummyShaderTextExporter` 占位模板,**不是** SP2 真用的那个(属性名对不上,`_MainColor ≠ _Color`) |
 
-**⚠️ 必须先更正的既有结论**:母计划 §8 第 2 条写「SP2 与 Volken 同为 2022.3.62,`BillboardParticles.asset` 大概率直接可用」—— **这句是错的**。
+** 必须先更正的既有结论**:母计划 §8 第 2 条写「SP2 与 Volken 同为 2022.3.62,`BillboardParticles.asset` 大概率直接可用」—— **这句是错的**。
 实测:`<SP2_D4>/ProjectSettings/ProjectVersion.txt` = **`6000.2.14f1`**;本工程 = **`2022.3.62f3`**。
 → 该 `.asset` 里的 DXBC 是按 Unity 6000.2 的 D3D11 目标编的,**2022.3 重新导入/重编很可能失败**;而它在工程里是「带 GUID 的资产引用」而非可读文本。导入失败 → `FindKernel` 拿不到 kernel → 后续全线崩。
 
@@ -140,7 +140,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 | ㉟ | **`RWStructuredBuffer<uint>` 既没有 `InterlockedAdd`,也没有 `Load4/Store4`** | **compute 编译失败 → 品红 + 掉帧**;而且**同一个根因发作了两次**(第一次只修 `InterlockedAdd`,因为日志被刷屏 4728 行,于是"紫色照旧") | 用 **`RWByteAddressBuffer`**;`_CulledCount.InterlockedAdd(0, 1u, slot)` 的 `0` 就是字节偏移;`_ArgsBuffer.Load4/Store4(0, …)` 本身即字节地址语义 |
 | ⑩ | **compute shader 里没有 `_Time`** | 编译报未定义;即便能编,回绕重生不掺时间 → 每个粒子在同一 xz 重生 → **固定竖线** | 自加 `float _time`,由 C# 每帧写 `Time.time` |
 | — | **`FillArgs` 是唯一写 `_ArgsBuffer.instanceCount` 的地方** | 它一失败,参数保持 C# 初始化的**容量值** → **硬画 `容量 × 12` 顶点/帧**(实测 400000 → 480 万顶点/帧) | 诊断次序固定:**"能画出来但品红 + 掉帧" → 先查 compute 编译错误,不要先调参** |
-| ⑫ | 实例索引必须用 **`SV_InstanceID`** | 用 `UNITY_VERTEX_INPUT_INSTANCE_ID` / `unity_InstanceID` 那一套容易拿到**恒 0** 的实例号 → **所有雨丝重叠在同一处** | 用 `SV_InstanceID`(与 `_CulledPositions` 的原子累加写入顺序一一对应)。⚠️ 计划自注"属推断,尚未在真机跑过" → **阶段 4 必验** |
+| ⑫ | 实例索引必须用 **`SV_InstanceID`** | 用 `UNITY_VERTEX_INPUT_INSTANCE_ID` / `unity_InstanceID` 那一套容易拿到**恒 0** 的实例号 → **所有雨丝重叠在同一处** | 用 `SV_InstanceID`(与 `_CulledPositions` 的原子累加写入顺序一一对应)。 计划自注"属推断,尚未在真机跑过" → **阶段 4 必验** |
 
 ### 3.4 难点 4:SR2 的渲染时机与浮动原点
 
@@ -156,7 +156,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 - 粒子位置 = **相对相机的偏移**;`_domainPos` = 相机世界位置(故 `世界 = _domainPos + 偏移` 仍成立);
 - 相机高速(10 km/s 级)下没有大数精度问题;
 - **`_frameVel` 恒 0 是刻意的,不是漏了** —— 不要"顺手补上";
-- ⚠️ 附带要求:**视锥平面必须手工解析构造**(`BuildCameraPlanes`),**不要**混用 `GeometryUtility.CalculateFrustumPlanes`(它给**参考系空间**,与相机相对空间不一致 → 相机飞远后剔除**整体错位**,症状是"雨只在一小块出现/整片消失,且随离原点距离变化")。
+-  附带要求:**视锥平面必须手工解析构造**(`BuildCameraPlanes`),**不要**混用 `GeometryUtility.CalculateFrustumPlanes`(它给**参考系空间**,与相机相对空间不一致 → 相机飞远后剔除**整体错位**,症状是"雨只在一小块出现/整片消失,且随离原点距离变化")。
 
 **(d) 材质 uniform 是全局的**:多相机共享同一 `Material` 实例 → **每次绘制前必须按当前相机重设基向量与相机相关 uniform**,否则后一个相机覆盖前一个 → **朝向随相机跳**(计划 §10.4 G)。
 
@@ -170,7 +170,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 | **数量本身** | 100,000 | **"满屏高频细节的粒子,2 万与 10 万实例肉眼几乎无差"** —— 白花 5 倍顶点 | 不照抄 10 万 |
 | **上限** | — | 400,000 × 12 顶点 = **480 万顶点/帧**,是本机 5060 Laptop 的可承受边界 | 上限与画质档显式绑定;撞上限**必须打日志**(否则"雨突然变稀"无线索) |
 
-> ⚠️ **顺序要求(踩过)**:域半径必须在**算完相机速度之后、算粒子数之前**确定,否则粒子数慢一帧、首帧用错值。
+>  **顺序要求(踩过)**:域半径必须在**算完相机速度之后、算粒子数之前**确定,否则粒子数慢一帧、首帧用错值。
 > 正确 `Tick` 顺序:`_spectatorVel`(相机速度)→ `EffectiveDomainRadius`(域半径)→ `ApplyParticleAmount`(粒子数,含密度补偿)→ `ComputeOcclusionActive` → `AdvanceFade` → 绘制判定。
 
 ---
@@ -190,7 +190,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 | 9 | **EVE 的可借鉴点** | 贴图**图集 UV 分格**做每粒子变体(`particleSheetCount`,上次 seed 已传进 shader 但**未用于 UV**);`randomDirectionStrength`(雨 0.5);`minCoverageThreshold` 与云覆盖联动;落地水花独立 sheet |
 | 10 | **配置层与面板** | **已就位,重做时不用动**:`RainSection` 字段位、XML 节点、面板分组(雨组现为禁用占位)全部存在 |
 
-⚠️ **不能照抄的一条**:SP2 的 `ParticleAmount` setter 在数量变化时 `FreeBuffers() + SetupBuffers()` **重建全部 GPU buffer** 并重新 `Dispatch(Randomize)`。SP2 从**天气事件(低频、不在渲染循环)**调用,所以安全;**本项目从每帧 `Tick` 调用** → 会在"上一帧绘制命令还没执行完"时释放它引用的 `GraphicsBuffer` → **未定义行为**。必须用第 2 条的容量/生效数量分离方案。
+ **不能照抄的一条**:SP2 的 `ParticleAmount` setter 在数量变化时 `FreeBuffers() + SetupBuffers()` **重建全部 GPU buffer** 并重新 `Dispatch(Randomize)`。SP2 从**天气事件(低频、不在渲染循环)**调用,所以安全;**本项目从每帧 `Tick` 调用** → 会在"上一帧绘制命令还没执行完"时释放它引用的 `GraphicsBuffer` → **未定义行为**。必须用第 2 条的容量/生效数量分离方案。
 
 ---
 
@@ -201,11 +201,11 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 ### 阶段 0:准备与护栏(不改代码)
 
-- [ ] **0.1** ~~把 stash 里的旧实现只读参考取出看一眼~~ → ⚠️ **stash 已不存在**(2026-10-02 核实),改依据[教训 §6「已证伪思路」清单](archive/weather-rain-fog-postmortem-2026-09-27.md)逐条打勾 —— 目的是**知道哪些路已经证伪**,不是复用代码。
+- [ ] **0.1** ~~把 stash 里的旧实现只读参考取出看一眼~~ →  **stash 已不存在**(2026-10-02 核实),改依据[教训 §6「已证伪思路」清单](archive/weather-rain-fog-postmortem-2026-09-27.md)逐条打勾 —— 目的是**知道哪些路已经证伪**,不是复用代码。
 - [ ] **0.2** 确认 `docs/archive/weather-rain-fog-postmortem-2026-09-27.md` 的 §5.1 铁律 1~5 与 §7 起步清单已读。
 - [ ] **0.3** **接上诊断三件套**(教训 §5.3 / 计划 §10.8),**先于任何渲染代码**:
   - GPU 回读:`_ArgsBuffer[1]` = `instanceCount`,每 10 s 一次(阈值表见计划 §10.8 ④:`instanceCount == 0` → 问题在**剔除/参数环节**,不是绘制环节);
-  - **屏幕空间**量:倾角、长宽比(⚠️ **禁止**用世界空间夹角当屏幕倾角 —— 这是上次失败的直接原因);
+  - **屏幕空间**量:倾角、长宽比( **禁止**用世界空间夹角当屏幕倾角 —— 这是上次失败的直接原因);
   - 内部状态心跳:`fade / activeCount / capacity / domainR(eff) / camSpd / occlusion / draws/s / everDrew`。
 - [x] **0.4** 建目录 `Assets/Scripts/Volken/Weather/`(**命名空间已定:跟随现有代码用 `Volken.Weather`** —— 母计划 §10.2 ① 关于 `VolkenMod.Weather` 的旧注记,源于当时存在的一个全局 `Volken` 类(`Core/Volken.cs`,触发 CS0101);该类**早已删除**,现有 `VolkenWeather.cs`/`LightningModule.cs`/`LightningBolt.cs`/`WeatherPanel.cs` 全部用 `Volken.Weather` 且编译通过,故新文件沿用同一约定)。
 
@@ -280,7 +280,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 ### 阶段 7:水花、雨声、图集变体(收尾)
 
 - [ ] **7.1** 落地水花(独立 sheet / 独立 pass,不要并进雨丝 pass)。
-- [ ] **7.2** 雨声:素材导入 + 导入设置(`forceToMono` / `CompressedInMemory` / `preloadAudioData`)+ **进 `_otherAssets`**(⚠️ 删资产**不会**让 GUID 自动消失,纳新资产也**不会**自动入包)→ 打包 → dev 命令 `volkenAssets` 复核台账。
+- [ ] **7.2** 雨声:素材导入 + 导入设置(`forceToMono` / `CompressedInMemory` / `preloadAudioData`)+ **进 `_otherAssets`**( 删资产**不会**让 GUID 自动消失,纳新资产也**不会**自动入包)→ 打包 → dev 命令 `volkenAssets` 复核台账。
 - [ ] **7.3** 贴图图集 UV 分格(用已传进 shader 的 seed)。
 - [ ] **7.4** 本地化文案(EN-US / ZH-CN / RU-RU,key 前缀 `Volken.UI.*`),并把雨组从「禁用占位」改为可用。
 
@@ -306,7 +306,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 | 既有结论 | 本文档的处置 |
 |---|---|
-| 母计划 §8 第 2 条「SP2 与 Volken 同为 2022.3,`.asset` 大概率可直接用」 | **⚠️ 更正**:sp2d4 是 **6000.2.14f1** → 改为**手写 `.compute`**(§3.3) |
+| 母计划 §8 第 2 条「SP2 与 Volken 同为 2022.3,`.asset` 大概率可直接用」 | ** 更正**:sp2d4 是 **6000.2.14f1** → 改为**手写 `.compute`**(§3.3) |
 | 母计划 §3 表格「遮挡改 BIRP」 | 细化为**方案 A / 方案 B**,并写入空深度图护栏(§3.2) |
 | 母计划 §6「素材清单(从 sp2d4 拷贝)」 | 保留可用部分(billboard 纹理 / 网格尺寸 / 雨声),但**shader 与 compute 不可拷**(§3.3) |
 | 计划 §10.2 ⑰「buffer 容量与生效数量分离」 | **照抄**(§4 第 2 条),并补充"不能照抄 `ParticleAmount` setter"的原因 |
@@ -340,7 +340,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 > 本节**只留结论**:已落地物、当前参数、关键转弯点、已证伪思路、剩余项。
 > 原 §10.1~§10.23 的逐轮调试流水(734 行)已于 2026-10-02 精简;方法论沉淀见[复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) §5。
-> ⚠️ 旧雨/雾实现**不可回取**:`%TEMP%\volken-rain-fog-stash` 已被清理、**不存在**;重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md)。
+>  旧雨/雾实现**不可回取**:`%TEMP%\volken-rain-fog-stash` 已被清理、**不存在**;重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md)。
 
 ### 10.1 已落地(阶段 0 → 3)
 
@@ -374,7 +374,7 @@ SP2 雨的**出厂值(第一手:`sp2d4/Assets/Resources/prefabs/ParticleDomain.p
 - `ceilingAltitude`(**默认 12000m,0 = 关闸门**):SP2 最大缩放只到"半个岛",JNO 能缩到整颗星球 → 用相机海拔算 `altFade` 乘进 `_FadeAmount`,超上限不 dispatch / 不绘制(**太空零成本零雨**);**不与云层联动**。
 - `respawnMirror`(**默认 false**):随机混合重生(理由见 §10.3 #5 / #6)。
 
-**部署哨兵(判"包里装的是不是新版")**:`_ShaderVer`(当前 **3**)、`TranslateFixed=2`、`down·camUp ≈ -1`、`dist mean/R ≈ 0.75`;`SELFCHECK` 行打印 kernel 索引 / material / mesh / 贴图。⚠️ **不能用 `HasProperty` 判版本** —— 它看不见只在 HLSL 里声明的 uniform。
+**部署哨兵(判"包里装的是不是新版")**:`_ShaderVer`(当前 **3**)、`TranslateFixed=2`、`down·camUp ≈ -1`、`dist mean/R ≈ 0.75`;`SELFCHECK` 行打印 kernel 索引 / material / mesh / 贴图。 **不能用 `HasProperty` 判版本** —— 它看不见只在 HLSL 里声明的 uniform。
 
 ### 10.3 关键转弯点(每一次都是"证据推翻了上一版假设")
 
@@ -415,6 +415,6 @@ SP2 雨的**出厂值(第一手:`sp2d4/Assets/Resources/prefabs/ParticleDomain.p
 
 ### 10.6 环境事故与纪律(已按此执行)
 
-- ⚠️ **命令行绝不写非 ASCII 路径 / 文件名**:曾因中文路径被 shell 编码破坏,`ReadAllText` 失败却未停 → **把 986 行文档覆盖成 1 节**(已用同目录 ASCII 全本镜像复原)。用编辑工具、或 `Get-ChildItem -Filter` 取 `.FullName`;脚本开头设 `$ErrorActionPreference='Stop'`,任何 `ReadAllText` 后必须确认成功。
-- ⚠️ **Unity 陈旧编译状态**:AssetDatabase 缓存了磁盘上已删除的文件 → 大量 CS0234 级联错误、`Library/ScriptAssemblies` 停留旧版;聚焦窗口 / **Ctrl+R** 刷新即可(磁盘状态以 dotnet 编译为准)。
-- ⚠️ **命名空间 `Volken.Debug` 会遮蔽 `UnityEngine.Debug`**(曾因此踩 CS0234):测试代码统一 `Volken.Tests`;测试与正式代码**单向依赖** —— 正式代码零引用,整个 `VolkenTests/` 可删除,契约见 `VolkenTests/README.md`。
+-  **命令行绝不写非 ASCII 路径 / 文件名**:曾因中文路径被 shell 编码破坏,`ReadAllText` 失败却未停 → **把 986 行文档覆盖成 1 节**(已用同目录 ASCII 全本镜像复原)。用编辑工具、或 `Get-ChildItem -Filter` 取 `.FullName`;脚本开头设 `$ErrorActionPreference='Stop'`,任何 `ReadAllText` 后必须确认成功。
+-  **Unity 陈旧编译状态**:AssetDatabase 缓存了磁盘上已删除的文件 → 大量 CS0234 级联错误、`Library/ScriptAssemblies` 停留旧版;聚焦窗口 / **Ctrl+R** 刷新即可(磁盘状态以 dotnet 编译为准)。
+-  **命名空间 `Volken.Debug` 会遮蔽 `UnityEngine.Debug`**(曾因此踩 CS0234):测试代码统一 `Volken.Tests`;测试与正式代码**单向依赖** —— 正式代码零引用,整个 `VolkenTests/` 可删除,契约见 `VolkenTests/README.md`。

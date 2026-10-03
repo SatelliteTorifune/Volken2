@@ -12,7 +12,7 @@ namespace Volken.Clouds
 {
     /// <summary>
     /// 云系统:持有全部云层、按行星装载云预设、装配云渲染器,并且是全工程唯一解析"当前行星环境"的地方。
-    /// ⚠️ 与天气的关系:直接读对方 config,不要造接口层。⚠️ Mod.OnModLoaded 里本类必须先于 VolkenWeather 初始化。
+    /// 与天气的关系:直接读对方 config,不要造接口层。Mod.OnModLoaded 里本类必须先于 VolkenWeather 初始化。
     /// </summary>
     public class VolkenClouds
     {
@@ -23,7 +23,7 @@ namespace Volken.Clouds
 
         public CloudLayer MainLayer => layers.Count > 0 ? layers[0] : null;
 
-        // 本帧真正参与渲染的云层。⚠️ 所有渲染/反射路径都要用它,不要直接看 config.enabled(漏掉环境抑制)
+        // 本帧真正参与渲染的云层。所有渲染/反射路径都要用它,不要直接看 config.enabled(漏掉环境抑制)
         public IEnumerable<CloudLayer> ActiveLayers => layers.Where(IsActiveLayer);
 
         /// <summary>把本帧渲染层填进调用方自带的缓冲;渲染 / 反射路径每帧都取一次,别再 LINQ + 临时 List。</summary>
@@ -79,7 +79,7 @@ namespace Volken.Clouds
 
         private bool _subscribedToSoi;
 
-        /// <summary>初始化单例(幂等)。⚠️ 必须先于 <c>VolkenWeather.Initialize</c>(天气要订阅 <see cref="PlanetChanged"/>)。</summary>
+        /// <summary>初始化单例(幂等)。必须先于 <c>VolkenWeather.Initialize</c>(天气要订阅 <see cref="PlanetChanged"/>)。</summary>
         public static void Initialize()
         {
             if (Instance != null) return;
@@ -391,7 +391,7 @@ namespace Volken.Clouds
             }
         }
 
-        // 按环境设/撤"运行时抑制"。⚠️ 不要回写 CloudConfig.enabled:那是玩家预设本体的字段,回写会在保存时污染预设。
+        // 按环境设/撤"运行时抑制"。不要回写 CloudConfig.enabled:那是玩家预设本体的字段,回写会在保存时污染预设。
         private void SetEnvironmentSuppressed(bool suppressed)
         {
             foreach (var layer in layers)

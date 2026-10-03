@@ -24,7 +24,7 @@
 | 产品/API 更正条目 | **27 条**(§10.2 ⑨~㊳、§10.3、§10.4 A~J) |
 | 被放弃的代码量 | 约 **150 KB**(`Rain.cs` 113 KB + `RainParticles.compute` 14 KB + `RainParticles.shader` 10.5 KB + `FogRenderer.cs` 12 KB + `HeightFog.shader` 10 KB) |
 | 一并弃用的素材 | 3 条环境雨声(约 5.5 MB) |
-| 最终结果 | 全部移除;当时 stash 到 `%TEMP%\volken-rain-fog-stash`,⚠️ **2026-10-02 核实该 stash 已被清理、不存在**;文档写明"待重做" |
+| 最终结果 | 全部移除;当时 stash 到 `%TEMP%\volken-rain-fog-stash`, **2026-10-02 核实该 stash 已被清理、不存在**;文档写明"待重做" |
 | 唯一正收益 | 本文档的教训清单 + 雷电链路保住了 |
 
 > 值得强调:**代码从来不是不可修的** —— 每一轮都修对了"当时认定的那个 bug"。
@@ -268,7 +268,7 @@ fadeState: target=1.000 from=0.000 elapsed=1.03/1.00 dt=0.0156 shutdown=False
 
 - **雷电链路保留**(`LightningBolt.cs` / `LightningModule.cs` / `LightningBolt.shader` / 5 条雷声);
 - **天气状态机保留**(`VolkenWeather`)—— 重做雨/雾时是最自然的触发判据。
-  ⚠️ **但不要再用 SP2 的全局天气档位**(`WeatherTypes`,已按用户要求删除):
+   **但不要再用 SP2 的全局天气档位**(`WeatherTypes`,已按用户要求删除):
   雨/雷的阈值现在是各自的配置字段 `rain.triggerValue` / `lightning.stormValue`,
   `VolkenWeather.DescribeWeatherValue` 只是**显示用的文字标签**。详见计划 §10.6;
 - **天气配置已并入 `PlanetConfig`(2026-09-27 末最终形态)**:一颗行星**一条记录**同时记云层与天气

@@ -89,7 +89,7 @@ namespace Volken.Tests
         {
             if (cam == null)
             {
-                // ⚠️ 相机为 null 必须留日志:静默返回会导致"命令开了但什么都不画、零日志"。
+                //  相机为 null 必须留日志:静默返回会导致"命令开了但什么都不画、零日志"。
                 Mod.Diag("RainAxis: attach skipped — camera is null");
                 return null;
             }
@@ -250,7 +250,7 @@ namespace Volken.Tests
             try { shader = Shader.Find("Unlit/Color"); } catch { }
             if (shader == null)
             {
-                // ⚠️ 诊断:shader 找不到 = 探针什么都不画(静默)。BIRP 下 Unlit/Color 应存在。
+                //  诊断:shader 找不到 = 探针什么都不画(静默)。BIRP 下 Unlit/Color 应存在。
                 Mod.Log("Volken:RainAxisProbe ERROR: Shader.Find(\"Unlit/Color\") returned null — quads will NOT draw");
                 return null;
             }
@@ -269,7 +269,7 @@ namespace Volken.Tests
             PreCullCalls++;
             if (!Enabled)
             {
-                // ⚠️ 诊断:探针活着但未启用 —— 证明实例回调在跑(区分"没挂上"与"关了")
+                //  诊断:探针活着但未启用 —— 证明实例回调在跑(区分"没挂上"与"关了")
                 if (Time.realtimeSinceStartup - _lastAliveLogTime > 5f)
                 {
                     _lastAliveLogTime = Time.realtimeSinceStartup;
@@ -280,7 +280,7 @@ namespace Volken.Tests
             }
             if (_cam == null || _mesh == null)
             {
-                // ⚠️ 诊断:开了但实例字段没就绪(Awake 没跑?AddComponent 时机问题?)
+                //  诊断:开了但实例字段没就绪(Awake 没跑?AddComponent 时机问题?)
                 if (Time.realtimeSinceStartup - _lastNotReadyLogTime > 5f)
                 {
                     _lastNotReadyLogTime = Time.realtimeSinceStartup;
@@ -372,7 +372,7 @@ namespace Volken.Tests
             if (_matA != null) Graphics.DrawMesh(_mesh, Matrix4x4.identity, _matA, 0, _cam, 0);
             if (_matB != null) Graphics.DrawMesh(_mesh, Matrix4x4.identity, _matB, 0, _cam, 1);
 
-            // ⚠️ 诊断:首次启用时打一行完整状态,确认绘制参数与材质
+            //  诊断:首次启用时打一行完整状态,确认绘制参数与材质
             if (!_loggedFirstEnable)
             {
                 _loggedFirstEnable = true;
@@ -463,7 +463,7 @@ namespace Volken.Tests
                 _trisA = new int[count * 6];
                 _trisB = new int[count * 6];
             }
-            // ⚠️ 索引必须每次重填(不能只在 resize 时),否则三角形恒为 0 → 什么都画不出来;
+            //  索引必须每次重填(不能只在 resize 时),否则三角形恒为 0 → 什么都画不出来;
             // 索引只依赖数量、≤10 粒子 = 120 个 int,重填很便宜。
             for (int i = 0; i < count; i++)
             {

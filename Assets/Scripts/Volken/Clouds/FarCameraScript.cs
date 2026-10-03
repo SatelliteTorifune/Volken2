@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.Rendering;
 /// <summary>
 /// 用 CommandBuffer 抓取远相机的线性化深度到 RT(供云渲染管线使用)。
-/// ⚠️ 不要改用 OnRenderImage:远相机上挂该钩子会被迫走中间 RT + resolve,并在近相机远裁剪面(~10 km)处画出可见的像素缝线。
-/// ⚠️ farDepthTex / maxFarDepth 是【实例成员】:每对(主视角 / PIP)相机各自持有,否则多相机会互相 Release/重建同一纹理。
+///  不要改用 OnRenderImage:远相机上挂该钩子会被迫走中间 RT + resolve,并在近相机远裁剪面(~10 km)处画出可见的像素缝线。
+///  farDepthTex / maxFarDepth 是【实例成员】:每对(主视角 / PIP)相机各自持有,否则多相机会互相 Release/重建同一纹理。
 /// </summary>
 
 namespace Volken.Clouds

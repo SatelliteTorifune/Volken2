@@ -76,7 +76,7 @@ namespace Volken.Weather
             public float brightness = 0f;   // = shader _Emission;0 = 不额外提亮
 
             // JNO 能把镜头缩到整颗星球,不加限制会在太空里下雨。
-            // ⚠️ 阈值是雨**自己的**配置项,**不读 CloudConfig.maxCloudHeight**。
+            //  阈值是雨**自己的**配置项,**不读 CloudConfig.maxCloudHeight**。
 
             public float ceilingAltitude = 12000f;   // 米;0 = 关闭闸门(不限制),超过上限不再下雨
 

@@ -111,9 +111,9 @@
 
 1. **雷电**:`LightningBolt.shader` 是否被 Unity 编译、日志 `loaded thunder clips: near=4/4 far=5/5`、`volkenBolt` 手动劈雷。
 2. **雷声真实化**:日志应逐条打印 `thunder [near|far] dist=… delay=… vol=…`。判据:① `thunderDistanceAttenuation=0` 时听感回到原版 0.05 s;② Droo(340 m/s)与 Tydos(931 m/s)同落点距离下延迟差约 2.7 倍;③ 连劈多次不互相打断;④ 素材 near / far 分类需**人工确认**。
-3. **天气预设 XML 往返**:面板改 → 保存 → 文件跟着变;**读**方向(手改 XML → 重进场景 / 换预设 → 面板跟着变)也要试;「另存为新配置」要能新建并出现在下拉里;并回归云的「另存为 / 加载」不受影响。⚠️ 失败是**静默**的(回落默认全关,不报错)。
+3. **天气预设 XML 往返**:面板改 → 保存 → 文件跟着变;**读**方向(手改 XML → 重进场景 / 换预设 → 面板跟着变)也要试;「另存为新配置」要能新建并出现在下拉里;并回归云的「另存为 / 加载」不受影响。 失败是**静默**的(回落默认全关,不报错)。
 4. **打包 `Volken.sr2-mod` + 核对资产清单**:权威来源 `Assets/ModData.asset` 的 `_otherAssets`(GUID),生成物 `Temp\ModManifest.xml` 与 `ModAssetBundles\…\volken.manifest`;应含 6 个 shader/compute(`Clouds` / `CloudNoiseCompute` / `RainParticles.{compute,shader}` / `LightningBolt` / `LightningFlash`)+ 9 条 wav,**不含**任何 rain / fog / 旧 ogg 路径;进游戏用 `volkenAssets` 复核。
-   ⚠️ **移动 / 删除资产不会自动更新 GUID**(2026-10-01 实测:shader 挪进 `Shader/` 后留了 2 条悬空 + 1 条已删 ogg 残留 → **资产静默不进 bundle,云会整体消失,但没有编译错误**;已修,现 26 条 0 悬空)。自检(输出非空即有悬空):
+    **移动 / 删除资产不会自动更新 GUID**(2026-10-01 实测:shader 挪进 `Shader/` 后留了 2 条悬空 + 1 条已删 ogg 残留 → **资产静默不进 bundle,云会整体消失,但没有编译错误**;已修,现 26 条 0 悬空)。自检(输出非空即有悬空):
 
 ```powershell
 $map=@{}; gci -Recurse -File Assets -Filter *.meta | %{ $l=(Select-String $_.FullName -Pattern '^guid: '|select -First 1); if($l){$map[$l.Line.Replace('guid: ','').Trim()]=1} }

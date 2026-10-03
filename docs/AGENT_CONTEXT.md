@@ -14,7 +14,7 @@
 - **已落地 / 已归档**:方案 A(自带云区域内密度缩放)、B(自带云全球分布)、C(KSA 时序超采样);轨道 2D 云 + 过渡带;割裂线(重投影 Y 镜像);JNO 冲突定位与修复;水面反射云(方案 A)。
 - **天气**:范围已缩减为**只做雷电**;雨 / 雾实现曾整体移除,现按雨计划重做;雷声真实化代码已落地(**待 Unity 打包 + 真机验收**,未做则雷声静音)。天气母计划 / 雷声 / 优化路线图 / 水体大修都在 [`proposals/`](proposals/)。
 - **2026-10-01 解耦重构已落地**:`VolkenMod` → `Clouds.VolkenClouds`、`VolkenWeatherConfig` → `Weather.VolkenWeatherSettings`、行星生命周期并入 `VolkenClouds`、`Weather/` 按子系统分子目录、`CloudConfig.TryGetBand` 成为唯一实现;期间抽出的接口 / 编排器层已按"过度抽象"**全部回撤**。剩余 A2 / D / F 未排期 → [`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md) §8。
-- ⚠️ **铁律:命令行里绝不写非 ASCII 路径** —— 曾因中文路径被 shell 编码破坏,`ReadAllText` 失败却未停,把 986 行的计划文档覆盖成 1 节。用编辑工具、或 `Get-ChildItem -Filter` 取 `.FullName`;`ReadAllText` 后必须确认读取成功。
+-  **铁律:命令行里绝不写非 ASCII 路径** —— 曾因中文路径被 shell 编码破坏,`ReadAllText` 失败却未停,把 986 行的计划文档覆盖成 1 节。用编辑工具、或 `Get-ChildItem -Filter` 取 `.FullName`;`ReadAllText` 后必须确认读取成功。
 
 ## 1. 关键路径
 
@@ -43,10 +43,10 @@
 
 | 文件 | 职责 |
 |---|---|
-| `Clouds/VolkenClouds.cs` | **云系统 + 行星生命周期的唯一来源**(原名 `Core/VolkenMod.cs`,2026-10-01 改名移入 `Clouds/`):持有全部云层、按行星装载云预设、装配 `CloudRenderer` / `FarCameraScript`;自己订阅 `SceneLoaded` / `PlayerChangedSoi`,解析 `PlanetEnvironment` 后广播 `PlanetChanged`(天气订阅它)。持有 `planetConfigList`。⚠️ `Mod.OnModLoaded` 里必须**先于** `VolkenWeather` 初始化 |
+| `Clouds/VolkenClouds.cs` | **云系统 + 行星生命周期的唯一来源**(原名 `Core/VolkenMod.cs`,2026-10-01 改名移入 `Clouds/`):持有全部云层、按行星装载云预设、装配 `CloudRenderer` / `FarCameraScript`;自己订阅 `SceneLoaded` / `PlayerChangedSoi`,解析 `PlanetEnvironment` 后广播 `PlanetChanged`(天气订阅它)。持有 `planetConfigList`。 `Mod.OnModLoaded` 里必须**先于** `VolkenWeather` 初始化 |
 | `Clouds/PlanetEnvironment.cs` | 当前行星环境快照(行星名 / 是否飞行 / 是否天体 / 大气 / 水),由 `VolkenClouds` 解析并广播 |
 | `Core/VolkenUserInterface.cs` | UI(配置分组、覆盖分解滑块、轨道云组、本地化);**只做 UI 自己的场景生命周期**(建面板)——行星解析 / 大气门控 / 渲染器装配已交给 `VolkenClouds` |
-| `Core/PlanetConfig.cs` | **行星 → 预设名映射**:`PlanetConfig`(`PlanetName` / `CloudConfigName` / `ExtraCloudConfigName` / `WeatherConfigName` + 仅用于迁移旧内联格式的 `LegacyWeather`)+ `PlanetConfigList`(清单读写 + 旧格式迁移 + `Get/SetWeatherConfig`)。落盘 `UserData/VolkenConfig/PlanetConfigList.xml`。**云与天气预设互相独立**(各自的名字 / 列表 / 新建保存,不配对)⚠️ `AddConfig` 对已有行星只更新预设名(勿改回 `Add`) |
+| `Core/PlanetConfig.cs` | **行星 → 预设名映射**:`PlanetConfig`(`PlanetName` / `CloudConfigName` / `ExtraCloudConfigName` / `WeatherConfigName` + 仅用于迁移旧内联格式的 `LegacyWeather`)+ `PlanetConfigList`(清单读写 + 旧格式迁移 + `Get/SetWeatherConfig`)。落盘 `UserData/VolkenConfig/PlanetConfigList.xml`。**云与天气预设互相独立**(各自的名字 / 列表 / 新建保存,不配对) `AddConfig` 对已有行星只更新预设名(勿改回 `Add`) |
 | `Weather/`(域根) | `VolkenWeather.cs`(状态机)+ `VolkenWeatherSettings.cs`(预设本体,类名仍是 `VolkenWeatherConfig`)+ `WeatherPanel.cs`(面板,含各子系统分组) |
 | `Weather/Rain/` | `RainParticles.cs` + `RainAudio.cs` + `Shader/`(`RainParticles.compute` / `.shader`)+ `Audio/`(6 条 `volkenRain-{light,heavy}-1~3.wav`) |
 | `Weather/Lightning/` | `LightningModule.cs` / `LightningBolt.cs` + `Shader/`(`LightningBolt.shader` / `LightningFlash.shader`)+ `Audio/`(9 条雷声 wav) |
@@ -68,7 +68,7 @@
 | `Water/ForceSetting.cs` | 按高度切换水透明等强制设置(水体 A 阶段雏形) |
 | `PlanetRing/PlanetRingsZWriteFix.cs` | 星环渲染(相关待办:星环渲染顺序错误) |
 | `HarmonyPatches/` | `LayoutRebuiltPatch.cs`、`PlanetRingsShaderPatch.cs` 等 |
-| **约定:资产按子系统归 `Shader/`** | 每个子系统的 `.shader` / `.compute` 放自己的 `Shader/`(`Clouds/Shader/`、`Weather/Rain/Shader/`、`Weather/Lightning/Shader/`),不散放在代码旁。⚠️ **移动资产必须同步路径字符串** —— `Mod.LoadVolkenAsset<T>` 按**工程路径**读,不是 GUID(共 6 处);新增 / 移动资产还要改 `Assets/ModData.asset` 的 `_otherAssets`,否则静默不进 bundle |
+| **约定:资产按子系统归 `Shader/`** | 每个子系统的 `.shader` / `.compute` 放自己的 `Shader/`(`Clouds/Shader/`、`Weather/Rain/Shader/`、`Weather/Lightning/Shader/`),不散放在代码旁。 **移动资产必须同步路径字符串** —— `Mod.LoadVolkenAsset<T>` 按**工程路径**读,不是 GUID(共 6 处);新增 / 移动资产还要改 `Assets/ModData.asset` 的 `_otherAssets`,否则静默不进 bundle |
 
 ## 3. 已确定的技术事实(不要再重复调研)
 
@@ -110,7 +110,7 @@
 - Mods 目录勿同时放 `Volken.sr2-mod` 与 `Volken-R.sr2-mod`(同名程序集冲突)。
 - **每帧回调的场景边界**:挂在相机 / 场景物体上的组件(`CloudRenderer` / `FarCameraScript` / `RainParticles`)随 Flight 场景卸载,天然只在飞行场景;常驻(`DontDestroyOnLoad`)组件(天气 ticker / `RainAudio` / `LightningModule` / `VolkenUserInterface`)必须按 `VolkenClouds.PlanetChanged` 的 `InFlight` 停表 —— 新增每帧组件照此办理,见 [场景门控](monobehaviour-scene-gate-2026-10-02.md) §0~§2。
 - **相机上组件的实例资源不得用 `static` 门控**:换场景 = 组件销毁 + 新实例,而 compute / shader / material / buffer 都在实例上;`static` 就绪标志会让新实例跳过加载并**永久 NOT READY**(雨视觉"换场景后打不开"就是这样),且静态开关会让雨声照响 → 表现为"只有视觉死"。见 [雨开关](rain-toggle-scene-switch-2026-10-02.md) §0。
-- ~~`CloudConfig.low/mid/highAltitudeThreshold` 是死配置但不可删除~~ → **⚠️ 已更正(2026-10-01)**:这三个字段早在 `fe87e59` 就删掉了(全仓库 0 命中),**且没有任何反序列化问题** —— `XmlSerializer` 对未知节点默认忽略、不抛异常。**结论:`CloudConfig` 里废弃字段可以放心删**;归档文档里"不可删除"的旧说法是未经验证的推测,勿再引用。
+- ~~`CloudConfig.low/mid/highAltitudeThreshold` 是死配置但不可删除~~ → ** 已更正(2026-10-01)**:这三个字段早在 `fe87e59` 就删掉了(全仓库 0 命中),**且没有任何反序列化问题** —— `XmlSerializer` 对未知节点默认忽略、不抛异常。**结论:`CloudConfig` 里废弃字段可以放心删**;归档文档里"不可删除"的旧说法是未经验证的推测,勿再引用。
 
 ## 4. 游戏 API 关键入口(反编译确认 / ModApi)
 

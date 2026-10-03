@@ -38,7 +38,7 @@ float3 _domainCenter;   // 相机位置(阶段 2 的域中心,世界坐标)
 float _domainRadius;    // 域半径(阶段 4 前用固定值)
 float _fallSpeed;       // 15 m/s(SP2 _fallSpeed)
 float3 _downDir;        // 径向"下" = 指向行星中心(帧空间,craft.GravityNormal)
-                        // ⚠️ 坐标系铁律(jnoCode ReferenceFrame/GravityNormal 实锤):
+                        //  坐标系铁律(jnoCode ReferenceFrame/GravityNormal 实锤):
                         //   世界(帧)空间是浮点原点+绕行星Y轴旋转,重力径向 → "下"随球面位置变,
                         //   不是世界 (0,-1,0)!球面赤道处径向"下"≈世界水平。
 float3 _translation;    // 换帧原点重定位平移量(TranslateFixed kernel;SP2 FloatingOriginChanged
@@ -79,7 +79,7 @@ float3 RandomUnitVector(float seed)
 
 // 域内随机重生位置(**体积均匀**,但在 [0.15R, R] 的壳层内 —— 避开"紧贴镜头凭空冒出")
 //   r = R * (lerp(inner³, 1, u))^(1/3) → 壳层内体积均匀;被排除的核心只占体积的 0.3%,密度无感。
-//   ⚠️ 随机(而非确定性镜像)是"像真雨"的关键:确定性处置会让整片雨**零混合** →
+//    随机(而非确定性镜像)是"像真雨"的关键:确定性处置会让整片雨**零混合** →
 //   初始的任何一簇粒子永远成团、周期性地一起落下来(实测反馈"雨像下面条一样集中一股脑下降";
 //   静止时周期 = 2R/下落速度 ≈ 6.7s,飞行时缩到 0.6s = 高频脉动)。
 float3 RandomSpawnInside(float seed, float phase)
@@ -100,7 +100,7 @@ void Randomize(uint3 id : SV_DispatchThreadID)
     float seed = (float)id.x * 7.13f + 1.0f;
     _RandomData[id.x] = float4(seed, 0, 0, 0);
     float3 dir = RandomUnitVector(seed);
-    // ⚠️ 体积均匀:半径必须 R*u^(1/3)(u 均匀),不能用 R*u ——
+    //  体积均匀:半径必须 R*u^(1/3)(u 均匀),不能用 R*u ——
     //   R*u 的体密度 ∝ 1/r²,粒子全挤在球心("雨是一团"的另一半原因),
     //   且镜头附近过密 → 垂直往下看时糊满屏幕的帮凶。
     float u = Hash11(seed + 3.3f);
@@ -138,18 +138,18 @@ void Positioning(uint3 id : SV_DispatchThreadID)
     down = normalize(down);
 
     // 阶段 2:沿径向"下"下落(**世界系下落**,与 SP2 同款:`_particleVel = dt*(风+下落)`)。
-    // ⚠️ 2026-09-29 第三轮真机根因:旧实现额外加 camVel(云锁相机)让整片雨"贴"在镜头上
+    //  2026-09-29 第三轮真机根因:旧实现额外加 camVel(云锁相机)让整片雨"贴"在镜头上
     //   (转镜头/缩放都跟着动,不像独立物体)。SP2 粒子是世界系下落 + 出球重生,域随相机重定位 ——
     //   相机速度**不参与位置积分**(只参与雨丝朝向 AlignStreaks),这才是"独立物品"感的来源。
     //   风、_frameVel → 阶段 5;换帧原点重定位 → TranslateFixed kernel。
     p.xyz += (down * _fallSpeed) * _dt;
 
     // 球域环绕:超出半径 → 随机重生在球内(保持均匀密度)。
-    // ⚠️ 2026-09-29 真机根因:旧实现 frac(dist/R)*R 把从边界缓慢飘出的粒子回收到
+    //  2026-09-29 真机根因:旧实现 frac(dist/R)*R 把从边界缓慢飘出的粒子回收到
     //   frac(≈1.0)≈0 的近中心处,高速飞行下整团云逐渐坍缩到相机上
     //   ("竖线贴在摄像机上",pos 回读 4m 簇 + 相对位置逐字节冻结 = 坍缩后的冻结态);
     //   随机重生无此问题。相位 floor(_time*20) 保证每粒子重生一次位置稳定,不每帧乱跳。
-    // ⚠️ 2026-09-29 第二轮根因:这里**不要读 _RandomData** —— 该 buffer 只绑了 Randomize
+    //  2026-09-29 第二轮根因:这里**不要读 _RandomData** —— 该 buffer 只绑了 Randomize
     //   kernel,在 Positioning 里读未绑定的 StructuredBuffer 会让本 kernel 在真机整段空转
     //   (实测:整团雨冻死在初始随机位,连 camVel 锁都失效,pos0Δ 恒 0);
     //   seed 直接用 id.x 派生(与 Randomize 同公式,每粒子稳定)。
@@ -160,7 +160,7 @@ void Positioning(uint3 id : SV_DispatchThreadID)
         if (_respawnMode == 1u)
         {
             // 确定性"穿过球心镜像"(SP2 元数据里没有随机 buffer 时的一种可能实现)。
-            // ⚠️ **不推荐**:确定性 + 同速下落 = 整片雨零混合 → 初始的每一簇粒子永远成团,
+            //  **不推荐**:确定性 + 同速下落 = 整片雨零混合 → 初始的每一簇粒子永远成团,
             //   周期性一起落下来("像下面条一样集中一股脑下降";静止周期 ≈ 6.7s,飞行时 0.6s)。
             //   保留此分支仅用于对照实验(_respawnMode=1);默认走随机(分支 else)。
             float3 n = dist > 1e-4f ? d / dist : float3(0, 1, 0);

@@ -16,7 +16,7 @@ namespace Volken.Clouds
 
         /// <summary>
         /// **运行时**环境抑制(不落盘):绕恒星 / 绕无大气行星时由 <see cref="VolkenClouds"/> 统一置位。
-        /// ⚠️ 不要回写 <c>config.enabled</c>:那是玩家预设本体,回写会随"保存配置"把预设静默改成"关闭"。
+        ///  不要回写 <c>config.enabled</c>:那是玩家预设本体,回写会随"保存配置"把预设静默改成"关闭"。
         /// 渲染只认 <c>enabled &amp;&amp; !EnvironmentSuppressed</c>。
         /// </summary>
         public bool EnvironmentSuppressed;

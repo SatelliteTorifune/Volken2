@@ -7,9 +7,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 /*
     云渲染主流程:合并远近相机深度 → 逐层低清 raymarch(+ 云面深度/MV 的 MRT)→ MV 膨胀 → 全清时序上采样 → 逐层合成。
-    ⚠️ 每个 CloudRenderer 实例 = 一台相机,每相机状态全在 CloudLayerView;farDepthSource = 这台相机的远相机。
-    ⚠️ 风/自转是全球共享量,每帧只能推进一次(AdvanceGlobalCloudState),多相机下推两次 = 云速翻倍。
-    ⚠️ [ImageEffectOpaque] 必须保留:云要在不透明之后、透明之前合成,否则会盖住水面/玻璃/UI。
+     每个 CloudRenderer 实例 = 一台相机,每相机状态全在 CloudLayerView;farDepthSource = 这台相机的远相机。
+     风/自转是全球共享量,每帧只能推进一次(AdvanceGlobalCloudState),多相机下推两次 = 云速翻倍。
+     [ImageEffectOpaque] 必须保留:云要在不透明之后、透明之前合成,否则会盖住水面/玻璃/UI。
 */
 
 namespace Volken.Clouds
@@ -308,13 +308,13 @@ namespace Volken.Clouds
                 Mathf.PerlinNoise(time * 0.5f + layer.layerIndex * 0.3f, 0f) * 2f - 1f,
                 Mathf.PerlinNoise(0f, time * 0.5f + layer.layerIndex * 0.3f) * 2f - 1f
             ));
-            // ⚠️ 重投影必须在云空间做:云自身在动(自转 + 风平移),纯世界空间 prevViewProj 会采到旧位置的云
+            //  重投影必须在云空间做:云自身在动(自转 + 风平移),纯世界空间 prevViewProj 会采到旧位置的云
             // → 运动残影,并在残影边缘形成水平割裂线。φ = 自转累积角 + 风平移折算的经度角(2π·runningOffset.x)。
             float cloudPhi = layer.accumulatedRotation + 2.0f * Mathf.PI * layer.runningOffset.x;
             float dPhi = float.IsNaN(view.prevCloudAngle) ? 0.0f : cloudPhi - view.prevCloudAngle;
             mat.SetMatrix("reprojMat", view.prevViewProjMat * BuildCloudSpaceRepro(dPhi, planetCenter));
             view.prevCloudAngle = cloudPhi;
-            // 观察射线用相机 transform 轴构造。⚠️ 不要用 cameraToWorldMatrix 第 2 列当 fwd —— Unity 视图约定里那是 -forward,会反向。
+            // 观察射线用相机 transform 轴构造。 不要用 cameraToWorldMatrix 第 2 列当 fwd —— Unity 视图约定里那是 -forward,会反向。
             mat.SetVector("_CamPos", cam.transform.position);
             mat.SetFloat("_ReflectionMode", 0f);
             mat.SetVector("_CamFwd", cam.transform.forward);
@@ -380,7 +380,7 @@ namespace Volken.Clouds
                 view.cloudTex != null ? view.cloudTex.width : 1f,
                 view.cloudTex != null ? view.cloudTex.height : 1f));
 
-            // ⚠️ 必须用 GL.GetGPUProjectionMatrix(cam.projectionMatrix, true),不能用逻辑投影:Clouds 顶点着色器
+            //  必须用 GL.GetGPUProjectionMatrix(cam.projectionMatrix, true),不能用逻辑投影:Clouds 顶点着色器
             // 用光栅化 clip 重建射线,D3D 下 GPU clip 与逻辑投影 Y 约定相反 → 历史采错行 → 云带边缘镜像鬼影(割裂线)。
             view.prevViewProjMat = GL.GetGPUProjectionMatrix(cam.projectionMatrix, true) * cam.worldToCameraMatrix;
         }
@@ -794,7 +794,7 @@ namespace Volken.Clouds
                     }
                 }
 
-                // 逐层上采样。⚠️ 不要改成 MRT + DrawMeshNow:双 MRT(0 深度)在该路径上不渲染 → upscaled 恒黑 → 看不到云。
+                // 逐层上采样。 不要改成 MRT + DrawMeshNow:双 MRT(0 深度)在该路径上不渲染 → upscaled 恒黑 → 看不到云。
                 int upscalePass = matRef.FindPass("Upscale");
                 foreach (var layer in activeLayers)
                 {

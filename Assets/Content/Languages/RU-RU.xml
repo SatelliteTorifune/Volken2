@@ -13,7 +13,7 @@
     <s id="Volken.ModSettings.ExtraCameraClouds">Облака на доп. камерах</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Автоматически рендерить объёмные облака на дополнительных камерах (окна PIP и т.п.). Только по поведению, без кода конкретного мода.</s>
     <s id="Volken.ModSettings.ShowProfiler">Оверлей профайлера</s>
-    <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности (VolkenProfiler). Переключение командой консоли 'VolkenProfiler'.</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности.</s>
 
     <s id="Volken.UI.CloudSettings">Настройка Облаков</s>
 
@@ -33,18 +33,20 @@
     <s id="Volken.UI.WeatherNotImplemented">Эта связь ещё не реализована; значения ниже — заготовки (0 = облака не меняются).</s>
 
 
-    <s id="Volken.UI.WeatherRain">Дождь (этап 3, в реальном времени)</s>
+    <s id="Volken.UI.WeatherRain">Дождь (в реальном времени)</s>
     <s id="Volken.UI.RainStats">Состояние (в реальном времени)</s>
     <s id="Volken.UI.RainToggleNow">Переключить дождь</s>
     <s id="Volken.UI.RainOnMsg">Дождь включён</s>
     <s id="Volken.UI.RainOffMsg">Дождь выключен</s>
-    <s id="Volken.UI.RainStreamMode">Струи вдоль относительной скорости (SP2 AlignStreaks; выкл = всегда радиально вниз)</s>
-    <s id="Volken.UI.RainStretch">Растяжение от скорости (SP2 0.045; 0 = нет)</s>
+    <s id="Volken.UI.RainStreamMode">Струи вдоль относительной скорости (выкл = всегда радиально вниз)</s>
+    <s id="Volken.UI.RainStretch">Растяжение от скорости (0 = нет)</s>
     <s id="Volken.UI.RainStretchLimit">Предел растяжения (макс. длина = длина x это; уменьшите, если слишком длинно)</s>
     <s id="Volken.UI.RainEdgeFade">Ширина затухания у границы домена (доля радиуса; 0 = выкл, по умолчанию 0.2)</s>
-    <s id="Volken.UI.RainSoftParticles">Мягкие частицы (0 = жёсткий край, 1 = по умолчанию SP2)</s>
-    <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи (SP2 _falloff, 0.9)</s>
+    <s id="Volken.UI.RainSoftParticles">Мягкие частицы (0 = жёсткий край, 1 = по умолчанию)</s>
+    <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи</s>
     <s id="Volken.UI.RainBrightness">Яркость (0 = исходная)</s>
+    <s id="Volken.UI.RainDistanceFade">Глубина: затухание по дистанции в домене (0 = выкл)</s>
+    <s id="Volken.UI.RainStreakVariation">Глубина: разброс длины/ширины струй (0 = все одинаковы)</s>
     <s id="Volken.UI.WeatherRainRemoved">Система дождя удалена и будет переделана; значения ниже — заготовки и ни на что не влияют.</s>
     <s id="Volken.UI.RainEnabled">Дождь включён</s>
     <s id="Volken.UI.RainCeilingAltitude">Предел высоты дождя (м; 0 = без ограничения)</s>
@@ -53,7 +55,7 @@
     <s id="Volken.UI.RainDumpLog">Записать состояние дождя в лог (для диагностики)</s>
     <s id="Volken.UI.RainDumped">Состояние дождя записано в Player.log</s>
     <s id="Volken.UI.RainAudioStats">Звук дождя</s>
-    <s id="Volken.UI.RainRowTest">Отладка: тестовый ряд (SV_InstanceID)</s>
+    <s id="Volken.UI.RainRowTest">Отладка: тестовый ряд</s>
     <s id="Volken.UI.RainAmount">Количество частиц</s>
     <s id="Volken.UI.RainDomainRadius">Радиус области (м)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Адаптивный радиус области</s>
@@ -177,7 +179,7 @@
     <s id="Volken.UI.LightMarchDistance">Дистанция Марша Света</s>
     <s id="Volken.UI.RayOffsetStrength">Сила Разброса Лучей</s>
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
-    <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг (шаг 1/N)</s>
+    <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
 
     <!-- Орбитальные облака (2D-шейдинг оболочки + перекрёстное затухание) -->

@@ -9,9 +9,9 @@
    `Volken.Tests` / `RainAxisProbe` / `ProfilerController` / `RainPreview` 等类型名）。
 2. **可整体删除**：删掉整个 `VolkenTests` 文件夹后，mod 仍能编译并正常运行（只是少了这些工具与命令）。
    所以想"彻底不打包进游戏"，直接删文件夹即可。
-3. **自发注册**：本文件夹里的工具不靠正式代码启动，而是由 `TestsBootstrap.cs` 用
-   `[RuntimeInitializeOnLoadMethod]` 自发注册命令/创建工具（原来写在 `Mod.RegisterCommands()` 里的
-   测试命令与剖析器入口已全部搬到这里）。
+3. **自发创建工具**：本文件夹里的工具不靠正式代码启动，而是由 `TestsBootstrap.cs` 用
+   `[RuntimeInitializeOnLoadMethod]` 自发创建（剖析器覆盖层）。**控制台命令只在
+   `Mod.RegisterCommands()` 注册，本文件夹不再注册任何命令。**
 4. 命名空间统一用 **`Volken.Tests`**（`Profiler/` 子目录保留其独立命名空间 `VolkenProfiler`），
    与正式命名空间（`Volken.*`）分开，便于一眼分辨。
 
@@ -20,11 +20,11 @@
 | 文件 | 用途 | 入口 |
 | --- | --- | --- |
 | `RainPreview.cs` | **编辑器内雨预览台**：自由飞相机 + 参数面板即时生效 + 地面/参照物；跑的是同一份 compute/shader/驱动代码 | Unity 里 Add Component「Volken Rain Preview」→ Play（可勾「下次 Play 自动启动」写 PlayerPrefs，仅编辑器生效） |
-| `RainAxisProbe.cs` | Phase 1 雨丝构轴 A/B 对照探针（屏幕平面构轴 vs SP2 世界系构轴） | 命令 `volkenRainAxis` / `volkenRainAxisOn 1` / `volkenRainAxisMode n` / `volkenRainAxisVec x y z` / `volkenRainAxisCount n`（`On 1` 会自行挂到当前视图相机） |
+| `RainAxisProbe.cs` | Phase 1 雨丝构轴 A/B 对照探针（屏幕平面构轴 vs SP2 世界系构轴）；结论已定案（轴 = 径向重力），**已无命令入口**，只能由代码 `Attach(cam)` 挂载 | 代码调用 |
 | `NoiseVisualizer.cs` | 体积云噪声可视化（`[ExecuteInEditMode]`） | 场景里挂组件 |
 | `RaymarchDebug.cs` | 体积云 raymarch 步进调试 | 场景里挂组件 |
-| `Profiler/` | 性能剖析覆盖层（帧耗时/面板） | 命令 `VolkenProfiler` / `VolkenProfiler.Capture`；由 `TestsBootstrap` 自动创建 |
-| `TestsBootstrap.cs` | 上述命令/工具的自发注册入口（重试至控制台就绪） | 自动（`RuntimeInitializeOnLoadMethod`） |
+| `Profiler/` | 性能剖析覆盖层（帧耗时/面板） | 由 `TestsBootstrap` 自动创建；可见性以 `ModSettings.ShowProfiler` 为准 |
+| `TestsBootstrap.cs` | 上述工具的自发创建入口 | 自动（`RuntimeInitializeOnLoadMethod`） |
 
 ## 校验"零引用"（改完正式代码后可自查）
 
@@ -40,3 +40,5 @@ Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
 - 2026-09-29 建立：原先散落在 `Assets/Scripts/Volken/Debug/`、`Assets/Scripts/Volken/Weather/RainAxisProbe.cs`、
   `Assets/Scripts/Volken/Profiler/` 的测试/开发脚本统一搬到这里；同时把 `Mod.cs` / `VolkenMod.cs` 里
   对这些脚本的 7 处引用**全部摘除**（改为自发注册），使正式代码与测试彻底解耦。
+- 2026-10-03 控制台命令精简：本文件夹内的 `DevConsoleApi.RegisterCommand` 全部删除，命令只剩
+  `Mod.RegisterCommands()` 的 3 条（`frs` / `brs` / `VolkenForceRefresh`）。

@@ -5,7 +5,7 @@ namespace Volken.Weather
 {
     /// <summary>游戏暂停的唯一判定点,外加一个"暂停期间停表"的真实时钟(任何该在暂停时停住的计时都用 <see cref="Now"/>)。</summary>
     /// <remarks>判据 = Unity <c>Time.timeScale</c> 兜底 + JNO 自己的 <c>ITimeManager.Paused</c>(慢动作/快进是它的另几个字段,不算暂停)。
-    /// 累计暂停时长按"两次查询的间隔"懒累加,所以**不需要额外驱动者** —— 调用方每帧查一次即可。</remarks>
+    /// 累计暂停时长按"两次查询的间隔"懒累加,且**一帧只查一次游戏 API**(闪电分叉可能有上百个自毁组件在查),不需要额外驱动者。</remarks>
     public static class GamePause
     {
         public static bool IsPaused { get { Tick(); return _paused; } }
@@ -17,9 +17,14 @@ namespace Volken.Weather
         private static bool _started;
         private static float _pausedTotal;
         private static float _lastQuery;
+        private static int _lastFrame = -1;
 
         private static void Tick()
         {
+            int frame = Time.frameCount;
+            if (frame == _lastFrame) return;   // 一帧只查一次游戏 API(分叉组件可能上百个,别每帧打上百次)
+            _lastFrame = frame;
+
             float now = Time.realtimeSinceStartup;
             if (_started && _paused) _pausedTotal += now - _lastQuery;   // 上一次查询到现在都是暂停 → 计入停表
             _started = true;

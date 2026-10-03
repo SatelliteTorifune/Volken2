@@ -76,36 +76,7 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
-
-            DevConsoleApi.RegisterCommand("volkenWeather",WeatherStatus);
-            DevConsoleApi.RegisterCommand("volkenAssets",LogVolkenAssets);
-
-            // 测试/开发工具的命令由 VolkenTests/TestsBootstrap.cs 自发注册 —— 正式代码对该文件夹零引用。
-
-            // 雨:没有控制台指令,全部旋钮在天气面板「雨」分组
-        }
-
-        /// <summary>打印天气系统当前状态(行星 / 配置 / 雷电 / 相机)。</summary>
-        private void WeatherStatus()
-        {
-            var w = VolkenWeather.Instance;
-            if (w == null) { Diag("WeatherStatus: VolkenWeather 未初始化"); return; }
-            var c = w.Config;
-            Diag("WeatherStatus: planet={0} active={1} cfgEnabled={2} lightningCfg={3} boltCount={4} nextStrike={5:F1}s " +
-                 "camAsl={6:F0}m agl={7:F0}m cloudFade={8:F2} solarHour={9:F1} submerged={10}",
-                w.CurrentPlanet, w.IsActive, c?.overall?.enabled, c?.lightning?.enabled,
-                w.Lightning?.BoltCount ?? 0,
-                w.Lightning?.TimeToNextStrike ?? 0f,
-                w.CameraAltitudeAsl, w.CameraAltitudeAgl, w.CameraCloudFade, w.LocalSolarHour, w.CameraSubmerged);
-            Diag("WeatherStatus.preset: planet={0} weatherPreset={1} (独立于云层预设)", w.CurrentPlanet, w.CurrentConfigName);
-            Diag("WeatherStatus.paths: clouds={0}  weather={1}",
-                Volken.Core.PlanetConfigList.GetConfigPath(Volken.Core.PlanetConfigList.DefaultListName),
-                string.IsNullOrEmpty(w.CurrentPlanet)
-                    ? "—"
-                    : VolkenWeatherConfig.GetConfigPath(w.CurrentPlanet, w.CurrentConfigName));
-
-            // 资源台账:一眼看出"哪个资源没打进 bundle"
-            LogVolkenAssets();
+            
         }
         
         
@@ -114,10 +85,10 @@ namespace Assets.Scripts
         {
             if (!Game.InFlightScene) return;
 
-            Volken.Clouds.VolkenClouds.Initialize();
+            VolkenClouds.Initialize();
             VolkenWeather.Initialize();
 
-            Volken.Clouds.VolkenClouds.Instance?.OnFlightSceneLoaded();
+            VolkenClouds.Instance?.OnFlightSceneLoaded();
             Log("VolkenForceRefresh: 已让 VolkenClouds 重新解析行星环境");;
         }
         #region LOG

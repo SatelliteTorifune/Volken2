@@ -75,6 +75,10 @@ namespace Volken.Weather
 
             public float brightness = 0f;   // = shader _Emission;0 = 不额外提亮
 
+            // 纵深线索(治"快速缩放时像一层平面"):整片雨丝等长、等亮、平行 → 没有纵深
+            public float distanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关;近了亮远了暗)
+            public float streakVariation = 0.5f;  // 逐粒长度/宽度倍率(0 = 全一样长)
+
             // JNO 能把镜头缩到整颗星球,不加限制会在太空里下雨。
             //  阈值是雨**自己的**配置项,**不读 CloudConfig.maxCloudHeight**。
 
@@ -106,6 +110,8 @@ namespace Volken.Weather
                 softParticles = s.softParticles;
                 tailFalloff = s.tailFalloff;
                 brightness = s.brightness;
+                distanceFade = s.distanceFade;
+                streakVariation = s.streakVariation;
                 ceilingAltitude = s.ceilingAltitude;
                 ceilingBand = s.ceilingBand;
                 respawnMirror = s.respawnMirror;
@@ -294,6 +300,8 @@ namespace Volken.Weather
             rain.softParticles = Mathf.Clamp(rain.softParticles, 0f, 3f);
             rain.tailFalloff = Mathf.Clamp01(rain.tailFalloff);
             rain.brightness = Mathf.Clamp(rain.brightness, 0f, 3f);
+            rain.distanceFade = Mathf.Clamp01(rain.distanceFade);
+            rain.streakVariation = Mathf.Clamp01(rain.streakVariation);
             rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);
             rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
 

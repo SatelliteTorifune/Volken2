@@ -1,19 +1,17 @@
 using System;
-using Assets.Packages.DevConsole;
 using UnityEngine;
 
 namespace VolkenProfiler
 {
     /// <summary>
     /// 性能分析器入口,由 <c>TestsBootstrap</c> 调 <see cref="Create"/> 创建(幂等)。
-    /// 命令 <c>VolkenProfiler</c> / <c>VolkenProfiler.Capture</c>;可见性以 <c>ModSettings.ShowProfiler</c> 为准。
+    /// 可见性以 <c>ModSettings.ShowProfiler</c> 为准。
     /// </summary>
     public class ProfilerController : MonoBehaviour
     {
         public static ProfilerController Instance { get; private set; }
 
         private ProfilerOverlay _overlay;
-        private bool _commandsRegistered;
         private bool _visible;
 
         /// <summary>创建单例(幂等)。</summary>
@@ -39,8 +37,6 @@ namespace VolkenProfiler
             overlayGo.transform.SetParent(transform, false);
             _overlay = overlayGo.AddComponent<ProfilerOverlay>();
             _overlay.gameObject.SetActive(false); // 默认隐藏,隐藏时零开销
-
-            RegisterCommands();
         }
 
         private void Update()
@@ -89,25 +85,6 @@ namespace VolkenProfiler
             }
 
             SetVisible(next);
-        }
-
-        private void RegisterCommands()
-        {
-            if (_commandsRegistered)
-            {
-                return;
-            }
-
-            _commandsRegistered = true;
-            try
-            {
-                DevConsoleApi.RegisterCommand("VolkenProfiler", Toggle);
-                DevConsoleApi.RegisterCommand("VolkenProfiler.Capture", ToggleCapture);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("[Volken.Profiler] failed to register console commands: " + ex);
-            }
         }
 
         private void ToggleCapture()

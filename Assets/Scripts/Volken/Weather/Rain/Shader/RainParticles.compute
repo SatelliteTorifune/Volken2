@@ -28,7 +28,7 @@
 #pragma kernel FillArgs
 
 RWStructuredBuffer<float4> _Positions;   // xyz = 世界(相机域)位置;w = 执行探针(_time)
-RWStructuredBuffer<float4> _RandomData;  // x = 随机种子;yzw 备用
+RWStructuredBuffer<float4> _RandomData;  // x = 种子;yzw = 逐粒长/宽倍率与滚转(只由 Randomize 写、雨丝 shader 读)
 RWStructuredBuffer<uint> _ArgsBuffer;    // 5×uint 间接绘制参数(args[1] = instanceCount)
 RWStructuredBuffer<uint> _DiagBuffer;    // 诊断计数:x0 = 本帧重生次数(CPU 每帧 SetData 复位)
 
@@ -98,7 +98,8 @@ void Randomize(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _capacity) return;
     float seed = (float)id.x * 7.13f + 1.0f;
-    _RandomData[id.x] = float4(seed, 0, 0, 0);
+    // yzw = 逐粒外观随机(长度倍率 / 宽度倍率 / 滚转角),由雨丝 shader 读(**本 compute 的 Positioning 绝不可读 _RandomData**)
+    _RandomData[id.x] = float4(seed, Hash11(seed + 11.3f), Hash11(seed + 23.7f), Hash11(seed + 37.1f));
     float3 dir = RandomUnitVector(seed);
     //  体积均匀:半径必须 R*u^(1/3)(u 均匀),不能用 R*u ——
     //   R*u 的体密度 ∝ 1/r²,粒子全挤在球心("雨是一团"的另一半原因),

@@ -622,14 +622,14 @@ namespace Volken.Weather
                 LastMaster, LastLightVolume, LastHeavyVolume, LastIntensity, LastFade, AssetsStatus);
         }
 
-        /// <summary>dev 命令 <c>volkenRainAudioOn</c>:雨声总开关(0 = 关)。</summary>
+        /// <summary>雨声总开关(0 = 关)。</summary>
         public static void SetEnabled(int on)
         {
             Enabled = on != 0;
             Mod.Diag("RainAudio: Enabled = {0}", Enabled);
         }
 
-        /// <summary>dev 命令 <c>volkenRainAudioVol</c>:改雨声音量(0..1)。</summary>
+        /// <summary>改雨声音量(0..1)。</summary>
         public static void SetVolume(float v)
         {
             RainParticles.Volume = Mathf.Clamp01(v);

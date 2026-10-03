@@ -27,6 +27,7 @@
 | [`proposals/cloud-optimization-roadmap-2026-08-28.md`](proposals/cloud-optimization-roadmap-2026-08-28.md) | 📋 未排期(其 §3 #1 现状已更正) | 13 项优化点按收益排名(T0 部分已被方案 C / 轨道云消化) |
 | [`proposals/hotpath-optimization-backlog-2026-10-02.md`](proposals/hotpath-optimization-backlog-2026-10-02.md) | 📋 未排期 | 剩余高开销四组(A 拖 UI 尖峰 / B 每帧 CPU / C 一次性 / D GPU)+ D 各方案**代价**;A 组已决定不改 |
 | [`proposals/water-system-overhaul-2026-09-02.md`](proposals/water-system-overhaul-2026-09-02.md) | 📋 未排期 | 水体大修路线 A~E(A/B 零风险调参先行,E 换 shader 为终局) |
+| [`proposals/cloud-band-interval-raymarch-2026-10-03.md`](proposals/cloud-band-interval-raymarch-2026-10-03.md) | 📋 待拍板 | 解析云带[底,顶]区间求交,把 raymarch 步进预算集中在云带内(参考 Ringworld-Clouds;对应优化路线图 #8) |
 
 ## 三、已归档(`archive/`,已完成 / 历史)
 

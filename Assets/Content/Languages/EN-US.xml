@@ -13,7 +13,7 @@
     <s id="Volken.ModSettings.ExtraCameraClouds">Extra Camera Clouds</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Auto-render volumetric clouds on extra world cameras (PIP windows etc.). Detect by behavior only, no mod-specific code.</s>
     <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
-    <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay (VolkenProfiler). Toggle with console command 'VolkenProfiler'.</s>
+    <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay.</s>
 
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
 
@@ -33,18 +33,20 @@
     <s id="Volken.UI.WeatherNotImplemented">This linkage is not implemented yet; the values below are placeholders (0 = clouds unchanged).</s>
 
 
-    <s id="Volken.UI.WeatherRain">Rain (stage 3, live)</s>
+    <s id="Volken.UI.WeatherRain">Rain (live)</s>
     <s id="Volken.UI.RainStats">Status (live)</s>
     <s id="Volken.UI.RainToggleNow">Toggle rain now</s>
     <s id="Volken.UI.RainOnMsg">Rain enabled</s>
     <s id="Volken.UI.RainOffMsg">Rain disabled</s>
-    <s id="Volken.UI.RainStreamMode">Streaks along relative velocity (SP2 AlignStreaks; off = always radial down)</s>
-    <s id="Volken.UI.RainStretch">Stretch vs speed (SP2 0.045; 0 = none)</s>
+    <s id="Volken.UI.RainStreamMode">Streaks along relative velocity (off = always radial down)</s>
+    <s id="Volken.UI.RainStretch">Stretch vs speed (0 = none)</s>
     <s id="Volken.UI.RainStretchLimit">Stretch limit (max streak length = length x this; lower if too long)</s>
     <s id="Volken.UI.RainEdgeFade">Domain edge fade width (fraction of radius; 0 = off, default 0.2)</s>
-    <s id="Volken.UI.RainSoftParticles">Soft particles (0 = hard edge, 1 = SP2 default)</s>
-    <s id="Volken.UI.RainTailFalloff">Streak tail falloff (SP2 _falloff, 0.9)</s>
+    <s id="Volken.UI.RainSoftParticles">Soft particles (0 = hard edge, 1 = default)</s>
+    <s id="Volken.UI.RainTailFalloff">Streak tail falloff</s>
     <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
+    <s id="Volken.UI.RainDistanceFade">Depth: in-domain distance fade (0 = off; near bright, far dim)</s>
+    <s id="Volken.UI.RainStreakVariation">Depth: per-streak length/width variation (0 = all identical)</s>
     <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>
     <s id="Volken.UI.RainEnabled">Rain Enabled</s>
     <s id="Volken.UI.RainCeilingAltitude">Rain ceiling altitude (m; 0 = no limit (gate off))</s>
@@ -53,7 +55,7 @@
     <s id="Volken.UI.RainDumpLog">Dump rain status to the log (for troubleshooting)</s>
     <s id="Volken.UI.RainDumped">Rain status written to Player.log</s>
     <s id="Volken.UI.RainAudioStats">Rain Audio</s>
-    <s id="Volken.UI.RainRowTest">Dev: evenly spaced test row (SV_InstanceID)</s>
+    <s id="Volken.UI.RainRowTest">Dev: evenly spaced test row</s>
     <s id="Volken.UI.RainAmount">Particle Amount</s>
     <s id="Volken.UI.RainDomainRadius">Domain Radius (m)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Adaptive Domain Radius</s>
@@ -177,7 +179,7 @@
     <s id="Volken.UI.LightMarchDistance">Light March Distance</s>
     <s id="Volken.UI.RayOffsetStrength">Ray Offset Strength</s>
     <s id="Volken.UI.HistoryBlend">History Blend</s>
-    <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale (1/N stepping)</s>
+    <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
 
     <!-- Orbit Clouds (2D shell shading + transition crossfade) -->

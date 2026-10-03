@@ -276,9 +276,18 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.ceilingBand ?? 0.4f,
                 v => ApplyRain(c => c.rain.ceilingBand = v), 0.05f, 1f, 2);
 
-            // 域半径随相机速度自适应:尚未实现,禁用
-            AddDisabledToggle(group, "Volken.UI.RainAdaptiveDomain",
-                () => weather.Config?.rain?.adaptiveDomain ?? true);
+            // 纵深线索:整片雨丝等长/等亮/平行是"像一层平面"的主因
+            AddSlider(group, "Volken.UI.RainDistanceFade",
+                () => weather.Config?.rain?.distanceFade ?? 0.35f,
+                v => ApplyRain(c => c.rain.distanceFade = v), 0f, 1f, 2);
+            AddSlider(group, "Volken.UI.RainStreakVariation",
+                () => weather.Config?.rain?.streakVariation ?? 0.5f,
+                v => ApplyRain(c => c.rain.streakVariation = v), 0f, 1f, 2);
+
+            // 域半径随相机速度自适应(快相机时固定半径会被整片回收 → 没有视差)
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainAdaptiveDomain"),
+                () => weather.Config?.rain?.adaptiveDomain ?? true,
+                v => ApplyRain(c => c.rain.adaptiveDomain = v)));
 
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainDumpLog"), _ =>
             {

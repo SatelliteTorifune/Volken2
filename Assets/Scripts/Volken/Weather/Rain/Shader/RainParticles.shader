@@ -27,11 +27,18 @@ Shader "Volken/RainParticles"
         _MainColor ("Main Color", Color) = (0.72, 0.82, 1, 1)
         _InvFade ("Soft Particles Factor", Range(0.01, 3)) = 1
         _Falloff ("Tail Fade", Range(0, 1)) = 0.9
+        // 纵深线索(治"快速缩放时像一层平面"):域内距离衰减 / 逐粒长宽变化 / 逐粒滚转(默认关)
+        _DistanceFade ("Distance Fade (depth cue)", Range(0, 1)) = 0.35
+        _StreakVariation ("Per-streak Size Variation", Range(0, 1)) = 0.5
+        _StreakRoll ("Per-streak Roll", Range(0, 1)) = 0
+        // 亚像素雨丝会被光栅化成断续点线,人眼会把断点连成"斜的流"(实测:宽 0.0055m ≈ 0.5px 时最明显)。
+        //   这里按距离把宽度撑到屏幕宽度 ≥ 本值(像素);**默认 0 = 关**(它曾因退化 pass 把四边形撑到公里级 → GPU 设备丢失)。
+        _MinStreakWidthPx ("Min On-screen Streak Width (px)", Range(0, 4)) = 0
         // 部署探针(不是视觉效果):C# SELFCHECK 读它确认**包里装的是新版 shader** ——
         //   只在 HLSL 里声明的 uniform(_RotationMatrix/_Positions/_FadeAmount/_LinearSceneDepth)
         //   不在 Properties 表里,HasProperty 未必看得到,不能用来判版本。
-        //   本 shader 语义每次改动就 +1(1=屏幕平面构轴,2=SP2 世界系旋转矩阵)。
-        _ShaderVer ("Shader Build (部署探针)", Float) = 3
+        //   本 shader 语义每次改动就 +1(5 = 最小屏幕宽度守卫,6 = _RandomData 消毒:yzw 夹到 [0,1] + NaN 归零)。
+        _ShaderVer ("Shader Build (部署探针)", Float) = 6
         // 域边界淡出(SP2 把 _DomainPos/_DomainRadius 传给 material,唯一合理用途 = 隐藏球域边界/回收突现):
         //   _EdgeFade = 0 关;>0 时在 [1-_EdgeFade, 1]·R 区间把 alpha 渐隐到 0。
         _EdgeFade ("Domain Edge Fade", Range(0, 0.5)) = 0.2
@@ -52,6 +59,7 @@ Shader "Volken/RainParticles"
             #include "UnityCG.cginc"
 
             StructuredBuffer<float4> _Positions;   // 与 compute 里 _Positions 同一 buffer(xyz=帧空间位置)
+            StructuredBuffer<float4> _RandomData;  // 同一 buffer 的读视图:yzw = 逐粒长/宽倍率与滚转
 
             sampler2D _MainTex;
             fixed4 _MainColor;
@@ -63,6 +71,10 @@ Shader "Volken/RainParticles"
             float3 _DomainPos;         // 球域中心(=相机位置;SP2 material 同名)
             float _DomainRadius;       // 球域半径
             float _EdgeFade;           // 边界淡出宽度比例(0 = 关)
+            float _DistanceFade;
+            float _StreakVariation;
+            float _StreakRoll;
+            float _MinStreakWidthPx;
 
             sampler2D _LinearSceneDepth;   // CloudRenderer.combinedDepthTex(RFloat, LinearEyeDepth 米)
 
@@ -90,6 +102,34 @@ Shader "Volken/RainParticles"
                 //   mul(UNITY_MATRIX_V, worldPos) 能正确带上平移(eyeDepth 实测正确)即佐证。
                 //   故 SetColumn(1, dir) 乘 v.y ✓。
                 float3 local = mul((float3x3)_RotationMatrix, v.vertex.xyz);
+                // 逐粒外观:长度/宽度倍率 + 绕长轴滚转 —— 整片雨丝完全平行+等长是"像一层平面"的主因之一
+                // ⚠️ yzw 由 compute 的 Randomize 写入。**包里 compute 若是旧版(没写 yzw),这里读到的是未初始化显存**
+                //    → 天文数字/NaN 倍率把网格"宽"方向拉成几百米 → 整片出现"斜的针"(实测踩过)。所以必须先消毒。
+                float4 raw = _RandomData[instanceID];
+                bool rndBad = !(raw.x == raw.x && raw.y == raw.y && raw.z == raw.z && raw.w == raw.w);   // NaN != NaN
+                float4 rnd = rndBad ? float4(0.5, 0.5, 0.5, 0.5) : clamp(raw, 0.0, 1.0);
+                float lenScale = 1.0 + (rnd.y * 2.0 - 1.0) * _StreakVariation * 0.5;
+                float widScale = 1.0 + (rnd.z * 2.0 - 1.0) * _StreakVariation * 0.35;
+                // 亚像素守卫:把宽度撑到屏幕宽度 ≥ _MinStreakWidthPx 像素(否则雨丝栅格化成断续点线 → 人眼连成"斜流")。
+                // ⚠️ 必须防退化 pass:_ScreenParams.y / 投影 _m11 为 0(或相机距离异常)时本式会算出天文数字的宽度,
+                //    顶点被撑到公里级 → 十万个巨型四边形 → GPU 设备丢失(0x887A0005)实测踩过。所以:门槛 + 硬上限。
+                if (_MinStreakWidthPx > 0.0 && _ScreenParams.y >= 8.0)
+                {
+                    float m11 = abs(UNITY_MATRIX_P._m11);
+                    float halfW = max(abs(v.vertex.x), abs(v.vertex.z));
+                    float camDist = clamp(length(_Positions[instanceID].xyz - _WorldSpaceCameraPos), 0.2, 500.0);
+                    if (m11 > 1e-3 && halfW > 1e-5)
+                    {
+                        float pxPerMeter = _ScreenParams.y * 0.5 * m11 / camDist;
+                        float wantWorldW = _MinStreakWidthPx / pxPerMeter;
+                        widScale = min(widScale * max(1.0, wantWorldW / (2.0 * halfW * widScale)), widScale * 8.0 + 4.0);
+                    }
+                }
+                float2 xz = float2(local.x * widScale, local.z * widScale);
+                float roll = rnd.w * 6.2831853 * _StreakRoll;
+                float rollCos = cos(roll);
+                float rollSin = sin(roll);
+                local = float3(xz.x * rollCos - xz.y * rollSin, local.y * lenScale, xz.x * rollSin + xz.y * rollCos);
                 //  w 必须为 1(是"位置"不是"方向"):UnityWorldToClipPos 内部会强制 w=1 所以
                 //   w=0 时 clip 不炸,但 mul(UNITY_MATRIX_V, worldPos) 会丢掉平移 → eyeDepth 全错。
                 float4 worldPos = float4(_Positions[instanceID].xyz + local, 1.0);
@@ -101,10 +141,13 @@ Shader "Volken/RainParticles"
 
                 // 域边界淡出:粒子在球域外围渐隐 → 球域边界与"出域回收"的突现都不显形。
                 // (按**粒子中心**算,不含网格顶点偏移 —— 单个粒子的淡出系数是常量,不会拉花。)
+                // 再叠一层**整段域内的距离衰减**当纵深线索:否则 10m 与 40m 的雨丝一样亮,整片读成平面。
                 float radial = length(_Positions[instanceID].xyz - _DomainPos);
-                o.edgeFade = (_EdgeFade > 0.0001)
-                    ? saturate((1.0 - radial / max(1e-3, _DomainRadius)) / max(1e-3, _EdgeFade))
+                float safeR = max(1e-3, _DomainRadius);
+                float edge = (_EdgeFade > 0.0001)
+                    ? saturate((1.0 - radial / safeR) / max(1e-3, _EdgeFade))
                     : 1.0;
+                o.edgeFade = edge * (1.0 - _DistanceFade * saturate(radial / safeR));
                 return o;
             }
 

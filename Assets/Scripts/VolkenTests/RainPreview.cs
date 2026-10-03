@@ -55,6 +55,11 @@ namespace Volken.Tests
         public float rainVolume = 0.5f;      // 雨声音量
         public int rainRepeats = 3;          // 每条素材连播几遍再换下一条
         public float rainCrossfade = 2f;     // 换素材的交叉淡化时长(秒)
+        public float distanceFade = 0.35f;   // 纵深:域内距离衰减(0 = 关)
+        public float streakVariation = 0.5f; // 纵深:逐粒长度/宽度变化(0 = 全一样)
+        public float streakRoll = 0f;        // 纵深:逐粒绕长轴滚转(默认 0;开了可能"面条")
+        public bool adaptiveDomain = true;   // 域半径随相机速度自适应
+        public float adaptiveMaxRadius = 120f; // 自适应半径上限(米)
 
         [Header("预览专用")]
         [Tooltip("手动喂给海拔闸门的相机海拔(编辑器里拿不到真实海拔)")]
@@ -267,6 +272,11 @@ namespace Volken.Tests
             RainParticles.Volume = Mathf.Clamp01(rainVolume);
             RainAudio.RepeatsPerClip = Mathf.Max(1, rainRepeats);
             RainAudio.CrossfadeTime = Mathf.Clamp(rainCrossfade, 0.05f, 10f);
+            RainParticles.DistanceFade = Mathf.Clamp01(distanceFade);
+            RainParticles.StreakVariation = Mathf.Clamp01(streakVariation);
+            RainParticles.StreakRoll = Mathf.Clamp01(streakRoll);
+            RainParticles.AdaptiveDomain = adaptiveDomain;
+            RainParticles.AdaptiveMaxRadius = Mathf.Clamp(adaptiveMaxRadius, 10f, 400f);
             RainParticles.DebugAltitudeOverride = overrideAltitude ? altitudeOverrideValue : float.NaN;
             RainParticles.Enabled = rainEnabled;
         }
@@ -299,6 +309,9 @@ namespace Volken.Tests
                     ceilingBand = ceilingBand,
                     strength = rainStrength,
                     volume = rainVolume,
+                    adaptiveDomain = adaptiveDomain,
+                    distanceFade = distanceFade,
+                    streakVariation = streakVariation,
                 };
                 RainParticles.ApplyConfig(cfg);
                 RainParticles.Enabled = rainEnabled;
@@ -427,6 +440,18 @@ namespace Volken.Tests
             tailFalloff = Slider("尾淡(SP2 0.9)", tailFalloff, 0f, 1f, false);
             brightness = Slider("亮度增益", brightness, 0f, 3f, false);
 
+            GUILayout.Label("── 纵深线索(治\"快速缩放像一层平面\")──");
+            distanceFade = Slider("域内距离衰减(0=关;近了亮远了暗)", distanceFade, 0f, 1f, false);
+            streakVariation = Slider("逐粒长度/宽度变化(0=全一样长)", streakVariation, 0f, 1f, false);
+            streakRoll = Slider("逐粒绕长轴滚转(默认 0;开了可能\"面条\")", streakRoll, 0f, 1f, false);
+
+            GUILayout.Label("── 自适应域(相机越快 → 半径越大,治\"整片回收=没有视差\")──");
+            bool adapt = GUILayout.Toggle(adaptiveDomain, " 域半径随相机速度自适应");
+            if (adapt != adaptiveDomain) { adaptiveDomain = adapt; _paramsDirty = true; }
+            adaptiveMaxRadius = Slider("自适应半径上限(米;越大密度越稀)", adaptiveMaxRadius, 10f, 400f, true);
+            GUILayout.Label(string.Format("     → 本帧实际半径 R={0:F0}m(相机 {1:F0}m/s;补偿后容量 {2})",
+                RainParticles.AdaptiveRadius, RainParticles.LastCamSpeed, RainParticles.BufferCapacity));
+
             GUILayout.Label("── 行为 ──");
             bool stream = GUILayout.Toggle(streamMode, " 雨丝朝向沿相对速度(关 = 恒径向下)");
             if (stream != streamMode) { streamMode = stream; _paramsDirty = true; }
@@ -521,6 +546,11 @@ namespace Volken.Tests
             rainVolume = 0.5f;
             rainRepeats = 3;
             rainCrossfade = 2f;
+            distanceFade = 0.35f;
+            streakVariation = 0.5f;
+            streakRoll = 0f;
+            adaptiveDomain = true;
+            adaptiveMaxRadius = 120f;
             PushHeavy();
             Toast("已重置为 SP2 出厂参数");
         }
@@ -535,7 +565,7 @@ namespace Volken.Tests
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var parts = new[]
                 {
-                    "v3",
+                    "v4",
                     rainEnabled ? "1" : "0",
                     amount.ToString("R", inv), domainRadius.ToString("R", inv), fallSpeed.ToString("R", inv),
                     streakLength.ToString("R", inv), streakWidth.ToString("R", inv),
@@ -546,6 +576,8 @@ namespace Volken.Tests
                     ceilingAltitude.ToString("R", inv), ceilingBand.ToString("R", inv),
                     rainStrength.ToString("R", inv), rainVolume.ToString("R", inv),
                     rainRepeats.ToString(inv), rainCrossfade.ToString("R", inv),
+                    distanceFade.ToString("R", inv), streakVariation.ToString("R", inv), streakRoll.ToString("R", inv),
+                    adaptiveDomain ? "1" : "0", adaptiveMaxRadius.ToString("R", inv),
                 };
                 PlayerPrefs.SetString(ParamsPref, string.Join(";", parts));
                 PlayerPrefs.Save();
@@ -561,8 +593,9 @@ namespace Volken.Tests
                 string s = PlayerPrefs.GetString(ParamsPref, "");
                 if (string.IsNullOrEmpty(s)) return false;
                 var p = s.Split(';');
-                // v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
-                bool hasLoop = p.Length >= 21 && p[0] == "v3";
+                // v4 = v3 + 纵深线索/自适应域;v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
+                bool hasDepth = p.Length >= 26 && p[0] == "v4";
+                bool hasLoop = hasDepth || (p.Length >= 21 && p[0] == "v3");
                 bool hasAudio = hasLoop || (p.Length >= 19 && p[0] == "v2");
                 if (!hasAudio && (p.Length < 17 || p[0] != "v1")) return false;
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -577,6 +610,11 @@ namespace Volken.Tests
                 ceilingAltitude = F(15); ceilingBand = F(16);
                 if (hasAudio) { rainStrength = F(17); rainVolume = F(18); }
                 if (hasLoop) { rainRepeats = Mathf.RoundToInt(F(19)); rainCrossfade = F(20); }
+                if (hasDepth)
+                {
+                    distanceFade = F(21); streakVariation = F(22); streakRoll = F(23);
+                    adaptiveDomain = p[24] == "1"; adaptiveMaxRadius = F(25);
+                }
                 UnityEngine.Debug.Log("[Volken] RainPreview: 已恢复上次记忆的参数(想从出厂值开始就点「重置为 SP2 出厂参数」)");
                 return true;
             }
@@ -598,7 +636,7 @@ namespace Volken.Tests
                 sb.AppendLine("    <enabled>" + B(rainEnabled) + "</enabled>");
                 sb.AppendLine("    <amount>" + N(amount) + "</amount>");
                 sb.AppendLine("    <domainRadius>" + N(domainRadius) + "</domainRadius>");
-                sb.AppendLine("    <adaptiveDomain>true</adaptiveDomain>");
+                sb.AppendLine("    <adaptiveDomain>" + B(adaptiveDomain) + "</adaptiveDomain>");
                 sb.AppendLine("    <fallSpeed>" + N(fallSpeed) + "</fallSpeed>");
                 sb.AppendLine("    <strength>" + N(rainStrength) + "</strength>");
                 sb.AppendLine("    <windInfluence>1</windInfluence>");
@@ -612,12 +650,14 @@ namespace Volken.Tests
                 sb.AppendLine("    <softParticles>" + N(softParticles) + "</softParticles>");
                 sb.AppendLine("    <tailFalloff>" + N(tailFalloff) + "</tailFalloff>");
                 sb.AppendLine("    <brightness>" + N(brightness) + "</brightness>");
+                sb.AppendLine("    <distanceFade>" + N(distanceFade) + "</distanceFade>");
+                sb.AppendLine("    <streakVariation>" + N(streakVariation) + "</streakVariation>");
                 sb.AppendLine("    <ceilingAltitude>" + N(ceilingAltitude) + "</ceilingAltitude>");
                 sb.AppendLine("    <ceilingBand>" + N(ceilingBand) + "</ceilingBand>");
                 sb.AppendLine("    <respawnMirror>" + B(respawnMirror) + "</respawnMirror>");
                 sb.AppendLine("  </Rain>");
                 GUIUtility.systemCopyBuffer = sb.ToString();
-                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(windInfluence/adaptiveDomain 未调,按原值改回)");
+                Toast("已复制 <Rain> 段到剪贴板 → 覆盖 weather.xml 里同名段(windInfluence 未调,按原值改回)");
                 UnityEngine.Debug.Log("[Volken] RainPreview 已复制参数 XML:\n" + sb);
             }
             catch (Exception ex)

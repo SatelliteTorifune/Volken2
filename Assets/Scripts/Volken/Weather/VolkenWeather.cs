@@ -224,14 +224,24 @@ namespace Volken.Weather
             AvailableConfigs = names;
         }
 
-        /// <summary>切换到另一个天气预设(只动天气,不碰云配置),并登记为该行星的天气预设。</summary>
-        public void SwitchPreset(string configName)
+        /// <summary>切换到另一个天气预设(只动天气,不碰云配置),并登记为该行星的天气预设。返回 false = 没切(名字空/同名/预设文件不存在)。</summary>
+        public bool SwitchPreset(string configName)
         {
-            if (string.IsNullOrEmpty(CurrentPlanet) || string.IsNullOrWhiteSpace(configName)) return;
-            if (configName == CurrentConfigName) return;
+            if (string.IsNullOrEmpty(CurrentPlanet) || string.IsNullOrWhiteSpace(configName)) return false;
+            if (configName == CurrentConfigName) return false;
+
+            //必须校验文件存在:ApplyPreset → LoadFromFile 在文件缺失时会**就地新建一份默认 XML 并落盘**,
+            // 然后 RegisterPresetName 又把行星清单里的预设名改写成它 —— 下拉里一条幽灵项(例如只有 Default 时)
+            // 被点一下 = 静默造出垃圾预设 + 改掉行星绑定。新建预设请走"另存为新配置"。
+            if (!VolkenWeatherConfig.Exists(CurrentPlanet, configName))
+            {
+                Mod.Log($"VolkenWeather: 预设 '{configName}' 在 {CurrentPlanet} 的天气预设目录里不存在 → 拒绝切换(避免新建默认文件并改写行星绑定)");
+                return false;
+            }
 
             ApplyPreset(CurrentPlanet, configName);
             RegisterPresetName();
+            return true;
         }
 
         /// <summary>把当前天气参数另存为新预设(玩家给名字)并切到它。纯天气操作,不碰云。</summary>
@@ -340,16 +350,16 @@ namespace Volken.Weather
             return _boltShader;
         }
 
-        /// <summary>手动劈一道雷(dev 命令 / UI)。要求配置启用。</summary>
-        public void TriggerLightning()
+        /// <summary>手动劈一道雷(dev 命令 / UI)。要求配置启用。返回 false = 没落雷(模块未激活 / 海拔闸门拦下)。</summary>
+        public bool TriggerLightning()
         {
             if (_lightning == null)
             {
                 Mod.Log("VolkenWeather: TriggerLightning ignored — lightning module not active " +
                         "(need enabled planet config + lightning.enabled)");
-                return;
+                return false;
             }
-            _lightning.CastRandomBolt();
+            return _lightning.CastRandomBolt();
         }
 
         /// <summary>雷电模块(诊断/UI 用,可能为 null)。</summary>
@@ -510,6 +520,11 @@ namespace Volken.Weather
         {
             var w = VolkenWeather.Instance;
             if (w == null) return;
+
+            // 双保险(写法同 RainAudio.Update):场景门控靠 SceneLoaded 事件链,而别家 mod 的处理器抛异常会静默跳过
+            // 后续订阅者(本仓库有同源事故)→ 按 Game.InFlightScene 当场兜底:非飞行场景的每帧回调一律不跑。
+            if (Game.Instance == null || !Game.InFlightScene) return;
+
             w.Tick(Time.deltaTime);
         }
     }

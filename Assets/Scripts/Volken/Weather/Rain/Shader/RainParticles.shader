@@ -37,8 +37,9 @@ Shader "Volken/RainParticles"
         // 部署探针(不是视觉效果):C# SELFCHECK 读它确认**包里装的是新版 shader** ——
         //   只在 HLSL 里声明的 uniform(_RotationMatrix/_Positions/_FadeAmount/_LinearSceneDepth)
         //   不在 Properties 表里,HasProperty 未必看得到,不能用来判版本。
-        //   本 shader 语义每次改动就 +1(5 = 最小屏幕宽度守卫,6 = _RandomData 消毒:yzw 夹到 [0,1] + NaN 归零)。
-        _ShaderVer ("Shader Build (部署探针)", Float) = 6
+        //   本 shader 语义每次改动就 +1(5 = 最小屏幕宽度守卫,6 = _RandomData 消毒:yzw 夹到 [0,1] + NaN 归零,
+        //                            7 = 水下粒子剔除:粒子中心低于海平面 → 四边形塌成零面积)。
+        _ShaderVer ("Shader Build (部署探针)", Float) = 7
         // 域边界淡出(SP2 把 _DomainPos/_DomainRadius 传给 material,唯一合理用途 = 隐藏球域边界/回收突现):
         //   _EdgeFade = 0 关;>0 时在 [1-_EdgeFade, 1]·R 区间把 alpha 渐隐到 0。
         _EdgeFade ("Domain Edge Fade", Range(0, 0.5)) = 0.2
@@ -75,6 +76,9 @@ Shader "Volken/RainParticles"
             float _StreakVariation;
             float _StreakRoll;
             float _MinStreakWidthPx;
+            float3 _SeaCenter;         // 海平面球心(帧空间,与 _Positions 同空间)
+            float _SeaRadius;          // 海平面半径(米;0 = 行星无水 → 不做水下剔除)
+            float3 _SeaUp;             // 海平面法线(径向向上)= −down;截断雨丝用
 
             sampler2D _LinearSceneDepth;   // CloudRenderer.combinedDepthTex(RFloat, LinearEyeDepth 米)
 
@@ -103,7 +107,7 @@ Shader "Volken/RainParticles"
                 //   故 SetColumn(1, dir) 乘 v.y ✓。
                 float3 local = mul((float3x3)_RotationMatrix, v.vertex.xyz);
                 // 逐粒外观:长度/宽度倍率 + 绕长轴滚转 —— 整片雨丝完全平行+等长是"像一层平面"的主因之一
-                // ⚠️ yzw 由 compute 的 Randomize 写入。**包里 compute 若是旧版(没写 yzw),这里读到的是未初始化显存**
+                //yzw 由 compute 的 Randomize 写入。**包里 compute 若是旧版(没写 yzw),这里读到的是未初始化显存**
                 //    → 天文数字/NaN 倍率把网格"宽"方向拉成几百米 → 整片出现"斜的针"(实测踩过)。所以必须先消毒。
                 float4 raw = _RandomData[instanceID];
                 bool rndBad = !(raw.x == raw.x && raw.y == raw.y && raw.z == raw.z && raw.w == raw.w);   // NaN != NaN
@@ -111,7 +115,7 @@ Shader "Volken/RainParticles"
                 float lenScale = 1.0 + (rnd.y * 2.0 - 1.0) * _StreakVariation * 0.5;
                 float widScale = 1.0 + (rnd.z * 2.0 - 1.0) * _StreakVariation * 0.35;
                 // 亚像素守卫:把宽度撑到屏幕宽度 ≥ _MinStreakWidthPx 像素(否则雨丝栅格化成断续点线 → 人眼连成"斜流")。
-                // ⚠️ 必须防退化 pass:_ScreenParams.y / 投影 _m11 为 0(或相机距离异常)时本式会算出天文数字的宽度,
+                //必须防退化 pass:_ScreenParams.y / 投影 _m11 为 0(或相机距离异常)时本式会算出天文数字的宽度,
                 //    顶点被撑到公里级 → 十万个巨型四边形 → GPU 设备丢失(0x887A0005)实测踩过。所以:门槛 + 硬上限。
                 if (_MinStreakWidthPx > 0.0 && _ScreenParams.y >= 8.0)
                 {
@@ -130,6 +134,31 @@ Shader "Volken/RainParticles"
                 float rollCos = cos(roll);
                 float rollSin = sin(roll);
                 local = float3(xz.x * rollCos - xz.y * rollSin, local.y * lenScale, xz.x * rollSin + xz.y * rollCos);
+
+                // 水下剔除 + 水面截断:海平面以下的雨丝不该存在(相机在水面上时,球域有一半泡在水里;
+                //   水体是透明队列、不写深度,挡不住它们 → 会看到"水里也在下雨")。
+                //   ① 粒子中心在水面下 → 整个四边形塌成零面积(光栅化不出像素;不要改用 alpha=0,透明混合仍留痕)。
+                //   ② 中心在水面上、但尾端扎进水里 → 把那一端收到水面上(否则长雨丝会插进水面以下)。
+                //   ③ 只用**粒子中心**判在水上/水下,单个粒子整体一起处理,不会把雨丝切成锯齿。
+                //   axisUp = 列1(雨丝轴×拉伸)与径向"上"的点积:倾斜雨丝(StreamMode)也按实际倾角折算。
+                if (_SeaRadius > 0.0)
+                {
+                    float3 partPos = _Positions[instanceID].xyz;
+                    float seaAlt = length(partPos - _SeaCenter) - _SeaRadius;
+                    if (seaAlt < 0.0)
+                    {
+                        local = 0.0;
+                    }
+                    else
+                    {
+                        float3 axis = float3(_RotationMatrix._m01, _RotationMatrix._m11, _RotationMatrix._m21);
+                        float axisUp = dot(axis, _SeaUp);
+                        if (abs(axisUp) > 1e-3 && seaAlt + local.y * axisUp < 0.0)
+                        {
+                            local.y = -seaAlt / axisUp;
+                        }
+                    }
+                }
                 //  w 必须为 1(是"位置"不是"方向"):UnityWorldToClipPos 内部会强制 w=1 所以
                 //   w=0 时 clip 不炸,但 mul(UNITY_MATRIX_V, worldPos) 会丢掉平移 → eyeDepth 全错。
                 float4 worldPos = float4(_Positions[instanceID].xyz + local, 1.0);

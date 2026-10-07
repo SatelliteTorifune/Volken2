@@ -12,12 +12,13 @@
     <s id="Volken.ModSettings.WaterReflectionDesc">将体积云渲染到水面反射中。</s>
     <s id="Volken.ModSettings.ExtraCameraClouds">附加相机云层</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">在附加世界相机(画中画窗口等)上自动渲染体积云。仅通过行为检测,不依赖特定模组代码。</s>
+    <s id="Volken.ModSettings.ExtraCameraRain">附加相机雨</s>
+    <s id="Volken.ModSettings.ExtraCameraRainDesc">在附加世界相机(画中画窗口等)上同时渲染雨。每台相机一套独立雨实例(显存与 GPU 开销随相机数增加);仅在「雨」开关打开时生效。</s>
     <s id="Volken.ModSettings.ShowProfiler">性能分析器覆盖层</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层。</s>
 
     <s id="Volken.UI.CloudSettings">云层设置</s>
 
-    <!-- 天气(SP2 移植:总体 / 云层联动 / 雨 / 雾 / 雷) -->
     <s id="Volken.UI.Weather">天气</s>
     <s id="Volken.UI.WeatherUnavailable">天气系统未初始化(请重载飞行场景)。</s>
     <s id="Volken.UI.WeatherPlanet">行星</s>
@@ -51,6 +52,8 @@
     <s id="Volken.UI.RainEnabled">启用雨</s>
     <s id="Volken.UI.RainCeilingAltitude">雨的海拔上限(米;0=关闭闸门,不限制)</s>
     <s id="Volken.UI.RainCeilingBand">上限淡出带宽(占上限比例;0.4=顶部 40% 渐隐)</s>
+    <s id="Volken.UI.RainUnderwaterGate">水下不下雨(水面以下不画雨丝)</s>
+    <s id="Volken.UI.RainUnderwaterFade">水下淡出深度(米;贴水面浮动时不闪断)</s>
     <s id="Volken.UI.RainRespawnMirror">出域镜像重生(开=确定性传送带,会周期性团块;关=随机混合,推荐)</s>
     <s id="Volken.UI.RainDumpLog">把雨状态写入日志(排查用)</s>
     <s id="Volken.UI.RainDumped">雨状态已写入 Player.log</s>
@@ -82,12 +85,14 @@
     <s id="Volken.UI.LightningEnabled">启用雷电</s>
     <s id="Volken.UI.LightningTriggerNow">立刻劈一道</s>
     <s id="Volken.UI.LightningTriggered">已触发闪电。</s>
+    <s id="Volken.UI.LightningTriggerBlocked">海拔过高:未落雷(超过雷电海拔上限)</s>
     <s id="Volken.UI.LightningStats">落雷状态</s>
     <s id="Volken.UI.LightningInactive">未激活(需启用雷电 + 天气值达雷暴档)</s>
     <s id="Volken.UI.LightningMinDelay">最小间隔(秒)</s>
     <s id="Volken.UI.LightningMaxDelay">最大间隔(秒)</s>
     <s id="Volken.UI.LightningTargetRange">落点散布(米)</s>
     <s id="Volken.UI.LightningSpawnRange">源点散布(米)</s>
+    <s id="Volken.UI.LightningCeilingAltitude">雷电海拔上限(米;0=关闭闸门,不限制)</s>
     <s id="Volken.UI.LightningArcs">主干段数</s>
     <s id="Volken.UI.LightningInaccuracy">主干抖动</s>
     <s id="Volken.UI.LightningSplits">每段分叉数</s>

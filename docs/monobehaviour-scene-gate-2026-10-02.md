@@ -58,7 +58,7 @@
 - 编译:`dotnet build Volken.csproj` = 0 错误;警告只剩 `PlanetRingsZWriteFix` 的 2 条 CS0162(死代码)+ 1 条既有引用冲突。
 - 真机 / 编辑器(未做):
   1. 主菜单 / 设计器 / 行星工坊 / 过场里,Profiler 不再出现 `WeatherTicker.Update`、`RainAudio.Update`、`LightningModule.Update`、`VolkenUserInterface.Update`。
-  2. 进飞行:云正常、面板正常、`ExtraCameraClouds` 仍自动挂载(1 s 内)、雨开关仍生效;PIP / 额外相机的远深度源仍在 1 s 内解析到(解析不到时不再每帧重试)。
+  2. 进飞行:云正常、面板正常、`ExtraCameraClouds` 仍自动挂载(1 s 内)、雨开关仍生效(开了 `ExtraCameraRain` 时额外相机也挂雨,见 [附加相机雨](extra-camera-rain-2026-10-04.md));PIP / 额外相机的远深度源仍在 1 s 内解析到(解析不到时不再每帧重试)。
   3. **离场雨声仍淡出**(不是硬切),淡出后不再有每帧开销;回场重新淡入。
   4. 开雷电飞行一次 → 回菜单:无残留闪电、**也无残留雷声**(`SetActive(false)` 已一并停掉雷声通道),`LightningModule.Update` 停表;飞行中在面板关掉雷电时,不该再听到已排程的远雷。
   5. 版本落后时:更新提醒仍只在**进主菜单**后弹(最多晚 0.5 s),飞行 / 设计场景不打断。

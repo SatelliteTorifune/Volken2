@@ -12,12 +12,13 @@
     <s id="Volken.ModSettings.WaterReflectionDesc">Рендерить объёмные облака в отражении воды.</s>
     <s id="Volken.ModSettings.ExtraCameraClouds">Облака на доп. камерах</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Автоматически рендерить объёмные облака на дополнительных камерах (окна PIP и т.п.). Только по поведению, без кода конкретного мода.</s>
+    <s id="Volken.ModSettings.ExtraCameraRain">Дождь на доп. камерах</s>
+    <s id="Volken.ModSettings.ExtraCameraRainDesc">Также рендерить дождь на дополнительных камерах (окна PIP и т.п.). Для каждой камеры — свой экземпляр дождя (память и нагрузка GPU растут с числом камер); работает только при включённом дожде.</s>
     <s id="Volken.ModSettings.ShowProfiler">Оверлей профайлера</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности.</s>
 
     <s id="Volken.UI.CloudSettings">Настройка Облаков</s>
 
-    <!-- Погода (порт из SP2: общее / связь с облаками / дождь / туман / молнии) -->
     <s id="Volken.UI.Weather">Погода</s>
     <s id="Volken.UI.WeatherUnavailable">Система погоды не инициализирована (перезагрузите сцену полёта).</s>
     <s id="Volken.UI.WeatherPlanet">Планета</s>
@@ -51,6 +52,8 @@
     <s id="Volken.UI.RainEnabled">Дождь включён</s>
     <s id="Volken.UI.RainCeilingAltitude">Предел высоты дождя (м; 0 = без ограничения)</s>
     <s id="Volken.UI.RainCeilingBand">Полоса затухания у предела (доля; 0.4 = верхние 40%)</s>
+    <s id="Volken.UI.RainUnderwaterGate">Без дождя под водой (скрывать ниже поверхности воды)</s>
+    <s id="Volken.UI.RainUnderwaterFade">Глубина затухания под водой (м)</s>
     <s id="Volken.UI.RainRespawnMirror">Зеркальное перерождение (вкл = конвейер с периодическими сгустками; выкл = случайное смешивание, рекомендуется)</s>
     <s id="Volken.UI.RainDumpLog">Записать состояние дождя в лог (для диагностики)</s>
     <s id="Volken.UI.RainDumped">Состояние дождя записано в Player.log</s>
@@ -82,12 +85,14 @@
     <s id="Volken.UI.LightningEnabled">Молнии включены</s>
     <s id="Volken.UI.LightningTriggerNow">Ударить сейчас</s>
     <s id="Volken.UI.LightningTriggered">Молния вызвана.</s>
+    <s id="Volken.UI.LightningTriggerBlocked">Слишком высоко: удара нет (выше предела высоты молний)</s>
     <s id="Volken.UI.LightningStats">Состояние разрядов</s>
     <s id="Volken.UI.LightningInactive">неактивно (нужны включённые молнии и погода уровня грозы)</s>
     <s id="Volken.UI.LightningMinDelay">Мин. интервал (с)</s>
     <s id="Volken.UI.LightningMaxDelay">Макс. интервал (с)</s>
     <s id="Volken.UI.LightningTargetRange">Разброс цели (м)</s>
     <s id="Volken.UI.LightningSpawnRange">Разброс источника (м)</s>
+    <s id="Volken.UI.LightningCeilingAltitude">Предел высоты молний (м; 0 = без ограничения)</s>
     <s id="Volken.UI.LightningArcs">Сегментов ствола</s>
     <s id="Volken.UI.LightningInaccuracy">Дрожание ствола</s>
     <s id="Volken.UI.LightningSplits">Ветвей на сегмент</s>

@@ -51,6 +51,9 @@ namespace Volken.Tests
         public bool respawnMirror = false;
         public float ceilingAltitude = 12000f;
         public float ceilingBand = 0.4f;
+        public bool underwaterGate = true;    // 水下不下雨(海平面以下)
+        public float underwaterFade = 2f;     // 米;海平面 → 水面下此深度内线性淡出到 0
+        public bool assumeWater = false;      // 预览专用:独立模式拿不到行星,假装有水才能验水下闸门
         public float rainStrength = 1f;      // 雨强度(与粒子数一起决定小雨/暴雨音效混合)
         public float rainVolume = 0.5f;      // 雨声音量
         public int rainRepeats = 3;          // 每条素材连播几遍再换下一条
@@ -268,6 +271,9 @@ namespace Volken.Tests
             RainParticles.RespawnMirror = respawnMirror;
             RainParticles.CeilingAltitude = Mathf.Max(0f, ceilingAltitude);
             RainParticles.CeilingBand = Mathf.Clamp(ceilingBand, 0.02f, 1f);
+            RainParticles.UnderwaterGate = underwaterGate;
+            RainParticles.UnderwaterFade = Mathf.Clamp(underwaterFade, 0.1f, 50f);
+            RainParticles.DebugAssumeWater = assumeWater;
             RainParticles.Strength = Mathf.Clamp(rainStrength, 0f, 4f);
             RainParticles.Volume = Mathf.Clamp01(rainVolume);
             RainAudio.RepeatsPerClip = Mathf.Max(1, rainRepeats);
@@ -307,6 +313,8 @@ namespace Volken.Tests
                     respawnMirror = respawnMirror,
                     ceilingAltitude = ceilingAltitude,
                     ceilingBand = ceilingBand,
+                    underwaterGate = underwaterGate,
+                    underwaterFade = underwaterFade,
                     strength = rainStrength,
                     volume = rainVolume,
                     adaptiveDomain = adaptiveDomain,
@@ -463,10 +471,15 @@ namespace Volken.Tests
             bool oa = GUILayout.Toggle(overrideAltitude, " 使用覆盖海拔");
             if (oa != overrideAltitude) overrideAltitude = oa;
             if (overrideAltitude)
-                altitudeOverrideValue = Slider("相机海拔(米)", altitudeOverrideValue, 0f, 120000f, false);
+                altitudeOverrideValue = Slider("相机海拔(米;负 = 水下)", altitudeOverrideValue, -100f, 120000f, false);
             ceilingAltitude = Slider("海拔上限(米;0=关闭闸门)", ceilingAltitude, 0f, 60000f, false);
             ceilingBand = Slider("上限淡出带宽(比例)", ceilingBand, 0.05f, 1f, false);
-            GUILayout.Label("     把海拔拉过上限:雨应渐隐并在超过上限后完全不画");
+            bool uw = GUILayout.Toggle(underwaterGate, " 水下不下雨(海平面以下)");
+            if (uw != underwaterGate) { underwaterGate = uw; _paramsDirty = true; }
+            underwaterFade = Slider("水下淡出深度(米;贴水面浮动时不闪断)", underwaterFade, 0.1f, 20f, false);
+            bool aw = GUILayout.Toggle(assumeWater, " 假装行星有水(独立模式拿不到行星)");
+            if (aw != assumeWater) assumeWater = aw;
+            GUILayout.Label("     把海拔拉过上限 = 太空不画雨;拉到 0 以下 = 水下不画雨");
 
             GUILayout.Label("── 雨声(light / heavy 按雨量交叉淡化 + 淡入淡出)──");
             bool audioOn = GUILayout.Toggle(RainAudio.Enabled, " 雨声总开关(关掉只是不响,雨照下)");
@@ -542,6 +555,9 @@ namespace Volken.Tests
             respawnMirror = false;
             ceilingAltitude = 12000f;
             ceilingBand = 0.4f;
+            underwaterGate = true;
+            underwaterFade = 2f;
+            assumeWater = false;
             rainStrength = 1f;
             rainVolume = 0.5f;
             rainRepeats = 3;
@@ -565,7 +581,7 @@ namespace Volken.Tests
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var parts = new[]
                 {
-                    "v4",
+                    "v5",
                     rainEnabled ? "1" : "0",
                     amount.ToString("R", inv), domainRadius.ToString("R", inv), fallSpeed.ToString("R", inv),
                     streakLength.ToString("R", inv), streakWidth.ToString("R", inv),
@@ -578,6 +594,7 @@ namespace Volken.Tests
                     rainRepeats.ToString(inv), rainCrossfade.ToString("R", inv),
                     distanceFade.ToString("R", inv), streakVariation.ToString("R", inv), streakRoll.ToString("R", inv),
                     adaptiveDomain ? "1" : "0", adaptiveMaxRadius.ToString("R", inv),
+                    underwaterGate ? "1" : "0", underwaterFade.ToString("R", inv), assumeWater ? "1" : "0",
                 };
                 PlayerPrefs.SetString(ParamsPref, string.Join(";", parts));
                 PlayerPrefs.Save();
@@ -593,8 +610,9 @@ namespace Volken.Tests
                 string s = PlayerPrefs.GetString(ParamsPref, "");
                 if (string.IsNullOrEmpty(s)) return false;
                 var p = s.Split(';');
-                // v4 = v3 + 纵深线索/自适应域;v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
-                bool hasDepth = p.Length >= 26 && p[0] == "v4";
+                // v5 = v4 + 水下闸门;v4 = v3 + 纵深线索/自适应域;v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
+                bool hasWater = p.Length >= 29 && p[0] == "v5";
+                bool hasDepth = hasWater || (p.Length >= 26 && p[0] == "v4");
                 bool hasLoop = hasDepth || (p.Length >= 21 && p[0] == "v3");
                 bool hasAudio = hasLoop || (p.Length >= 19 && p[0] == "v2");
                 if (!hasAudio && (p.Length < 17 || p[0] != "v1")) return false;
@@ -615,6 +633,7 @@ namespace Volken.Tests
                     distanceFade = F(21); streakVariation = F(22); streakRoll = F(23);
                     adaptiveDomain = p[24] == "1"; adaptiveMaxRadius = F(25);
                 }
+                if (hasWater) { underwaterGate = p[26] == "1"; underwaterFade = F(27); assumeWater = p[28] == "1"; }
                 UnityEngine.Debug.Log("[Volken] RainPreview: 已恢复上次记忆的参数(想从出厂值开始就点「重置为 SP2 出厂参数」)");
                 return true;
             }
@@ -654,6 +673,8 @@ namespace Volken.Tests
                 sb.AppendLine("    <streakVariation>" + N(streakVariation) + "</streakVariation>");
                 sb.AppendLine("    <ceilingAltitude>" + N(ceilingAltitude) + "</ceilingAltitude>");
                 sb.AppendLine("    <ceilingBand>" + N(ceilingBand) + "</ceilingBand>");
+                sb.AppendLine("    <underwaterGate>" + B(underwaterGate) + "</underwaterGate>");
+                sb.AppendLine("    <underwaterFade>" + N(underwaterFade) + "</underwaterFade>");
                 sb.AppendLine("    <respawnMirror>" + B(respawnMirror) + "</respawnMirror>");
                 sb.AppendLine("  </Rain>");
                 GUIUtility.systemCopyBuffer = sb.ToString();

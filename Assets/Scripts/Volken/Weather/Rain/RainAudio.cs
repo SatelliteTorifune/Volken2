@@ -321,7 +321,7 @@ namespace Volken.Weather
             float altFade = 1f;
             if (gateOpen)
             {
-                altFade = Mathf.Clamp01(RainParticles.LastAltitudeFade);   // 高度闸门:雨被压掉时声音一起走
+                altFade = Mathf.Clamp01(RainParticles.LastAltitudeFade * RainParticles.LastWaterFade);   // 高度 + 水下闸门:雨被压掉时声音一起走
                 if (altFade <= 0.001f) gateOpen = false;
 
                 //  不要读一次就缓存 —— 离场要停、回场要能再起;独立模式(编辑器预览)没有天气系统,跳过
@@ -620,20 +620,6 @@ namespace Volken.Weather
             return string.Format(
                 "vol {0:F2}  小雨 {1:F2} / 暴雨 {2:F2}  混合 {3:F2}  淡入淡出 {4:F2}  {5}",
                 LastMaster, LastLightVolume, LastHeavyVolume, LastIntensity, LastFade, AssetsStatus);
-        }
-
-        /// <summary>雨声总开关(0 = 关)。</summary>
-        public static void SetEnabled(int on)
-        {
-            Enabled = on != 0;
-            Mod.Diag("RainAudio: Enabled = {0}", Enabled);
-        }
-
-        /// <summary>改雨声音量(0..1)。</summary>
-        public static void SetVolume(float v)
-        {
-            RainParticles.Volume = Mathf.Clamp01(v);
-            Mod.Diag("RainAudio: 雨声音量 = {0:F2}", RainParticles.Volume);
         }
 
         /// <summary>把完整状态写进 Player.log。</summary>

@@ -148,7 +148,13 @@ namespace Volken.Weather
                         if (string.IsNullOrWhiteSpace(newConfig)) return;
                         if (newConfig == weather.CurrentConfigName) return;
 
-                        weather.SwitchPreset(newConfig);
+                        // 预设文件不存在时 SwitchPreset 会拒绝(否则会就地新建一份 Default 并改掉行星绑定)
+                        if (!weather.SwitchPreset(newConfig))
+                        {
+                            Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                Locale.GetString("Volken.UI.ErrorLoadingConfig"));
+                            return;
+                        }
 
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                             string.Format(Locale.GetString("Volken.UI.ConfigLoaded"), newConfig));
@@ -276,6 +282,14 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.ceilingBand ?? 0.4f,
                 v => ApplyRain(c => c.rain.ceilingBand = v), 0.05f, 1f, 2);
 
+            // 水下闸门(高度闸门只管上半边:潜进水里时雨会照样从头顶落下来)
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainUnderwaterGate"),
+                () => weather.Config?.rain?.underwaterGate ?? true,
+                v => ApplyRain(c => c.rain.underwaterGate = v)));
+            AddSlider(group, "Volken.UI.RainUnderwaterFade",
+                () => weather.Config?.rain?.underwaterFade ?? 2f,
+                v => ApplyRain(c => c.rain.underwaterFade = v), 0.1f, 20f, 1);
+
             // 纵深线索:整片雨丝等长/等亮/平行是"像一层平面"的主因
             AddSlider(group, "Volken.UI.RainDistanceFade",
                 () => weather.Config?.rain?.distanceFade ?? 0.35f,
@@ -362,9 +376,9 @@ namespace Volken.Weather
             // 立即劈一道(唯一有副作用的按钮;省得等 6~45 秒的随机间隔)
             group.Add(new TextButtonModel(Locale.GetString("Volken.UI.LightningTriggerNow"), _ =>
             {
-                VolkenWeather.Instance?.TriggerLightning();
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                    Locale.GetString("Volken.UI.LightningTriggered"));
+                bool struck = VolkenWeather.Instance?.TriggerLightning() ?? false;
+                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString(
+                    struck ? "Volken.UI.LightningTriggered" : "Volken.UI.LightningTriggerBlocked"));
             }));
 
             group.Add(new TextModel(Locale.GetString("Volken.UI.LightningStats"),
@@ -387,6 +401,11 @@ namespace Volken.Weather
             AddSlider(group, "Volken.UI.LightningSpawnRange",
                 () => weather.Config?.lightning?.spawnRange ?? 4000f,
                 v => Set(c => c.lightning.spawnRange = v), 10f, 30000f, 0);
+
+            // 海拔闸门(必需:JNO 镜头能缩到整颗星球,不限制会在太空里劈雷)
+            AddSlider(group, "Volken.UI.LightningCeilingAltitude",
+                () => weather.Config?.lightning?.ceilingAltitude ?? 12000f,
+                v => Set(c => c.lightning.ceilingAltitude = v), 0f, 200000f, 0, true);
             AddSlider(group, "Volken.UI.LightningArcs",
                 () => weather.Config?.lightning?.arcs ?? 20,
                 v => Set(c => c.lightning.arcs = Mathf.RoundToInt(v)), 4f, 64f, 0, true);

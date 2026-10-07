@@ -68,52 +68,6 @@ namespace VolkenProfiler
             }
         }
 
-        public void Toggle()
-        {
-            bool next = !_visible;
-            try
-            {
-                var s = Assets.Scripts.ModSettings.Instance?.ShowProfiler;
-                if (s != null)
-                {
-                    s.Value = next;
-                }
-            }
-            catch
-            {
-                // 设置不可用时只切本地状态
-            }
-
-            SetVisible(next);
-        }
-
-        private void ToggleCapture()
-        {
-            var session = _overlay != null ? _overlay.Session : null;
-            if (session == null)
-            {
-                return;
-            }
-
-            if (session.CaptureActive)
-            {
-                string path = session.FinishCapture();
-                if (path != null)
-                {
-                    Debug.Log("[Volken.Profiler] capture saved: " + path);
-                }
-                else
-                {
-                    Debug.Log("[Volken.Profiler] capture ended (no samples)");
-                }
-            }
-            else
-            {
-                session.BeginCapture();
-                Debug.Log("[Volken.Profiler] capture started (max " + session.CaptureLimit + " frames)");
-            }
-        }
-
         private void OnDestroy()
         {
             if (Instance == this)

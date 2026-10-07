@@ -12,12 +12,13 @@
     <s id="Volken.ModSettings.WaterReflectionDesc">Render volumetric clouds into the water reflection.</s>
     <s id="Volken.ModSettings.ExtraCameraClouds">Extra Camera Clouds</s>
     <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Auto-render volumetric clouds on extra world cameras (PIP windows etc.). Detect by behavior only, no mod-specific code.</s>
+    <s id="Volken.ModSettings.ExtraCameraRain">Extra Camera Rain</s>
+    <s id="Volken.ModSettings.ExtraCameraRainDesc">Also render rain on extra world cameras (PIP windows etc.). Each camera gets its own rain instance (VRAM and GPU cost scale with the number of cameras); only active while rain is enabled.</s>
     <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay.</s>
 
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
 
-    <!-- Weather (SP2 port: overall / cloud linkage / rain / fog / lightning) -->
     <s id="Volken.UI.Weather">Weather</s>
     <s id="Volken.UI.WeatherUnavailable">Weather system not initialized (reload the flight scene).</s>
     <s id="Volken.UI.WeatherPlanet">Planet</s>
@@ -51,6 +52,8 @@
     <s id="Volken.UI.RainEnabled">Rain Enabled</s>
     <s id="Volken.UI.RainCeilingAltitude">Rain ceiling altitude (m; 0 = no limit (gate off))</s>
     <s id="Volken.UI.RainCeilingBand">Ceiling fade band (fraction of ceiling; 0.4 = top 40% fades)</s>
+    <s id="Volken.UI.RainUnderwaterGate">No rain underwater (hidden below the water surface)</s>
+    <s id="Volken.UI.RainUnderwaterFade">Underwater fade depth (m; avoids flicker at the surface)</s>
     <s id="Volken.UI.RainRespawnMirror">Mirror respawn (on = deterministic conveyor, periodic clumps; off = randomized mixing, recommended)</s>
     <s id="Volken.UI.RainDumpLog">Dump rain status to the log (for troubleshooting)</s>
     <s id="Volken.UI.RainDumped">Rain status written to Player.log</s>
@@ -82,12 +85,14 @@
     <s id="Volken.UI.LightningEnabled">Lightning Enabled</s>
     <s id="Volken.UI.LightningTriggerNow">Strike Now</s>
     <s id="Volken.UI.LightningTriggered">Lightning triggered.</s>
+    <s id="Volken.UI.LightningTriggerBlocked">Too high: no strike (above lightning ceiling altitude)</s>
     <s id="Volken.UI.LightningStats">Bolt status</s>
     <s id="Volken.UI.LightningInactive">inactive (needs lightning enabled + storm-level weather)</s>
     <s id="Volken.UI.LightningMinDelay">Min Interval (s)</s>
     <s id="Volken.UI.LightningMaxDelay">Max Interval (s)</s>
     <s id="Volken.UI.LightningTargetRange">Target Scatter (m)</s>
     <s id="Volken.UI.LightningSpawnRange">Source Scatter (m)</s>
+    <s id="Volken.UI.LightningCeilingAltitude">Lightning ceiling altitude (m; 0 = no limit (gate off))</s>
     <s id="Volken.UI.LightningArcs">Arc Segments</s>
     <s id="Volken.UI.LightningInaccuracy">Arc Inaccuracy</s>
     <s id="Volken.UI.LightningSplits">Branch Splits</s>

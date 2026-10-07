@@ -86,6 +86,12 @@ namespace Volken.Weather
 
             public float ceilingBand = 0.4f;   // 上限处的淡出带宽(占上限比例 0.02~1);默认 0.4 = 顶部 40% 渐隐到 0
 
+            // 水下闸门:相机沉到海平面以下(有水行星)时整片不画 —— 高度闸门管不到水下这半边。
+
+            public bool underwaterGate = true;   // 海平面以下不画雨
+
+            public float underwaterFade = 2f;    // 米;海平面 → 水面下此深度内线性淡出到 0(贴水面浮动时不会闪断)
+
             // false = 域内随机重生(默认,持续混合 = 连续雨帘);true = 确定性镜像,会零混合、周期团块。
 
             public bool respawnMirror = false;   // true = 确定性镜像(仅对照用)
@@ -114,6 +120,8 @@ namespace Volken.Weather
                 streakVariation = s.streakVariation;
                 ceilingAltitude = s.ceilingAltitude;
                 ceilingBand = s.ceilingBand;
+                underwaterGate = s.underwaterGate;
+                underwaterFade = s.underwaterFade;
                 respawnMirror = s.respawnMirror;
             }
         }
@@ -172,6 +180,11 @@ namespace Volken.Weather
 
             public float spawnRange = 4000f;   // 米;源点相对云层中高的随机偏移半径
 
+            /// <summary>海拔上限(米;0 = 关闭闸门,不限制):**观测者**高于它就不再落雷 —— JNO 能把镜头缩到整颗星球,
+            /// 不限制就会"在太空里劈雷"。语义与 <see cref="RainSection.ceilingAltitude"/> 一致:按观测者高度判定,
+            /// 阈值是雷**自己的**配置项,**不读 CloudConfig**。</summary>
+            public float ceilingAltitude = 12000f;
+
             public int arcs = 20;   // 主干分叉段数(SP2 arcs = 20/2;实际分叉点在 i < arcs-2)
 
             public float inaccuracy = 0.5f;   // 主干每段抖动幅度(SP2 inaccuracy)
@@ -212,6 +225,7 @@ namespace Volken.Weather
                 maxDelay = s.maxDelay;
                 targetRange = s.targetRange;
                 spawnRange = s.spawnRange;
+                ceilingAltitude = s.ceilingAltitude;
                 arcs = s.arcs;
                 inaccuracy = s.inaccuracy;
                 splits = s.splits;
@@ -304,6 +318,7 @@ namespace Volken.Weather
             rain.streakVariation = Mathf.Clamp01(rain.streakVariation);
             rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);
             rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
+            rain.underwaterFade = Mathf.Clamp(rain.underwaterFade, 0.1f, 50f);
 
             // ---- ④ 雾(占位) ----
             fog.height = Mathf.Clamp(fog.height, 1f, 20000f);
@@ -318,6 +333,7 @@ namespace Volken.Weather
             lightning.maxDelay = Mathf.Max(lightning.minDelay, lightning.maxDelay);
             lightning.targetRange = Mathf.Max(1f, lightning.targetRange);
             lightning.spawnRange = Mathf.Max(1f, lightning.spawnRange);
+            lightning.ceilingAltitude = Mathf.Clamp(lightning.ceilingAltitude, 0f, 500000f);
             lightning.arcs = Mathf.Clamp(lightning.arcs, 4, 64);
             lightning.inaccuracy = Mathf.Clamp(lightning.inaccuracy, 0f, 2f);
             lightning.splits = Mathf.Clamp(lightning.splits, 0, 8);
@@ -376,6 +392,21 @@ namespace Volken.Weather
         public static string GetConfigPath(string planetName, string configName)
         {
             return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
+        }
+
+        /// <summary>该行星下这份预设文件是否**真实存在**。与 <see cref="GetConfigPath"/> 不同:不建目录、不写盘(查存在不该有副作用)。</summary>
+        public static bool Exists(string planetName, string configName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(planetName) || string.IsNullOrEmpty(configName)) return false;
+                string path = Path.Combine(Application.persistentDataPath + CONFIG_FOLDER, planetName, configName + ".xml");
+                return File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>这颗行星已有的**天气预设名**列表(扫目录,与 <c>CloudConfig.GetAllConfigNames</c> 同逻辑);天气预设**独立**,与云的预设列表无关。</summary>

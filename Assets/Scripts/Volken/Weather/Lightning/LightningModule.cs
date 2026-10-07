@@ -322,6 +322,33 @@ namespace Volken.Weather
             Mod.Log("Volken:LightningModule thunder resumed (game unpaused)");
         }
 
+        // ---- 海拔闸门(太空不落雷) ----
+        //   JNO 能把镜头缩到整颗星球:不限制的话人还在轨道上就会看到脚下在劈雷。
+        //   语义与 RainParticles.ResolveCeiling 一致:阈值 = 雷**自己的**配置项(**不读 CloudConfig**),按**观测者**高度判定;
+        //   0(或 ≤1m)= 关闭闸门(不限制)。**取不到高度时放行** —— 不因为读不到值就把雷电整个关掉。
+        private float _lastCeilingSkipLog = -999f;
+
+        /// <summary>观测者是否在海拔上限之下(可以落雷)。返回 false 时 <paramref name="alt"/> / <paramref name="ceiling"/> 是判定依据(供日志)。</summary>
+        public bool IsBelowCeiling(out float alt, out float ceiling)
+        {
+            var weather = VolkenWeather.Instance;
+            alt = weather?.CameraAltitudeAsl ?? 0f;
+            ceiling = weather?.Config?.lightning?.ceilingAltitude ?? 0f;
+
+            if (ceiling <= 1f) return true;                                // 关闭闸门
+            if (float.IsNaN(alt) || float.IsInfinity(alt)) return true;    // 高度未知 → 不拦
+            return alt < ceiling;
+        }
+
+        /// <summary>被海拔闸门拦下时打一条**限频**日志(每个落雷间隔都刷会淹掉日志)。</summary>
+        private void LogCeilingSkip(float alt, float ceiling)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now - _lastCeilingSkipLog < 5f) return;
+            _lastCeilingSkipLog = now;
+            Mod.Log($"Volken:LightningModule 海拔闸门 → 不落雷(观测者 {alt:F0}m ≥ 上限 {ceiling:F0}m;太空/云层之上不劈雷)");
+        }
+
         private IEnumerator StormLoop()
         {
             while (true)
@@ -345,33 +372,46 @@ namespace Volken.Weather
                 }
                 TimeToNextStrike = 0f;
 
-                // 条件复核:等待期间玩家可能关掉了天气/雷电
+                // 条件复核:等待期间玩家可能关掉了天气/雷电,或已经飞到了上限之上
                 var weather = VolkenWeather.Instance;
                 if (weather == null || !weather.IsActive) continue;
                 var c = weather.Config;
                 if (c == null || !c.lightning.enabled) continue;
 
+                if (!IsBelowCeiling(out float skipAlt, out float skipCeiling))
+                {
+                    LogCeilingSkip(skipAlt, skipCeiling);
+                    continue;   // 换一个间隔再来:高度降回上限内后自然恢复落雷
+                }
+
                 CastRandomBolt();
             }
         }
 
-        public void CastRandomBolt()
+        /// <summary>劈一道随机雷。返回 false = 本次没有落雷(海拔闸门拦下 / 缺 shader / 取不到相机),原因会写进日志。</summary>
+        public bool CastRandomBolt()
         {
             var weather = VolkenWeather.Instance;
             var cfg = weather?.Config;
-            if (cfg == null) return;
+            if (cfg == null) return false;
 
             if (_boltShader == null)
             {
                 Mod.Log("Volken:LightningModule: no bolt shader — cannot cast");
-                return;
+                return false;
+            }
+
+            if (!IsBelowCeiling(out float ceilAlt, out float ceilValue))
+            {
+                LogCeilingSkip(ceilAlt, ceilValue);
+                return false;
             }
 
             Camera cam = null;
             try { cam = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera; }
             catch { }
             if (cam == null) cam = Camera.main;
-            if (cam == null) return;
+            if (cam == null) return false;
 
             Vector3 camPos = cam.transform.position;
             bool haveCloudBand = TryGetCloudBand(out float cloudBottom, out float cloudTop);
@@ -390,6 +430,7 @@ namespace Volken.Weather
             target += radial * Mathf.Max(0f, Vector3.Dot(ground - target, radial));
 
             CastBolt(source, target, cam);
+            return true;
         }
 
         public void CastBolt(Vector3 from, Vector3 to, Camera cam = null)

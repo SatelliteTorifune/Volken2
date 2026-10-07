@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text;
 using System.Xml.Linq;
 using Assets.Scripts;
 using Assets.Scripts.Cameras;
@@ -27,6 +28,12 @@ namespace Volken.Core
         private IInspectorPanel inspectorPanel;
         private InspectorModel inspectorModel;
 
+        /// <summary>面板里下拉选项的"构建时快照"签名(云 + 天气预设列表)。选项集变了就得重建面板,否则已建下拉永远显示旧选项。</summary>
+        private string _panelOptionsSignature;
+
+        /// <summary>下一次检查选项集是否过期的时间点(1 s 一次)。</summary>
+        private float _nextOptionsSyncTime = -1f;
+
         private void Awake()
         {
             Instance = this;
@@ -37,9 +44,10 @@ namespace Volken.Core
             catch (Exception ex) { Mod.Log("Volken: SceneLoaded subscribe failed: " + ex.Message); }
         }
 
-        // 额外摄像机(PIP 等)体积云自动挂载
+        // 额外摄像机(PIP 等)体积云 + 雨自动挂载
         // 不引用任何具体 mod 的类型:按 Unity 通用规则识别"渲染世界的额外相机"。
-        // 开关 ModSettings.ExtraCameraClouds(默认开);远相机由 CloudRenderer 自行配对。
+        // 开关 ModSettings.ExtraCameraClouds / ExtraCameraRain(都默认开);远相机由 CloudRenderer 自行配对。
+        // 雨挂的是**每相机一套实例资源**(compute / buffer / 材质),所以只在雨主开关打开时才挂(见 RainParticles.AttachExtra)。
         private float _nextExtraCameraScanTime = -1f;
 
         private void Update()
@@ -47,12 +55,23 @@ namespace Volken.Core
             try
             {
                 if (!Game.InFlightScene) return;
+
+                // 下拉选项是**构建面板那一刻的拷贝**(见 EnsureInspectorPanelUpToDate),而云 / 天气的预设列表是在
+                // 面板建好之后才扫描的(场景加载链里 UI 排在 VolkenClouds 之前)→ 这里按 1 s 检查、过期就重建。
+                if (Time.realtimeSinceStartup >= _nextOptionsSyncTime)
+                {
+                    _nextOptionsSyncTime = Time.realtimeSinceStartup + 1f;
+                    EnsureInspectorPanelUpToDate();
+                }
+
                 if (Time.realtimeSinceStartup < _nextExtraCameraScanTime) return;
                 _nextExtraCameraScanTime = Time.realtimeSinceStartup + 1f;
 
-                bool wantExtra = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
-                if (!wantExtra)
+                bool wantExtraClouds = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
+                bool wantExtraRain = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraRain.Value;
+                if (!wantExtraClouds && !wantExtraRain)
                 {
+                    RainParticles.DestroyExtraInstances();   // 关掉了就顺手清掉已挂的(否则要等换场景才生效)
                     return;
                 }
                 var gameCam = Game.Instance.FlightScene.ViewManager.GameView.GameCamera;
@@ -62,17 +81,25 @@ namespace Volken.Core
                     if (cam == null) continue;
                     if (gameCam != null &&
                         (cam == gameCam.NearCamera || cam == gameCam.FarCamera)) continue;
+                    if (!IsExtraWorldCamera(cam)) continue;
 
-                    var cr = cam.GetComponent<CloudRenderer>();
-                    if (cr == null && IsExtraWorldCamera(cam))
+                    if (wantExtraClouds && cam.GetComponent<CloudRenderer>() == null)
                     {
                         cam.gameObject.AddComponent<CloudRenderer>();
                     }
+                    if (wantExtraRain)
+                    {
+                        RainParticles.AttachExtra(cam);   // 幂等:已挂过就返回原实例
+                    }
+                }
+                if (!wantExtraRain)
+                {
+                    RainParticles.DestroyExtraInstances();
                 }
             }
             catch (Exception ex)
             {
-                Mod.Log("Volken: ExtraCameraClouds scan ERROR: " + ex.Message);
+                Mod.Log("Volken: ExtraCamera scan ERROR: " + ex.Message);
             }
         }
 
@@ -172,6 +199,17 @@ namespace Volken.Core
             try
             {
                 VolkenClouds.Instance.RefreshConfigList();
+
+                // 天气预设列表也现刷一次:打开面板时云 / 天气两边都用磁盘上的最新预设(与上一句对称)
+                var weather = VolkenWeather.Instance;
+                if (weather != null && !string.IsNullOrEmpty(weather.CurrentPlanet))
+                {
+                    weather.RefreshPresetList(weather.CurrentPlanet);
+                }
+
+                // 打开前保证面板用的就是此刻的选项集(列表变了 → 重建;面板还没建则由下面那句建)
+                EnsureInspectorPanelUpToDate();
+
                 if (inspectorPanel == null)
                 {
                     CreateInspectorPanel();
@@ -203,6 +241,9 @@ namespace Volken.Core
         {
             try
             {
+                // 记下"这次构建用的选项快照":构建中途失败也算已尝试过,避免 1 s 检查里反复重建刷日志
+                _panelOptionsSignature = BuildPanelOptionsSignature();
+
                 if (inspectorPanel != null)
                 {
                     try
@@ -999,10 +1040,12 @@ namespace Volken.Core
         {
             try
             {
+                bool wasVisible = false;
                 if (inspectorPanel != null)
                 {
                     try
                     {
+                        wasVisible = inspectorPanel.Visible;
                         inspectorPanel.CloseButtonClicked -= OnCloseButtonClicked;
                         inspectorPanel.Visible = false;
                     }
@@ -1011,11 +1054,71 @@ namespace Volken.Core
                 }
 
                 CreateInspectorPanel();
+
+                // 重建**不该顺手关掉玩家正开着的面板**:选项集变化也会走这条路(面板开着时重建是常态)
+                if (wasVisible && inspectorPanel != null)
+                {
+                    try { inspectorPanel.Visible = true; } catch { /* ignore */ }
+                }
             }
             catch (Exception ex)
             {
                 Mod.Log("Volken: Error rebuilding panel: " + ex);
             }
+        }
+
+        /// <summary>
+        /// 面板里那几组下拉(云预设 / 天气预设)的**当前**选项集签名。用于判断已建面板用的是不是过期快照。
+        /// 行星名也在签名里(换行星后两边的预设名可能恰好相同,只比列表会漏判);名字**排序后**再拼(顺序变化不该触发重建)。
+        /// </summary>
+        private static string BuildPanelOptionsSignature()
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append(VolkenClouds.Instance?.CurrentPlanetName).Append('|');
+                AppendSortedOptions(sb, VolkenClouds.Instance?._availableConfigs);
+                sb.Append('|');
+                AppendSortedOptions(sb, VolkenWeather.Instance?.AvailableConfigs);
+                return sb.ToString();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void AppendSortedOptions(StringBuilder sb, System.Collections.Generic.List<string> names)
+        {
+            if (names == null) return;
+            var copy = new System.Collections.Generic.List<string>(names);
+            copy.Sort(StringComparer.Ordinal);
+            for (int i = 0; i < copy.Count; i++) sb.Append(copy[i]).Append(',');
+        }
+
+        /// <summary>把选项列表写成一行可读日志(签名是拼串,不能直接给人看)。</summary>
+        private static string DescribeOptions(System.Collections.Generic.List<string> names)
+        {
+            return names == null ? "-" : string.Join(",", names);
+        }
+
+        /// <summary>
+        /// 下拉选项是**构建面板那一刻的拷贝**(<c>DropdownModel</c> 构造时逐条拷进自己的 <c>Options</c>),之后刷新列表
+        /// 到不了已建面板 —— 表现就是"天气配置下拉里只有 Default,保存 / 重载后才出现其它已存在的预设"。
+        /// 选项集一过期就重建面板;面板还不存在时**不**顺手创建(留给玩家打开面板时那条路径)。
+        /// </summary>
+        private void EnsureInspectorPanelUpToDate()
+        {
+            if (inspectorPanel == null) return;
+
+            string sig = BuildPanelOptionsSignature();
+            if (sig == null || sig == _panelOptionsSignature) return;
+
+            Mod.Diag("Volken: 预设列表已变 → 重建检查器面板(planet={0}, cloud=[{1}], weather=[{2}])",
+                VolkenClouds.Instance?.CurrentPlanetName,
+                DescribeOptions(VolkenClouds.Instance?._availableConfigs),
+                DescribeOptions(VolkenWeather.Instance?.AvailableConfigs));
+            RebuildInspectorPanel();
         }
 
         private void OnDestroy()

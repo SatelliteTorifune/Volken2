@@ -1,7 +1,7 @@
 # 雨视觉开关:换场景后无法再打开(2026-10-02)
 
-> 状态:🚧 实施中 —— C# 侧已落地(`dotnet build Volken.csproj` = 0 错误),**未做 Unity 真机验收**
-> 日期:2026-10-02
+> 状态:🚧 实施中 —— C# 侧已落地(`dotnet build Volken.csproj` = 0 错误),**未做 Unity 真机验收**;2026-10-04 补了 §4 的场景门控回归
+> 日期:2026-10-02(§4 = 2026-10-04)
 > 关联:[雨计划](sp2-rain-particledomain-port-2026-09-28.md)(雨子系统唯一事实源)/ [解耦](weather-cloud-decoupling-2026-10-01.md) §3.3 C2(挂雨该归谁)/ [场景门控](monobehaviour-scene-gate-2026-10-02.md) §1(挂在相机上的组件随 Flight 场景卸载)
 > 定位:诊断并修复"雨视觉开关异常、换场景后打开无效";范围只有**雨视觉**,雷(视觉 + 音效)与雨声本来就好 —— 这正是本诊断的旁证,见 §0。
 
@@ -62,3 +62,37 @@
 **Flight → Flight 重载(快速读档 / 回退发射)不重读 XML —— 属正常,不处理**(【决策:2026-10-02,用户】):该路径不经过非飞行场景,`ApplyPlanet` 的同行星早退(`CurrentPlanet == planetName && IsActive`)保留内存状态(含未保存改动)。这是可接受的行为,不要为它加"场景加载信号",也不要改早退判据。
 
 **另一条备注**:`Weather/Rain/RainParticles.cs` 的 `AssetsStatus` 仍是 static 诊断字符串,多实例时只反映"最近一次尝试",仅用于日志、不参与门控 —— **不要把它当就绪判据**(那正是本 bug 的形态)。
+
+---
+
+## 4. 回归:雨漏进设计器(2026-10-04)
+
+§1 的 `SyncToCurrentView()` 每飞行帧重挂雨,**只按"相机是谁"决定挂/不挂,从不判场景** → 切到设计器后雨挂到了**设计器的相机**上,整个设计器会话都在下雨。
+
+**根因 = 场景切换里有一条"事件还没到、`Game.InFlightScene` 已变 false"的窗口**(游戏源码 `Scenes/SceneManager.cs` 的 `LoadSceneCoroutine`):
+
+| 步 | 位置 | 状态 |
+|---|---|---|
+| 1 | 开头 `UpdateCurrentSceneInfo("Transition")` | `Game.InFlightScene` **当场变 false** |
+| 2 | `UnloadSceneAsync(上一个场景)` | 飞行相机与其上的 `RainParticles` 一起销毁 → `_current` 变 null |
+| 3 | 加载新场景 → `yield return null` | 这一帧 `Camera.main` 已是**新场景**的相机 |
+| 4 | 才 `OnSceneLoaded(sceneName)` | mod 这时才知道要关天气 ticker(收到 `PlanetChanged(InFlight=false)`) |
+
+**第 2~4 步之间那一帧 ticker 还开着**(关它的通知在第 4 步),于是 `Tick → SyncToCurrentView` 的 `ResolveViewCamera()` 一路回退到 `Camera.main` = 刚加载好的设计器相机 → 挂载成功;等第 4 步到达时组件已经挂上,而 `OnPreCull` 没有任何场景门控 → 雨照画不误。
+
+**修法 = 场景判据放在挂载与绘制两处**(而不是只挂在事件链上):
+
+| 文件 | 改法 |
+|---|---|
+| `Weather/Rain/RainParticles.cs` | 新增 `IsGameInFlightScene()`(活体读 `Game.InFlightScene`;取不到 `Game` = 编辑器预览台 → 按"不在飞行");`SyncToCurrentView()` / `Attach(cam)` 开头**拒绝**在非飞行场景挂载;`OnPreCull` 开头非飞行场景**直接 `Destroy(this)` 并 return** —— 自毁是必需的:留着它 `_current` 非空,回到飞行场景就再也挂不上(`OnDestroy` 会清 `_current`) |
+| `Weather/VolkenWeather.cs` | `WeatherTicker.Update` 加活体兜底:`Game.Instance == null \|\| !Game.InFlightScene` → return(写法同 `RainAudio.Update`)—— 场景门控靠 `SceneLoaded` 事件链,而别家 mod 的处理器抛异常会静默跳过后续订阅者(本仓库有同源事故) |
+
+诊断:门控命中会打一行 `RainParticles: 场景门控拦下(...) —— 非飞行场景(scene=...)`(5 s 节流);真机上出现它 = 确实有"想在别的场景挂 / 画雨"的调用。
+
+> 雷侧不受影响:`LightningModule.SetActive(false)` 已 `StopCoroutine` + `DestroyAll()`(在播的闪电一起清),没有残留物被带进下一个场景。编辑器预览台(`StandaloneMode=true`)全程短路这些门控。
+
+**验收判据(真机)**:
+
+1. 飞行中开雨 → 按「设计器」:设计器里**没有雨**(日志有 1 行「场景门控拦下(SyncToCurrentView)」,且新场景**不应**出现 `attached to camera`);回飞行场景后雨自己回来(仍以 XML 为准)。
+2. 主菜单、行星工坊同样无雨;`[VolkenDiag]RainParticles:` 诊断行在非飞行场景**不再增长**。
+3. 编辑器预览台照旧能画雨(独立模式,门控短路)。

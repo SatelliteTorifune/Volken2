@@ -28,6 +28,9 @@ namespace Assets.Scripts
 
         public BoolSetting ExtraCameraClouds { get; set; }
 
+        /// <summary>给附加世界相机(PIP 窗口等)也挂雨:每台相机一套雨实例(约 amount×32B 显存 + 一份满额 compute)。</summary>
+        public BoolSetting ExtraCameraRain { get; set; }
+
         protected override void InitializeSettings()
         {
             // xmlName 是 XML 序列化的稳定存储 key,必须显式给定:不指定会从显示名派生,而显示名是本地化引用,
@@ -51,6 +54,9 @@ namespace Assets.Scripts
                 .SetDefault(false);
             ExtraCameraClouds = CreateBool("{Volken.ModSettings.ExtraCameraClouds}", "ExtraCameraClouds")
                 .SetDescription("{Volken.ModSettings.ExtraCameraCloudsDesc}")
+                .SetDefault(true);
+            ExtraCameraRain = CreateBool("{Volken.ModSettings.ExtraCameraRain}", "ExtraCameraRain")
+                .SetDescription("{Volken.ModSettings.ExtraCameraRainDesc}")
                 .SetDefault(true);
             ShowProfiler = CreateBool("{Volken.ModSettings.ShowProfiler}", "ShowProfiler")
                 .SetDescription("{Volken.ModSettings.ShowProfilerDesc}")

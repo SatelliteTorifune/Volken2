@@ -13,7 +13,9 @@
 | [`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md) | 🚧 **唯一在动手** | SP2 雨重做:4 条真难点 + 8 阶段计划;**实施记录 §10 是唯一事实源**(本文不复制) |
 | [`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md) | 🚧 部分落地 | 天气↔云解耦审计(C1~C10);已落地改名 / 生命周期 / 目录 / `TryGetBand`;A2 / D / F 未排期 |
 | [`monobehaviour-scene-gate-2026-10-02.md`](monobehaviour-scene-gate-2026-10-02.md) | 🚧 实施中(待真机) | `Update` 是不是只在 FlightScene 跑:常驻组件按 `InFlight` 停表、`FindObjectsOfType` → `Camera.allCameras`、渲染路径去每帧 LINQ |
-| [`rain-toggle-scene-switch-2026-10-02.md`](rain-toggle-scene-switch-2026-10-02.md) | 🚧 实施中(待真机) | 雨视觉开关换场景后打不开:资产就绪标志误用 `static` + 解耦后无人重挂雨 |
+| [`rain-toggle-scene-switch-2026-10-02.md`](rain-toggle-scene-switch-2026-10-02.md) | 🚧 实施中(待真机) | 雨视觉开关换场景后打不开:资产就绪标志误用 `static` + 解耦后无人重挂雨;§4 = 重挂补场景门控(否则雨漏进设计器) |
+| [`weather-preset-dropdown-stale-2026-10-04.md`](weather-preset-dropdown-stale-2026-10-04.md) | 🚧 实施中(待真机) | 天气配置下拉只有 `Default`:选项是面板构建时的拷贝,而预设列表在面板建好之后才扫描 |
+| [`extra-camera-rain-2026-10-04.md`](extra-camera-rain-2026-10-04.md) | 🚧 实施中(待真机) | PIP / 多余相机只渲染雷电与云层、不渲染雨:雨是单实例挂主视图;按额外相机扫描挂"每相机一套实例" |
 
 > **待办清单与已修复台账**见 [§四之三](#四之三待办清单backlog)(2026-10-02 由原独立文件 `to-do.md` 并入 —— 根目录只留「活跃方案 + 本文档 + 会话上下文」)。
 
@@ -42,6 +44,7 @@
 | [`archive/jno-sceneloaded-nre-2026-08-27.md`](archive/jno-sceneloaded-nre-2026-08-27.md) | JNO 冲突:`OnSceneLoaded` NRE 中断事件链 → Volken 初始化被跳过 |
 | [`archive/reflection-adaptation-2026-09-02.md`](archive/reflection-adaptation-2026-09-02.md) | 实时反射:方案 A(水面)已落地,方案 B(机体 cubemap 探头)未做 |
 | [`archive/weather-rain-fog-postmortem-2026-09-27.md`](archive/weather-rain-fog-postmortem-2026-09-27.md) | **雨/雾移植失败复盘** —— 4 层根因 / 27 条铁律 / 8 条已证伪思路;**重做雨/雾前必读** |
+| [`archive/rain-spawn-hash-precision-2026-10-04.md`](archive/rain-spawn-hash-precision-2026-10-04.md) | 雨滴**重复落在同一处** = GPU 随机数 `frac`-hash 的 float32 精度塌缩(输入 `id*7.13 + _time*20*7.13`);改整数 hash + `_phase`,真机唯一率 0.932 / 最大重复 5 |
 
 > 归档文档头部「状态:」是最终结论;文档内未勾选项 = 待复跑 / 未排期,勿当待办执行。
 
@@ -57,6 +60,7 @@
 | 天气**没有**"天气值"/全局档位:各子系统只看自己的 `enabled` + 节奏参数 | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 |
 | 云与天气预设**各存各的、不配对**:云 `UserData/VolkenConfig/{行星}/{预设}.xml`,天气 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml` | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 / 母计划 §10.6 |
 | **天气数据的唯一权威来源 = 预设 XML**:面板未保存的改动**不跨场景保留**(进飞行场景 / 换行星重读文件;开关"自己变回文件里的值"是预期);Flight→Flight 快速读档/回退发射**除外**(保留内存状态,属正常) | [雨开关](rain-toggle-scene-switch-2026-10-02.md) §3 |
+| **下拉选项 = 面板构建那一刻的拷贝**(`DropdownModel` 构造即拷进自己的 `Options`)→ 预设列表变了**必须重建面板**才看得见;切预设**必须校验文件存在**,否则 `LoadFromFile` 会新建默认文件并改写行星绑定 | [天气预设下拉](weather-preset-dropdown-stale-2026-10-04.md) §0 / §1 |
 | 天气**不联动云**;"读对方的 config" ≠ 联动 | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 |
 | 命名:`VolkenMod` → `Clouds.VolkenClouds`;`VolkenWeatherConfig` → `Weather.VolkenWeatherSettings` | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 |
 | 行星生命周期只归 `VolkenClouds`(订阅 `SceneLoaded` / `PlayerChangedSoi`,广播 `PlanetChanged` 给天气) | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 |
@@ -70,6 +74,9 @@
 | 程序化网格 / 渐变 = **静态共用**;雨每帧只采样一次 craft 链 + 缓存 `CloudRenderer` + 只上传变化过的 uniform | [性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) §2.2 / §2.3 / §2.4 |
 | 每帧组件按 `PlanetEnvironment.InFlight` 启停(常驻天气 ticker / `LightningModule` / UI);**不新增 `SceneLoaded` 订阅者** | [场景门控](monobehaviour-scene-gate-2026-10-02.md) §1 / §2 |
 | **挂在场景物体上的组件,换场景 = 新实例**:实例资源(compute / shader / material / buffer)的就绪标志**不得用 `static`** 门控,否则新实例跳过加载 → 永久 NOT READY | [雨开关](rain-toggle-scene-switch-2026-10-02.md) §0 |
+| **重挂 / 重画相机上的组件必须按活体 `Game.InFlightScene` 门控(挂载点 + 绘制点两处,残留实例要自毁)**:切场景时 `InFlightScene` 在 Transition 阶段就变 false,而 `SceneLoaded` 要等新场景加载完(隔一帧)→ 只靠事件链会把雨挂到设计器 / 菜单的相机上 | [雨开关](rain-toggle-scene-switch-2026-10-02.md) §4 |
+| **多相机 = 每相机一套实例资源,`static` 诊断量只归主视图写**:雨的 compute / buffer / 材质都是实例资源(配置变更要遍历所有实例);`LastAltitudeFade` 等共享量若被额外相机写,主视图雨声会被它的水下 / 海拔状态顶掉 | [附加相机雨](extra-camera-rain-2026-10-04.md) §1 / §2 |
+| **GPU 随机数不许拿"随 id / `_time` 增长的浮点输入"喂 `frac`-hash**:`frac(p*0.1031)` 在输入到 7e4 量级只剩 ~128 级、越过 2^23 恒为 0 → 粒子拿到同一随机值、落点成簇(10 万粒只剩 ~1.3 万落点);随机数要么输入有界,要么直接用整数 hash(`id` + 整数相位) | [雨滴落点重复](archive/rain-spawn-hash-precision-2026-10-04.md) §0 / §2 |
 | 取"本帧云层"一律走 `VolkenClouds.FillActiveLayers(缓冲)`,判据单点 `IsActiveLayer`;**渲染路径禁止 LINQ + 临时 List** | [场景门控](monobehaviour-scene-gate-2026-10-02.md) §2 |
 | 路线图 #1 的光照解耦**已实现**(`lightStepSize` 是独立 uniform,样本数已按壳内长度自适应),`CreateDefault()` 的 `numLightSamplePoints` 现为 **25** → 该条只剩"改默认值 + 老配置迁移" | [hotpath 清单](proposals/hotpath-optimization-backlog-2026-10-02.md) §4.2 / §5 |
 | 全局调试开关必须 `static`;多相机共享材质 → 每相机绘制前重设 uniform | 母计划 §10.4 J / G |
@@ -112,7 +119,7 @@
 
 1. **雷电**:`LightningBolt.shader` 是否被 Unity 编译、日志 `loaded thunder clips: near=4/4 far=5/5`、`volkenBolt` 手动劈雷。
 2. **雷声真实化**:日志应逐条打印 `thunder [near|far] dist=… delay=… vol=…`。判据:① `thunderDistanceAttenuation=0` 时听感回到原版 0.05 s;② Droo(340 m/s)与 Tydos(931 m/s)同落点距离下延迟差约 2.7 倍;③ 连劈多次不互相打断;④ 素材 near / far 分类需**人工确认**。
-3. **天气预设 XML 往返**:面板改 → 保存 → 文件跟着变;**读**方向(手改 XML → 重进场景 / 换预设 → 面板跟着变)也要试;「另存为新配置」要能新建并出现在下拉里;并回归云的「另存为 / 加载」不受影响。 失败是**静默**的(回落默认全关,不报错)。
+3. **天气预设 XML 往返**:面板改 → 保存 → 文件跟着变;**读**方向(手改 XML → 重进场景 / 换预设 → 面板跟着变)也要试;「另存为新配置」要能新建并出现在下拉里;并回归云的「另存为 / 加载」不受影响。 失败是**静默**的(回落默认全关,不报错)。**下拉本身也要查**:冷启动后第一次进飞行场景,天气 / 云两个预设下拉应直接是**完整列表**(无需先保存 / 重载),见[天气预设下拉](weather-preset-dropdown-stale-2026-10-04.md) §2。
 4. **打包 `Volken.sr2-mod` + 核对资产清单**:权威来源 `Assets/ModData.asset` 的 `_otherAssets`(GUID),生成物 `Temp\ModManifest.xml` 与 `ModAssetBundles\…\volken.manifest`;应含 6 个 shader/compute(`Clouds` / `CloudNoiseCompute` / `RainParticles.{compute,shader}` / `LightningBolt` / `LightningFlash`)+ 9 条 wav,**不含**任何 rain / fog / 旧 ogg 路径;进游戏用 `volkenAssets` 复核。
     **移动 / 删除资产不会自动更新 GUID**(2026-10-01 实测:shader 挪进 `Shader/` 后留了 2 条悬空 + 1 条已删 ogg 残留 → **资产静默不进 bundle,云会整体消失,但没有编译错误**;已修,现 26 条 0 悬空)。自检(输出非空即有悬空):
 
@@ -129,6 +136,7 @@ $map=@{}; gci -Recurse -File Assets -Filter *.meta | %{ $l=(Select-String $_.Ful
 - **雨 / 雷高开销语句(C# 侧已改,GPU 侧未排期)** —— 剩余项 / 改法见[性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) §3,真机回归判据见其 §4。
 - **剩余高开销点(分组清单 + D 各方案代价)** —— [hotpath 清单](proposals/hotpath-optimization-backlog-2026-10-02.md):A 拖 UI 尖峰(已决定不改)/ B 每帧 CPU / C 一次性尖峰 / D GPU(D1 光样本数、D4 点光 range 各 1 行;D3 分叉合批半天;D2/D5 不建议)。
 - **雷电"固定位置射灯"扇形(根因已定位,待真机验收)** —— 根因 = 分叉 `LineRenderer` 的**第 0 个点从未赋值**:`positionCount` 的默认 `(0,0,0)` 在 `useWorldSpace` 下就是**世界原点**,而浮动原点又把原点重定位到飞船处 → `(arcs-3)×(splits+1)`(默认 **85**)条分叉全部从**观测者**身上扇形射出。已修 `SetPosition(0, from)`;同轮补**暂停收光** + **重定位防护**(两处真实缺陷)。见[复核](proposals/lightning-fixed-position-diagnosis-verify-2026-10-02.md) §5。
+- **雷电海拔限位(新增,待真机验收)** —— 飞到轨道(>12000m)仍会劈雷:雷电**从来没有高度闸门**(雨有 `rain.ceilingAltitude`)。新增 `lightning.ceilingAltitude`(默认 **12000**,0=关)+ `StormLoop`/`CastRandomBolt` 双重复核 + 面板滑块;「立刻劈一道」被拦下时改提示**海拔过高**,不再假报"已触发"。见[雷电海拔限位](proposals/lightning-altitude-ceiling-2026-10-02.md)。
 - **死代码待清理(只登记未删)**:`Clouds/DepthCapture.cs`(全工程零调用)、`PlanetRing/PlanetRingsZWriteFix.cs` + `HarmonyPatches/PlanetRingsShaderPatch.cs`(`Postfix` 首行 `return`、`Apply` 在 `Mod.cs` 里被注释)—— 见[场景门控](monobehaviour-scene-gate-2026-10-02.md) §3。
 - **二期可选项(未排期)**:落雷改用 `Physics.Raycast` 贴地形(现为行星正球面近似);联机行为核对;云层联动(字段占位仍在,但**面板分组 2026-10-01 已删** —— 要做必须是"可明确关掉且默认关"的显式选项,并走事件通道,见 [解耦](weather-cloud-decoupling-2026-10-01.md) §3.6)。
 
@@ -136,6 +144,9 @@ $map=@{}; gci -Recurse -File Assets -Filter *.meta | %{ $l=(Select-String $_.Ful
 
 | 日期 | 问题 | 根因(一句) | 详见 |
 |---|---|---|---|
+| 2026-10-04 | 雨滴**重复落在同样的地方**(落点成簇;随时间恶化到全同一点) | GPU 随机数用了 `frac(p*0.1031)` 的 float32 式,而输入是 `id*7.13 + floor(_time*20)*7.13`:输入到 7e4 量级 `frac` 只剩 ~128 级、越过 2^23 恒为 0 → 大量粒子同一随机值(10 万粒只剩 1.3 万落点、单点最多 655 粒) | [雨滴落点重复](archive/rain-spawn-hash-precision-2026-10-04.md) §1 / §2 |
+| 2026-10-04 | 雨**漏进设计器**(主菜单同样不干净) | `SyncToCurrentView` 每飞行帧重挂雨但**只判相机不判场景**;切场景时 `InFlightScene` 已变 false 而 `SceneLoaded` 还没到(隔一帧)→ 旧相机已销毁、回退 `Camera.main` = 刚加载好的设计器相机 → 挂上后无人清 | [雨开关](rain-toggle-scene-switch-2026-10-02.md) §4 |
+| 2026-10-04 | 天气配置下拉**只有 `Default`**,保存 / 重载后才出现其它预设 | 下拉选项是面板构建时的**拷贝**,而预设列表在面板建好之后才扫描(场景事件链里 UI 排在 `VolkenClouds` 之前)→ 已建下拉永远拿不到;顺带发现点"幽灵 Default"会**新建默认文件 + 改写行星绑定** | [天气预设下拉](weather-preset-dropdown-stale-2026-10-04.md) |
 | 2026-10-02 | 雨视觉开关异常:换场景后**再也打不开**(雨声照旧) | 资产就绪标志 `AssetsReady` 误用 `static`(资产是实例字段)→ 新场景的新实例跳过 `EnsureAssets` 永久 NOT READY;叠加解耦后**无任何重挂点** | [雨开关](rain-toggle-scene-switch-2026-10-02.md) |
 | 2026-10-02 | 主菜单 / 设计器 / 行星工坊里也在跑 Volken 的每帧回调 | 常驻(`DontDestroyOnLoad`)组件没按场景门控;另有一条 `yield return null` 等菜单的协程跨场景空转 | [场景门控](monobehaviour-scene-gate-2026-10-02.md) |
 | 2026-10-01 | 切换至有大气星球时 config 卡住 | `CloudConfig.enabled` 被当"环境开关"在**三处**回写,而它是玩家预设里会落盘的字段 → 行星预设被静默写成"关闭" | [解耦](weather-cloud-decoupling-2026-10-01.md) §8 |

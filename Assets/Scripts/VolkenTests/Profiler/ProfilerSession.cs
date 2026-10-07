@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Text;
 using UnityEngine;
 
 namespace VolkenProfiler
@@ -32,23 +27,11 @@ namespace VolkenProfiler
         public string CloudRenderInfo;       // 当前云渲染配置(分辨率/TSS/采样格网),非飞行或读取失败时为 null
     }
 
-    /// <summary>录制导出用的单帧样本(GPU 焦点)。</summary>
-    public struct FrameSample
-    {
-        public double Time;
-        public float FrameMs;
-        public float Fps;
-        public float GpuMs;
-        public float RenderMs;
-        public float PresentMs;
-    }
-
     /// <summary>
-    /// 帧数据采集器(GPU 焦点):帧率/帧耗时、GPU 帧时间、渲染线程耗时、Present 等待与瓶颈判断;可导出 CSV。
+    /// 帧数据采集器(GPU 焦点):帧率/帧耗时、GPU 帧时间、渲染线程耗时、Present 等待与瓶颈判断。
     /// </summary>
     public sealed class ProfilerSession
     {
-        public const int DefaultCaptureLimit = 1800; // 约 30s @ 60fps
         private const float SmoothingFactor = 0.1f;  // 与游戏内置 FpsMonitor 一致
 
         private readonly FrameTiming[] _frameTimings = new FrameTiming[8];
@@ -61,19 +44,9 @@ namespace VolkenProfiler
         private float _smoothedMs;
         private float _lastFrameMs;
 
-        private readonly List<FrameSample> _capture = new List<FrameSample>();
-        private bool _captureActive;
-        private int _captureLimit = DefaultCaptureLimit;
-        private double _elapsed;
-
-        public bool CaptureActive => _captureActive;
-        public int CaptureLimit { get => _captureLimit; set => _captureLimit = Mathf.Max(1, value); }
-
         /// <summary>每帧调用一次(由 Overlay 的 Update 驱动)。</summary>
         public void Tick(float unscaledDeltaTime)
         {
-            _elapsed += unscaledDeltaTime;
-
             // 1) 当前帧耗时(指数滑动平均,与游戏内置一致)
             if (unscaledDeltaTime > 0f)
             {
@@ -86,70 +59,6 @@ namespace VolkenProfiler
 
             // 2) GPU / 渲染线程 / Present 帧时间
             CaptureFrameTimings();
-
-            // 3) 录制
-            if (_captureActive)
-            {
-                var snap = BuildSnapshot();
-                _capture.Add(new FrameSample
-                {
-                    Time = _elapsed,
-                    FrameMs = _lastFrameMs,   // CSV 记录原始帧耗时,而非平滑值
-                    Fps = snap.Fps,
-                    GpuMs = snap.GpuFrameMs,
-                    RenderMs = snap.CpuRenderThreadFrameMs,
-                    PresentMs = snap.PresentWaitMs,
-                });
-                if (_capture.Count >= _captureLimit)
-                {
-                    FinishCapture();
-                }
-            }
-        }
-
-        public void BeginCapture()
-        {
-            _capture.Clear();
-            _captureActive = true;
-        }
-
-        /// <summary>结束录制并导出 CSV,返回文件路径;失败返回以 "ERR:" 开头的错误信息。</summary>
-        public string FinishCapture()
-        {
-            _captureActive = false;
-            if (_capture.Count == 0)
-            {
-                return null;
-            }
-
-            var inv = CultureInfo.InvariantCulture;
-            var sb = new StringBuilder(_capture.Count * 56 + 128);
-            sb.AppendLine("time_s,frame_ms,fps,gpu_ms,render_ms,present_ms");
-            foreach (var s in _capture)
-            {
-                sb.Append(s.Time.ToString("F3", inv)).Append(',');
-                sb.Append(s.FrameMs.ToString("F2", inv)).Append(',');
-                sb.Append(s.Fps.ToString("F1", inv)).Append(',');
-                sb.Append(s.GpuMs.ToString("F2", inv)).Append(',');
-                sb.Append(s.RenderMs.ToString("F2", inv)).Append(',');
-                sb.Append(s.PresentMs.ToString("F2", inv));
-                sb.AppendLine();
-            }
-
-            string path = Path.Combine(Application.persistentDataPath,
-                "VolkenProfilerGPU_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv");
-            try
-            {
-                File.WriteAllText(path, sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                _capture.Clear();
-                return "ERR: " + ex.Message;
-            }
-
-            _capture.Clear();
-            return path;
         }
 
         public ProfilerSnapshot BuildSnapshot()
@@ -223,8 +132,6 @@ namespace VolkenProfiler
             _cpuMainThreadFrameMs = 0f;
             _cpuRenderThreadFrameMs = 0f;
             _presentWaitMs = 0f;
-            _capture.Clear();
-            _captureActive = false;
         }
 
         /// <summary>瓶颈判断:某项占整帧耗时 ≥85% 才判定为该瓶颈。</summary>

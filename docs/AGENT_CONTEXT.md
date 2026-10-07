@@ -22,7 +22,7 @@
 |---|---|
 | 工程目录 | `<PROJECT>` |
 | Mod 源码 | `Assets/Scripts/Volken/` |
-| 测试 / 开发工具(可整体删除,正式代码零引用) | `Assets/Scripts/VolkenTests/`(雨预览台 `RainPreview.cs`、构轴探针 `RainAxisProbe.cs`、噪声 / 步进可视化、`Profiler/`;契约见该目录 `README.md`) |
+| 测试 / 开发工具(可整体删除,正式代码零引用) | `Assets/Scripts/VolkenTests/`(雨预览台 `RainPreview.cs`、噪声 / 步进可视化、`Profiler/`;契约见该目录 `README.md`) |
 | 文档索引 / 会话上下文 / **待办台账** | `docs/README.md`(§四之三 = 待办 + 已修复)· `docs/AGENT_CONTEXT.md` |
 | **文档体检脚本**(改完文档必跑) | `tools/check-docs.ps1`(仓库根,9 项机械检查,退出码 0 才算过);配套反模式清单见 `docs/README.md` §五.11 |
 | **注释自证脚本**(只动注释时必跑) | `tools/strip-code-comments.ps1`(仓库根) |
@@ -110,6 +110,11 @@
 - Mods 目录勿同时放 `Volken.sr2-mod` 与 `Volken-R.sr2-mod`(同名程序集冲突)。
 - **每帧回调的场景边界**:挂在相机 / 场景物体上的组件(`CloudRenderer` / `FarCameraScript` / `RainParticles`)随 Flight 场景卸载,天然只在飞行场景;常驻(`DontDestroyOnLoad`)组件(天气 ticker / `RainAudio` / `LightningModule` / `VolkenUserInterface`)必须按 `VolkenClouds.PlanetChanged` 的 `InFlight` 停表 —— 新增每帧组件照此办理,见 [场景门控](monobehaviour-scene-gate-2026-10-02.md) §0~§2。
 - **相机上组件的实例资源不得用 `static` 门控**:换场景 = 组件销毁 + 新实例,而 compute / shader / material / buffer 都在实例上;`static` 就绪标志会让新实例跳过加载并**永久 NOT READY**(雨视觉"换场景后打不开"就是这样),且静态开关会让雨声照响 → 表现为"只有视觉死"。见 [雨开关](rain-toggle-scene-switch-2026-10-02.md) §0。
+- **重挂 / 重画相机上的组件要按活体 `Game.InFlightScene` 门控,且门控要放在"挂载点 + 绘制点"两处**:`InFlightScene` 在切场景的 Transition 阶段就变 false,而 `SceneLoaded` 要等新场景加载完(游戏里隔一帧)→ 那一帧常驻 ticker 还开着、旧相机已销毁,`Camera.main` 回退会把雨挂到**设计器 / 菜单的相机**上;残留实例必须自毁,否则 `_current` 非空、回飞行场景再也挂不上。见 [雨开关](rain-toggle-scene-switch-2026-10-02.md) §4。
+- **多相机(PIP)= 每相机一套实例资源,`static` 诊断量只归主视图实例写**:雨的 compute / buffer / 材质都是实例字段(改配置要遍历所有实例,别只找"当前视图那一台");`LastAltitudeFade` / `LastWaterFade` 等共享量同时喂给 `RainAudio` 的门控,被额外相机写就会把主视图的雨声压掉。挂载点复用 `VolkenUserInterface` 的 1 Hz 额外相机扫描(与云同一套 `IsExtraWorldCamera` 识别),开关 `ModSettings.ExtraCameraRain`。见 [附加相机雨](extra-camera-rain-2026-10-04.md) §1 / §2。
+- **GPU 随机数不许拿"随 id / `_time` 增长的浮点输入"喂 `frac`-hash**:`frac(p*0.1031)` 在输入到 7e4 量级只剩 ~128 级分辨率、越过 2^23 后恒为 0 → 粒子拿到同一随机值,落点成簇(10 万粒只剩 ~1.3 万落点、单点最多 655 粒,随时间恶化到全同一点,表现为"雨滴重复落在同样的地方")。随机数要么输入有界(`frac` 之后的值),要么直接用整数 hash(`id` + CPU 传来的整数相位);诊断要**整块**回读 positions 统计"唯一率 / 最大重复"(连续 64 粒永远看不出跨 id 混叠)。见 [雨滴落点重复](archive/rain-spawn-hash-precision-2026-10-04.md) §1 / §4。
+- **Inspector 下拉的选项 = 面板构建那一刻的拷贝**(`DropdownModel` 构造把 options 逐条拷进自己的 `Options`)→ **列表之后刷新进不了已建面板,必须重建面板**。而场景加载事件链里 UI 排在 `VolkenClouds` 之前(`Mod.OnModLoaded` 先建 UI)→ "面板建好之后预设才被扫描"是常态。判据与实现见 [天气预设下拉](weather-preset-dropdown-stale-2026-10-04.md) §1(`VolkenUserInterface.EnsureInspectorPanelUpToDate` 按 1 s 签名比对)。
+- **切预设必须校验文件存在**:`VolkenWeatherConfig.LoadFromFile` 在文件缺失时会**就地新建默认 XML 并落盘**,`RegisterPresetName` 还会改写 `PlanetConfigList.xml` → 点一条幽灵项 = 造垃圾预设 + 改行星绑定(`SwitchPreset` 已加护栏,新建预设走「另存为新配置」)。
 - ~~`CloudConfig.low/mid/highAltitudeThreshold` 是死配置但不可删除~~ → ** 已更正(2026-10-01)**:这三个字段早在 `fe87e59` 就删掉了(全仓库 0 命中),**且没有任何反序列化问题** —— `XmlSerializer` 对未知节点默认忽略、不抛异常。**结论:`CloudConfig` 里废弃字段可以放心删**;归档文档里"不可删除"的旧说法是未经验证的推测,勿再引用。
 
 ## 4. 游戏 API 关键入口(反编译确认 / ModApi)

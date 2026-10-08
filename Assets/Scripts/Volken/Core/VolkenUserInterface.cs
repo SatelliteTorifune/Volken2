@@ -1114,7 +1114,7 @@ namespace Volken.Core
             string sig = BuildPanelOptionsSignature();
             if (sig == null || sig == _panelOptionsSignature) return;
 
-            Mod.Diag("Volken: 预设列表已变 → 重建检查器面板(planet={0}, cloud=[{1}], weather=[{2}])",
+            Mod.Log("Volken: 预设列表已变 → 重建检查器面板(planet={0}, cloud=[{1}], weather=[{2}])",
                 VolkenClouds.Instance?.CurrentPlanetName,
                 DescribeOptions(VolkenClouds.Instance?._availableConfigs),
                 DescribeOptions(VolkenWeather.Instance?.AvailableConfigs));

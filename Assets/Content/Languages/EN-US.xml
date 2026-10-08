@@ -47,6 +47,13 @@
     <s id="Volken.UI.RainTailFalloff">Streak tail falloff</s>
     <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
     <s id="Volken.UI.RainTransparency">Rain transparency (0 = original, 1 = fully transparent)</s>
+    <s id="Volken.UI.RainCollision">Rain collision (terrain / craft / water)</s>
+    <s id="Volken.UI.RainCollisionHighPrecision">High precision collision (512, default 256)</s>
+    <s id="Volken.UI.RainSplashes">Impact splashes (enables collision)</s>
+    <s id="Volken.UI.RainSplashDistance">Splash visibility distance (m)</s>
+    <s id="Volken.UI.RainSplashLifetime">Splash lifetime (s)</s>
+    <s id="Volken.UI.RainSplashSize">Maximum splash radius (m)</s>
+    <s id="Volken.UI.RainSplashDensity">Splash density</s>
     <s id="Volken.UI.RainDistanceFade">Depth: in-domain distance fade (0 = off; near bright, far dim)</s>
     <s id="Volken.UI.RainStreakVariation">Depth: per-streak length/width variation (0 = all identical)</s>
     <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>

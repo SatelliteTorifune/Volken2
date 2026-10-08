@@ -38,8 +38,8 @@ Shader "Volken/RainParticles"
         //   只在 HLSL 里声明的 uniform(_RotationMatrix/_Positions/_FadeAmount/_LinearSceneDepth)
         //   不在 Properties 表里,HasProperty 未必看得到,不能用来判版本。
         //   本 shader 语义每次改动就 +1(5 = 最小屏幕宽度守卫,6 = _RandomData 消毒:yzw 夹到 [0,1] + NaN 归零,
-        //                            7 = 水下粒子剔除:粒子中心低于海平面 → 四边形塌成零面积)。
-        _ShaderVer ("Shader Build (部署探针)", Float) = 7
+        //                            7 = 水下剔除,8 = GPU 碰撞表面裁切)。
+        _ShaderVer ("Shader Build (部署探针)", Float) = 8
         // 域边界淡出(SP2 把 _DomainPos/_DomainRadius 传给 material,唯一合理用途 = 隐藏球域边界/回收突现):
         //   _EdgeFade = 0 关;>0 时在 [1-_EdgeFade, 1]·R 区间把 alpha 渐隐到 0。
         _EdgeFade ("Domain Edge Fade", Range(0, 0.5)) = 0.2
@@ -61,6 +61,8 @@ Shader "Volken/RainParticles"
 
             StructuredBuffer<float4> _Positions;   // 与 compute 里 _Positions 同一 buffer(xyz=帧空间位置)
             StructuredBuffer<float4> _RandomData;  // 同一 buffer 的读视图:yzw = 逐粒长/宽倍率与滚转
+            StructuredBuffer<float4> _RainCollisionData;
+            uint _RainCollisionEnabled;
 
             sampler2D _MainTex;
             fixed4 _MainColor;
@@ -141,7 +143,7 @@ Shader "Volken/RainParticles"
                 //   ② 中心在水面上、但尾端扎进水里 → 把那一端收到水面上(否则长雨丝会插进水面以下)。
                 //   ③ 只用**粒子中心**判在水上/水下,单个粒子整体一起处理,不会把雨丝切成锯齿。
                 //   axisUp = 列1(雨丝轴×拉伸)与径向"上"的点积:倾斜雨丝(StreamMode)也按实际倾角折算。
-                if (_SeaRadius > 0.0)
+                if (_SeaRadius > 0.0 && _RainCollisionEnabled == 0u)
                 {
                     float3 partPos = _Positions[instanceID].xyz;
                     float seaAlt = length(partPos - _SeaCenter) - _SeaRadius;
@@ -161,6 +163,16 @@ Shader "Volken/RainParticles"
                 }
                 //  w 必须为 1(是"位置"不是"方向"):UnityWorldToClipPos 内部会强制 w=1 所以
                 //   w=0 时 clip 不炸,但 mul(UNITY_MATRIX_V, worldPos) 会丢掉平移 → eyeDepth 全错。
+                if (_RainCollisionEnabled != 0u)
+                {
+                    float4 surface = _RainCollisionData[instanceID];
+                    if (surface.w < 0.0) local = 0.0;
+                    else
+                    {
+                        float clearance = surface.w + dot(local, surface.xyz);
+                        if (clearance < 0.0) local -= surface.xyz * clearance;
+                    }
+                }
                 float4 worldPos = float4(_Positions[instanceID].xyz + local, 1.0);
 
                 o.pos = UnityWorldToClipPos(worldPos);

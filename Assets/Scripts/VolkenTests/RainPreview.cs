@@ -48,6 +48,13 @@ namespace Volken.Tests
         public float tailFalloff = 0.9f;
         public float brightness = 0f;
         [Range(0f, 1f)] public float transparency = 0f;
+        public bool collisionEnabled;
+        public bool collisionHighPrecision;
+        public bool splashesEnabled;
+        [Range(1f, 50f)] public float splashDistance = 25f;
+        [Range(0.1f, 1f)] public float splashLifetime = 0.35f;
+        [Range(0.03f, 0.5f)] public float splashSize = 0.18f;
+        [Range(0f, 1f)] public float splashDensity = 0.35f;
         public bool streamMode = true;
         public bool respawnMirror = false;
         public float ceilingAltitude = 12000f;
@@ -269,6 +276,13 @@ namespace Volken.Tests
             RainParticles.Falloff = Mathf.Clamp01(tailFalloff);
             RainParticles.Brightness = Mathf.Max(0f, brightness);
             RainParticles.Transparency = Mathf.Clamp01(transparency);
+            RainParticles.CollisionEnabled = collisionEnabled;
+            RainParticles.CollisionResolution = collisionHighPrecision ? 512 : 256;
+            RainParticles.SplashesEnabled = splashesEnabled;
+            RainParticles.SplashDistance = Mathf.Clamp(splashDistance, 1f, 50f);
+            RainParticles.SplashLifetime = Mathf.Clamp(splashLifetime, 0.1f, 1f);
+            RainParticles.SplashSize = Mathf.Clamp(splashSize, 0.03f, 0.5f);
+            RainParticles.SplashDensity = Mathf.Clamp01(splashDensity);
             RainParticles.StreamMode = streamMode;
             RainParticles.RespawnMirror = respawnMirror;
             RainParticles.CeilingAltitude = Mathf.Max(0f, ceilingAltitude);
@@ -312,6 +326,13 @@ namespace Volken.Tests
                     tailFalloff = tailFalloff,
                     brightness = brightness,
                     transparency = transparency,
+                    collisionEnabled = collisionEnabled,
+                    collisionResolution = collisionHighPrecision ? 512 : 256,
+                    splashesEnabled = splashesEnabled,
+                    splashDistance = splashDistance,
+                    splashLifetime = splashLifetime,
+                    splashSize = splashSize,
+                    splashDensity = splashDensity,
                     streamMode = streamMode,
                     respawnMirror = respawnMirror,
                     ceilingAltitude = ceilingAltitude,
@@ -451,6 +472,17 @@ namespace Volken.Tests
             tailFalloff = Slider("尾淡(SP2 0.9)", tailFalloff, 0f, 1f, false);
             brightness = Slider("亮度增益", brightness, 0f, 3f, false);
             transparency = Slider("雨滴透明度(0=原效果,1=全透明)", transparency, 0f, 1f, false);
+            bool wasCollisionEnabled = collisionEnabled;
+            collisionEnabled = GUILayout.Toggle(collisionEnabled, " 雨滴碰撞(地形 / 机体 / 水面)");
+            if (wasCollisionEnabled && !collisionEnabled) splashesEnabled = false;
+            collisionHighPrecision = GUILayout.Toggle(collisionHighPrecision, " 高精度碰撞(512,默认 256)");
+            bool wasSplashesEnabled = splashesEnabled;
+            splashesEnabled = GUILayout.Toggle(splashesEnabled, " 落地水花(自动启用碰撞)");
+            if (!wasSplashesEnabled && splashesEnabled) collisionEnabled = true;
+            splashDistance = Slider("水花距离(m)", splashDistance, 1f, 50f, false);
+            splashLifetime = Slider("水花寿命(s)", splashLifetime, 0.1f, 1f, false);
+            splashSize = Slider("水花半径(m)", splashSize, 0.03f, 0.5f, false);
+            splashDensity = Slider("水花密度", splashDensity, 0f, 1f, false);
 
             GUILayout.Label("── 纵深线索(治\"快速缩放像一层平面\")──");
             distanceFade = Slider("域内距离衰减(0=关;近了亮远了暗)", distanceFade, 0f, 1f, false);
@@ -556,6 +588,13 @@ namespace Volken.Tests
             tailFalloff = 0.9f;
             brightness = 0f;
             transparency = 0f;
+            collisionEnabled = false;
+            collisionHighPrecision = false;
+            splashesEnabled = false;
+            splashDistance = 25f;
+            splashLifetime = 0.35f;
+            splashSize = 0.18f;
+            splashDensity = 0.35f;
             streamMode = true;
             respawnMirror = false;
             ceilingAltitude = 12000f;
@@ -586,7 +625,7 @@ namespace Volken.Tests
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var parts = new[]
                 {
-                    "v6",
+                    "v7",
                     rainEnabled ? "1" : "0",
                     amount.ToString("R", inv), domainRadius.ToString("R", inv), fallSpeed.ToString("R", inv),
                     streakLength.ToString("R", inv), streakWidth.ToString("R", inv),
@@ -601,6 +640,9 @@ namespace Volken.Tests
                     adaptiveDomain ? "1" : "0", adaptiveMaxRadius.ToString("R", inv),
                     underwaterGate ? "1" : "0", underwaterFade.ToString("R", inv), assumeWater ? "1" : "0",
                     transparency.ToString("R", inv),
+                    collisionEnabled ? "1" : "0", collisionHighPrecision ? "1" : "0", splashesEnabled ? "1" : "0",
+                    splashDistance.ToString("R", inv), splashLifetime.ToString("R", inv),
+                    splashSize.ToString("R", inv), splashDensity.ToString("R", inv),
                 };
                 PlayerPrefs.SetString(ParamsPref, string.Join(";", parts));
                 PlayerPrefs.Save();
@@ -617,7 +659,8 @@ namespace Volken.Tests
                 if (string.IsNullOrEmpty(s)) return false;
                 var p = s.Split(';');
                 // 新字段追加在末尾,旧版本的字段索引保持不变。
-                bool hasTransparency = p.Length >= 30 && p[0] == "v6";
+                bool hasCollision = p.Length >= 37 && p[0] == "v7";
+                bool hasTransparency = hasCollision || (p.Length >= 30 && p[0] == "v6");
                 bool hasWater = hasTransparency || (p.Length >= 29 && p[0] == "v5");
                 bool hasDepth = hasWater || (p.Length >= 26 && p[0] == "v4");
                 bool hasLoop = hasDepth || (p.Length >= 21 && p[0] == "v3");
@@ -642,6 +685,13 @@ namespace Volken.Tests
                 }
                 if (hasWater) { underwaterGate = p[26] == "1"; underwaterFade = F(27); assumeWater = p[28] == "1"; }
                 transparency = hasTransparency ? Mathf.Clamp01(F(29)) : 0f;
+                collisionEnabled = hasCollision && p[30] == "1";
+                collisionHighPrecision = hasCollision && p[31] == "1";
+                splashesEnabled = hasCollision && p[32] == "1";
+                splashDistance = hasCollision ? Mathf.Clamp(F(33), 1f, 50f) : 25f;
+                splashLifetime = hasCollision ? Mathf.Clamp(F(34), 0.1f, 1f) : 0.35f;
+                splashSize = hasCollision ? Mathf.Clamp(F(35), 0.03f, 0.5f) : 0.18f;
+                splashDensity = hasCollision ? Mathf.Clamp01(F(36)) : 0.35f;
                 UnityEngine.Debug.Log("[Volken] RainPreview: 已恢复上次记忆的参数(想从出厂值开始就点「重置为 SP2 出厂参数」)");
                 return true;
             }
@@ -678,6 +728,13 @@ namespace Volken.Tests
                 sb.AppendLine("    <tailFalloff>" + N(tailFalloff) + "</tailFalloff>");
                 sb.AppendLine("    <brightness>" + N(brightness) + "</brightness>");
                 sb.AppendLine("    <transparency>" + N(Mathf.Clamp01(transparency)) + "</transparency>");
+                sb.AppendLine("    <collisionEnabled>" + B(collisionEnabled) + "</collisionEnabled>");
+                sb.AppendLine("    <collisionResolution>" + (collisionHighPrecision ? "512" : "256") + "</collisionResolution>");
+                sb.AppendLine("    <splashesEnabled>" + B(splashesEnabled) + "</splashesEnabled>");
+                sb.AppendLine("    <splashDistance>" + N(Mathf.Clamp(splashDistance, 1f, 50f)) + "</splashDistance>");
+                sb.AppendLine("    <splashLifetime>" + N(Mathf.Clamp(splashLifetime, 0.1f, 1f)) + "</splashLifetime>");
+                sb.AppendLine("    <splashSize>" + N(Mathf.Clamp(splashSize, 0.03f, 0.5f)) + "</splashSize>");
+                sb.AppendLine("    <splashDensity>" + N(Mathf.Clamp01(splashDensity)) + "</splashDensity>");
                 sb.AppendLine("    <distanceFade>" + N(distanceFade) + "</distanceFade>");
                 sb.AppendLine("    <streakVariation>" + N(streakVariation) + "</streakVariation>");
                 sb.AppendLine("    <ceilingAltitude>" + N(ceilingAltitude) + "</ceilingAltitude>");

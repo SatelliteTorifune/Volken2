@@ -47,6 +47,13 @@
     <s id="Volken.UI.RainTailFalloff">雨丝尾淡</s>
     <s id="Volken.UI.RainBrightness">亮度增益(0=原色)</s>
     <s id="Volken.UI.RainTransparency">雨滴透明度(0=原效果,1=全透明)</s>
+    <s id="Volken.UI.RainCollision">雨滴碰撞(地形 / 机体 / 水面)</s>
+    <s id="Volken.UI.RainCollisionHighPrecision">高精度碰撞(512,默认256)</s>
+    <s id="Volken.UI.RainSplashes">落地水花(自动启用碰撞)</s>
+    <s id="Volken.UI.RainSplashDistance">水花显示距离(m)</s>
+    <s id="Volken.UI.RainSplashLifetime">水花寿命(s)</s>
+    <s id="Volken.UI.RainSplashSize">水花最大半径(m)</s>
+    <s id="Volken.UI.RainSplashDensity">水花密度</s>
     <s id="Volken.UI.RainDistanceFade">纵深:域内距离衰减(0=关;近了亮远了暗)</s>
     <s id="Volken.UI.RainStreakVariation">纵深:逐粒长度/宽度变化(0=全一样长)</s>
     <s id="Volken.UI.WeatherRainRemoved">雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>

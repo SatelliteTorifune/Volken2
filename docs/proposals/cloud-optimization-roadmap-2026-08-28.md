@@ -3,7 +3,7 @@
 > 状态:📋 规划(部分已由 TSS / 轨道云实现,其余未排期)
 > 核对:2026-10-08 更新 #1 光照与 #2 轨道分派现状;其它排名保留原分析口径,收益为估算,实施前须重新核对源码和 profiler。
 > 分析日期:2026-08-28
-> 关联:[`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md)(当前唯一活跃方案;#2 距离淡出、#8 层壳相交排序与其雨渲染同源)
+> 关联:[雨实现记录](../archive/sp2-rain-particledomain-port-2026-09-28.md)(已归档;#2 距离淡出、#8 层壳相交排序与其雨渲染同源)
 > 范围:
 > - 本项目:`Assets/Scripts/Volken/`(CloudRenderer / CloudLayer / CloudNoise / CloudConfig / Clouds.shader / CloudNoiseCompute.compute)
 > - 参考 A:`<VOLRE_REF>`(KSP 体积云,反编译 C#)

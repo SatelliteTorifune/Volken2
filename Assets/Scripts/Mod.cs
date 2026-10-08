@@ -101,7 +101,7 @@ namespace Assets.Scripts
             }
             catch
             {
-                Debug.Log("什么叫做他妈的Log报错了??????");
+                Debug.LogWarning("[Volken] Log formatting failed.");
             }
         }
         #endregion
@@ -111,7 +111,7 @@ namespace Assets.Scripts
         /// <summary>诊断日志的前缀。用它在 Player.log 里一眼过滤出天气系统的排查信息。</summary>
         public const string DiagTag = "[VolkenDiag]";
 
-        /// <summary>始终输出的诊断日志(不受 <c>DevMode</c> 影响)。排查时在 Player.log 里搜 <c>VolkenDiag</c>。</summary>
+        /// <summary>手动诊断与必要告警,不受 <c>DevMode</c> 影响;常规开发输出使用 Log。</summary>
         public static void Diag(string format, params object[] args)
         {
             try
@@ -149,7 +149,7 @@ namespace Assets.Scripts
 
         #region ASSET LOADING
 
-        /// <summary>资源加载台账(dev 命令 <c>volkenAssets</c>)。新增资产不会自动进包,缺失 = 功能静默失效。</summary>
+        /// <summary>资源加载台账;新增资产须加入打包清单。</summary>
         private static readonly System.Collections.Generic.Dictionary<string, string> _assetLedger = new();
         
         /// <summary>

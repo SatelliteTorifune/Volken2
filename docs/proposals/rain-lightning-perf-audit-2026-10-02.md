@@ -2,7 +2,7 @@
 
 > 状态:📋 **规划** —— C# 侧低风险项**已落地**(`dotnet build Volken.csproj` = 0 错误),GPU 侧(`FillArgs` 原子加归约、分叉合批)与阈值型改动**未排期**,且**全部未做真机 / 编辑器验收**。
 > 日期:2026-10-02
-> 关联:**雨**[雨计划](../sp2-rain-particledomain-port-2026-09-28.md) §10(实施记录唯一事实源)/ **雷**[雷声真实化](../archive/thunder-realism-2026-09-28.md) / [雨雾复盘](../archive/weather-rain-fog-postmortem-2026-09-27.md)(跨界移植铁律)。
+> 关联:**雨**[雨计划](../archive/sp2-rain-particledomain-port-2026-09-28.md) §10(实施记录唯一事实源)/ **雷**[雷声真实化](../archive/thunder-realism-2026-09-28.md) / [雨雾复盘](../archive/weather-rain-fog-postmortem-2026-09-27.md)(跨界移植铁律)。
 > 定位:对新增的雨(`Rain/`)与雷(`Lightning/`)代码做一次"高开销语句"审计,给出**收益排序 + 具体改法 + 验收判据**。
 
 ---

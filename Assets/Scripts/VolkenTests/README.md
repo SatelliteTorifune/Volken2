@@ -27,6 +27,8 @@
 
 ## 校验"零引用"（改完正式代码后可自查）
 
+雨预览台支持雨滴碰撞 / 高精度深度图 / 水花距离、寿命、半径与密度;开启水花自动开启碰撞,关闭碰撞一并关闭水花。勾选“假设有水”时 y=0 为水面。参数记忆 v7 兼容 v1~v6,XML 复制包含新字段;重置后碰撞与水花关闭。实现与验收判据见 [雨计划 §10.8](../../../docs/archive/sp2-rain-particledomain-port-2026-09-28.md#108-gpu-雨滴碰撞与水花2026-10-08)。
+
 ```powershell
 # 期望输出：只有注释行，没有任何代码引用
 Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
@@ -35,6 +37,8 @@ Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
 ```
 
 ## 历史
+
+- 2026-10-08 日志清理:雨 / 雨声不再自动心跳,雨粒子与水花 GPU 回读由“把状态写入 Console”按钮触发,最小间隔 10 秒;游戏天气面板的日志按钮行为一致。GPU 数量与重生数显示最近一次手动采样,−1 表示尚未采样。
 
 - 2026-09-29 建立：原先散落在 `Assets/Scripts/Volken/Debug/`、`Assets/Scripts/Volken/Weather/RainAxisProbe.cs`、
   `Assets/Scripts/Volken/Profiler/` 的测试/开发脚本统一搬到这里；同时把 `Mod.cs` / `VolkenMod.cs` 里

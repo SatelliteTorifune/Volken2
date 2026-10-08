@@ -484,9 +484,6 @@ namespace Volken.Weather
 
             bolt.CastBolt(origin, landing);
             _boltCount++;
-            // 这里的距离是起手时的,仅供参考;真正决定延迟/音色的是雷声那一刻现算的距离(见 PlayThunder 日志)。
-            Mod.Log($"Volken:LightningModule bolt #{_boltCount} from {origin} to {landing} " +
-                    $"(len={Vector3.Distance(origin, landing):F0}m strikeDist~{Vector3.Distance(camPos, landing):F0}m)");
         }
 
         /// 雷声全流程:① 声程 = 按 <c>thunderSourceBlend</c> 在"落点距离"与"云底距离"之间取(观测者 = 相机,AudioListener 所在处);
@@ -610,9 +607,6 @@ namespace Volken.Weather
                 _voicePending[voice] = 0f;
                 _voicePaused[voice] = false;
 
-                Mod.Log($"Volken:LightningModule thunder [{(near ? "near" : "far")}] " +
-                        $"dist={strikeDist:F0}m path={pathDist:F0}m c={speedOfSound:F0}m/s " +
-                        $"delay={delay:F2}s vol={volume:F2} clip={clip.name}");
             }
             catch (Exception ex)
             {

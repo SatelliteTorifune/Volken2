@@ -83,7 +83,6 @@ namespace Volken.Weather
         private double _pauseDsp;               // 进入暂停时的 dsp 时间(恢复时把排程整体顺延)
         private float _fade;                    // 0..1 淡入淡出包络
         private float _intensity = 0.5f;        // 当前 light→heavy 混合
-        private float _lastHeartbeat = -999f;
         private bool _lastGateOpen;
         private int _transitions;
 
@@ -307,7 +306,7 @@ namespace Volken.Weather
                     ResumeGroup(_light, pausedFor);
                     ResumeGroup(_heavy, pausedFor);
                 }
-                Mod.Diag("RainAudio: {0}", paused ? "游戏暂停 → 雨声暂停" : "游戏恢复 → 雨声继续");
+                Mod.Log("RainAudio: {0}", paused ? "游戏暂停 → 雨声暂停" : "游戏恢复 → 雨声继续");
             }
             if (paused) return;
 
@@ -336,7 +335,7 @@ namespace Volken.Weather
             {
                 _lastGateOpen = gateOpen;
                 _transitions++;
-                Mod.Diag("RainAudio: 门控 {0} (enabled={1} rainEnabled={2} rainVol={3:F2} altFade={4:F3} → 目标包络 {5})",
+                Mod.Log("RainAudio: 门控 {0} (enabled={1} rainEnabled={2} rainVol={3:F2} altFade={4:F3} → 目标包络 {5})",
                     gateOpen ? "开 → 淡入" : "关 → 淡出", Enabled, RainParticles.Enabled,
                     RainParticles.Volume, altFade, gateOpen ? 1f : 0f);
             }
@@ -346,7 +345,7 @@ namespace Volken.Weather
             {
                 _preloadKicked = true;
                 int started = PreloadGroup(_light) + PreloadGroup(_heavy);
-                if (started > 0) Mod.Diag("RainAudio: 首次出声 → 拉起 {0} 条素材数据(preloadAudioData=0)", started);
+                if (started > 0) Mod.Log("RainAudio: 首次出声 → 拉起 {0} 条素材数据(preloadAudioData=0)", started);
             }
 
             // ---- 目标值:只算目标,进度单调推进 ----
@@ -380,13 +379,6 @@ namespace Volken.Weather
             LastLightVolume = master * lightMix;
             LastHeavyVolume = master * heavyMix;
 
-            if (now - _lastHeartbeat >= 10f)
-            {
-                _lastHeartbeat = now;
-                Mod.Diag("RainAudio: gate={0} transitions={1} fade={2:F2} master={3:F2} intensity={4:F2}/{5:F2} light={6:F2} heavy={7:F2} segments={8} clipChanges={9} stops={10} assets='{11}'",
-                    gateOpen, _transitions, _fade, master, _intensity, targetIntensity,
-                    LastLightVolume, LastHeavyVolume, SegmentCount, ClipChanges, StopCount, AssetsStatus);
-            }
         }
 
         /// <summary>推进一组素材的排程与音量:同一素材连播 <see cref="RepeatsPerClip"/> 遍(无缝),换素材时交叉淡化。</summary>

@@ -1,0 +1,163 @@
+#pragma kernel Clear
+#pragma kernel Prepare
+#pragma kernel Resolve
+
+// Positions remain in the current reference frame. Surfaces store normal + signed clearance.
+RWStructuredBuffer<float4> _Positions;
+RWStructuredBuffer<float4> _Previous;
+RWStructuredBuffer<float4> _Surfaces;
+RWStructuredBuffer<float4> _SplashPositions;
+RWStructuredBuffer<float4> _SplashNormals;
+RWStructuredBuffer<uint> _Counters;
+Texture2D<float> _CollisionDepth;
+float4x4 _CollisionVP, _CollisionView;
+float3 _CollisionStepX, _CollisionStepY;
+float3 _Down, _DomainCenter, _SeaUp;
+float _DomainRadius, _FallSpeed, _DeltaTime, _DepthFar;
+float _SeaAltitude, _SeaRadius, _SplashLifetime, _SplashDistance, _SplashDensity;
+uint _Capacity, _SplashCapacity, _DepthResolution, _DepthReady, _HasWater;
+uint _SplashesEnabled, _MaxImpacts, _FrameSeed;
+uint _DepthFlipY;
+
+uint Hash(uint v)
+{
+    v ^= v >> 16; v *= 0x7feb352du; v ^= v >> 15; v *= 0x846ca68bu; v ^= v >> 16;
+    return v;
+}
+
+bool GeometryDepth(float3 position, out float clearance, out int2 pixel)
+{
+    clearance = 1e20;
+    pixel = 0;
+    if (_DepthReady == 0u) return false;
+    float4 projected = mul(_CollisionVP, float4(position, 1));
+    float2 uv = projected.xy / projected.w * 0.5 + 0.5;
+    if (_DepthFlipY != 0u) uv.y = 1.0 - uv.y;
+    float eye = -mul(_CollisionView, float4(position, 1)).z;
+    if (any(uv <= 0.0) || any(uv >= 1.0) || eye < 0.0 || eye > _DepthFar) return false;
+    pixel = clamp(int2(uv * _DepthResolution), int2(0,0), int2(_DepthResolution - 1u, _DepthResolution - 1u));
+    float depth = _CollisionDepth.Load(int3(pixel, 0));
+    if (!(depth > 0.0 && depth < _DepthFar - 0.05)) return false;
+    clearance = depth - eye;
+    return true;
+}
+
+float SeaClearance(float3 position)
+{
+    float3 offset = position - _DomainCenter;
+    if (_SeaRadius <= 0.0) return _SeaAltitude + dot(offset, _SeaUp);
+    // Rationalized local sphere difference avoids subtracting two planet-sized floats.
+    float r = max(1.0, _SeaRadius + _SeaAltitude);
+    float delta = 2.0 * r * dot(offset, _SeaUp) + dot(offset, offset);
+    return _SeaAltitude + delta / (sqrt(max(1.0, r * r + delta)) + r);
+}
+
+float Surface(float3 position, out float3 normal, out uint water, out int2 pixel)
+{
+    float distance;
+    GeometryDepth(position, distance, pixel);
+    normal = -_Down;
+    water = 0u;
+    if (_HasWater != 0u)
+    {
+        float sea = SeaClearance(position);
+        // Convert radial clearance to distance along the actual simulated fall direction.
+        float3 seaNormal = normalize(_SeaUp + (position - _DomainCenter) / max(1.0, _SeaRadius + _SeaAltitude));
+        if (_SeaRadius <= 0.0) seaNormal = _SeaUp;
+        sea /= max(0.01, dot(seaNormal, -_Down));
+        if (sea < distance) { distance = sea; normal = seaNormal; water = 1u; }
+    }
+    return distance;
+}
+
+float3 GeometryNormal(int2 pixel)
+{
+    int edge = (int)_DepthResolution - 1;
+    if (any(pixel <= 0) || any(pixel >= edge)) return -_Down;
+    float dx0 = _CollisionDepth.Load(int3(pixel + int2(-1,0), 0));
+    float dx1 = _CollisionDepth.Load(int3(pixel + int2(1,0), 0));
+    float dy0 = _CollisionDepth.Load(int3(pixel + int2(0,-1), 0));
+    float dy1 = _CollisionDepth.Load(int3(pixel + int2(0,1), 0));
+    if (max(max(dx0, dx1), max(dy0, dy1)) >= _DepthFar - 0.05 ||
+        abs(dx1 - dx0) > length(_CollisionStepX) * 8.0 || abs(dy1 - dy0) > length(_CollisionStepY) * 8.0) return -_Down;
+    float3 n = cross(_CollisionStepX * 2.0 + _Down * (dx1 - dx0), _CollisionStepY * 2.0 + _Down * (dy1 - dy0));
+    if (!(dot(n,n) > 1e-10)) return -_Down;
+    n = normalize(n);
+    return dot(n, -_Down) < 0.0 ? -n : n;
+}
+
+[numthreads(64,1,1)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _Capacity) _Surfaces[id.x] = float4(0,0,0,1);
+    if (id.x < _SplashCapacity)
+    {
+        _SplashPositions[id.x] = float4(0,0,0,-1);
+        _SplashNormals[id.x] = float4(0,1,0,0);
+    }
+    if (id.x == 0u) { _Counters[0] = 0u; _Counters[1] = 0u; }
+}
+
+[numthreads(64,1,1)]
+void Prepare(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _Capacity)
+        _Previous[id.x] = float4(_Positions[id.x].xyz, _Surfaces[id.x].w >= 0.0 ? 1.0 : 0.0);
+    if (id.x < _SplashCapacity)
+    {
+        float4 splash = _SplashPositions[id.x];
+        if (splash.w >= 0.0)
+        {
+            splash.w += _DeltaTime;
+            if (splash.w >= _SplashLifetime || _SplashesEnabled == 0u) splash.w = -1.0;
+            _SplashPositions[id.x] = splash;
+        }
+    }
+}
+
+[numthreads(64,1,1)]
+void Resolve(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Capacity) return;
+    float4 p = _Positions[id.x];
+    float4 previous = _Previous[id.x];
+    float3 n; uint water; int2 pixel;
+    float distance = Surface(p.xyz, n, water, pixel);
+    _Surfaces[id.x] = float4(n, min(distance * max(0.01, dot(n, -_Down)), 1e6));
+    if (distance > 0.0) return;
+
+    float3 oldNormal; uint oldWater; int2 oldPixel;
+    float oldDistance = Surface(previous.xyz, oldNormal, oldWater, oldPixel);
+    float3 expected = _Down * _FallSpeed * _DeltaTime;
+    float3 error = (p.xyz - previous.xyz) - expected;
+    bool crossed = _DeltaTime > 0.0 && previous.w > 0.0 && oldDistance > 0.0 && oldDistance < 1e6 && dot(error,error) < 0.0025;
+    if (crossed && _SplashesEnabled != 0u)
+    {
+        float t = saturate(oldDistance / max(1e-5, oldDistance - distance));
+        float3 hit = lerp(previous.xyz, p.xyz, t);
+        float3 fromCamera = hit - _DomainCenter;
+        float random = (Hash(id.x ^ Hash(_FrameSeed)) & 0x00ffffffu) / 16777216.0;
+        if (dot(fromCamera,fromCamera) <= _SplashDistance * _SplashDistance && random < _SplashDensity)
+        {
+            uint request;
+            InterlockedAdd(_Counters[1], 1u, request);
+            if (request < _MaxImpacts)
+            {
+                uint slot;
+                InterlockedAdd(_Counters[0], 1u, slot);
+                slot %= _SplashCapacity;
+                // Never overwrite a live splash; the pool and per-frame budget bound all work.
+                if (_SplashPositions[slot].w < 0.0)
+                {
+                    if (water == 0u) n = GeometryNormal(pixel);
+                    _SplashNormals[slot] = float4(n, water);
+                    _SplashPositions[slot] = float4(hit + n * 0.025, 0);
+                }
+            }
+        }
+    }
+    // Let the existing integer-hash domain respawn try again next frame. Hidden samples do not emit impacts.
+    p.xyz = _DomainCenter - _Down * (_DomainRadius + _FallSpeed * 2.0 + 1.0);
+    _Positions[id.x] = p;
+    _Surfaces[id.x] = float4(0,0,0,-1);
+}

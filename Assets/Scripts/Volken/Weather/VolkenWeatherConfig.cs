@@ -33,7 +33,7 @@ namespace Volken.Weather
 
         // ③ 雨(占位)
 
-        /// <summary>雨子系统参数;密度/域半径的标定基线与踩坑见 <c>docs/sp2-rain-particledomain-port-2026-09-28.md</c> 与 <c>docs/archive/weather-rain-fog-postmortem-2026-09-27.md</c>。</summary>
+        /// <summary>雨子系统参数;密度/域半径的标定基线与踩坑见 <c>docs/archive/sp2-rain-particledomain-port-2026-09-28.md</c> 与 <c>docs/archive/weather-rain-fog-postmortem-2026-09-27.md</c>。</summary>
         [Serializable]
         public class RainSection
         {
@@ -77,6 +77,14 @@ namespace Volken.Weather
 
             public float transparency = 0f;   // 0 = 原有透明度,1 = 完全透明;仅影响雨滴视觉
 
+            public bool collisionEnabled = false;
+            public int collisionResolution = 256;   // 256 / 512,沿下落方向的深度图
+            public bool splashesEnabled = false;
+            public float splashDistance = 25f;      // 米,仅在相机附近生成
+            public float splashLifetime = 0.35f;    // 秒
+            public float splashSize = 0.18f;        // 米,最大半径
+            public float splashDensity = 0.35f;     // 撞击抽样比例,另受固定 GPU 预算限制
+
             // 纵深线索(治"快速缩放时像一层平面"):整片雨丝等长、等亮、平行 → 没有纵深
             public float distanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关;近了亮远了暗)
             public float streakVariation = 0.5f;  // 逐粒长度/宽度倍率(0 = 全一样长)
@@ -119,6 +127,13 @@ namespace Volken.Weather
                 tailFalloff = s.tailFalloff;
                 brightness = s.brightness;
                 transparency = s.transparency;
+                collisionEnabled = s.collisionEnabled;
+                collisionResolution = s.collisionResolution;
+                splashesEnabled = s.splashesEnabled;
+                splashDistance = s.splashDistance;
+                splashLifetime = s.splashLifetime;
+                splashSize = s.splashSize;
+                splashDensity = s.splashDensity;
                 distanceFade = s.distanceFade;
                 streakVariation = s.streakVariation;
                 ceilingAltitude = s.ceilingAltitude;
@@ -318,6 +333,11 @@ namespace Volken.Weather
             rain.tailFalloff = Mathf.Clamp01(rain.tailFalloff);
             rain.brightness = Mathf.Clamp(rain.brightness, 0f, 3f);
             rain.transparency = Mathf.Clamp01(rain.transparency);
+            rain.collisionResolution = rain.collisionResolution >= 384 ? 512 : 256;
+            rain.splashDistance = Mathf.Clamp(rain.splashDistance, 1f, 50f);
+            rain.splashLifetime = Mathf.Clamp(rain.splashLifetime, 0.1f, 1f);
+            rain.splashSize = Mathf.Clamp(rain.splashSize, 0.03f, 0.5f);
+            rain.splashDensity = Mathf.Clamp01(rain.splashDensity);
             rain.distanceFade = Mathf.Clamp01(rain.distanceFade);
             rain.streakVariation = Mathf.Clamp01(rain.streakVariation);
             rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);

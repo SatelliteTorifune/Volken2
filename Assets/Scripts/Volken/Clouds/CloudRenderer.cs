@@ -454,9 +454,10 @@ namespace Volken.Clouds
         // 2s 节流诊断:相机海拔/速度、每层淡入、体积云是否运行、RT 尺寸,用于量化 2D 与体积云的"范围/速度"差异
         private void LogOrbitDiagnostics(List<CloudLayerView> activeViews, float camAlt, int orbitPass)
         {
+            if (ModSettings.Instance == null || !ModSettings.Instance.DevMode) return;
             bool anyOrbit = false;
             foreach (var view in activeViews)
-                if (view.layer.config != null && view.layer.config.useOrbitClouds) { anyOrbit = true; break; }
+                if (view.layer.config != null && view.layer.config.useOrbitClouds && view.layer.config.orbitDebugMode > 0) { anyOrbit = true; break; }
             if (!anyOrbit) return;
 
             if (Time.realtimeSinceStartup - _lastOrbitDiagLogTime < 2f) return;

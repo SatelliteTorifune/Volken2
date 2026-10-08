@@ -1,12 +1,13 @@
 # Volken —— SP2 雨系统 `ParticleDomain` 移植难点与分步计划(2026-09-28)
 
-> 状态:🚧 实施中(雨视觉 / 雨声等已落地,继续标定与回归;当前实施以 §10 为准)
+> 状态:✅ 已归档(2026-10-08:用户确认水花不可见问题已解决,本轮雨透明度 / 碰撞 / 水花工作收束)
+> 验收范围:本轮水花可见性已获用户真机确认;135 项独立 GPU 验证通过。性能矩阵、PIP、复杂场景等专项回归未据此宣告全部通过,保留为未排期后续项。
 > 2026-10-08 核对:§1~§9 是早期设计与验收计划,其中屏幕构轴、自动密度补偿和 dev 命令已有后续变更;未勾选项不等于当前功能全未实现。最新代码核对见 §10.5。
 > 日期:2026-09-28
 > 关联:
-> - [`archive/weather-rain-fog-postmortem-2026-09-27.md`](archive/weather-rain-fog-postmortem-2026-09-27.md) —— **本文档的必读前置**。本文所有"不能照抄"的判断都建立在它的铁律上(尤其 §3.1㈠㈡㈢、§5.1)。
-> - [`archive/sp2-weather-port-2026-09-27.md`](archive/sp2-weather-port-2026-09-27.md) —— 母计划(**已归档,历史底账**)。§10.2 / §10.3 / §10.4 是实施期 30+ 处实测更正,本文大量引用;资源均已据原始数据复核。
-> - [`README.md`](README.md) §四之三「雨重做」—— 本文档是该条的执行细案。
+> - [雨雾复盘](weather-rain-fog-postmortem-2026-09-27.md) —— **本文档的必读前置**。本文所有"不能照抄"的判断都建立在它的铁律上(尤其 §3.1㈠㈡㈢、§5.1)。
+> - [天气母计划](sp2-weather-port-2026-09-27.md) —— **已归档,历史底账**。§10.2 / §10.3 / §10.4 是实施期 30+ 处实测更正,本文大量引用;资源均已据原始数据复核。
+> - [文档索引](../README.md) §三为归档入口,§四之三保留未排期专项回归。
 > 主题定位:把「SP2 的 GPU 计算粒子雨域(`Jundroo.Common.ParticleDomain` + `Assets.Scripts.Flight.ParticleHandler`)移植进 Volken(BIRP / Unity 2022.3 / SR2 mod)」这件事,拆成**难点清单 + 可独立验收的 8 个阶段**。每个阶段都有**准入门槛、验收判据、停止条件**,目的是**不再出现"连续多轮无可信改善信号"**。
 
 ---
@@ -29,9 +30,9 @@
 
 | 项 | 事实 | 出处 |
 |---|---|---|
-| 上次结果 | 雨(阶段 2)/雾(阶段 3)实现**整体移除**,当前只保留雷电 | [`README.md`](README.md) §四之三 |
+| 上次结果 | 雨(阶段 2)/雾(阶段 3)实现**整体移除**,当前只保留雷电 | [`README.md`](../README.md) §四之三 |
 | 代价 | **8 轮迭代 / 27 条更正 / 约 150 KB 代码被弃**(`Rain.cs` 113 KB + `RainParticles.compute` 14 KB + `RainParticles.shader` 10.5 KB + 雾相关);3 条环境雨声一并弃用 | 教训 §2 |
-| 代码现状 | 全部 stash 在 `%TEMP%\volken-rain-fog-stash`,但  **该 stash 已被清理、不存在(2026-10-02 核实)** → 重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md) | 教训 §2 / 计划 §10.5 |
+| 代码现状 | 全部 stash 在 `%TEMP%\volken-rain-fog-stash`,但  **该 stash 已被清理、不存在(2026-10-02 核实)** → 重写只能依据[复盘 §6「已证伪思路清单」](weather-rain-fog-postmortem-2026-09-27.md) | 教训 §2 / 计划 §10.5 |
 | 保留的净收益 | 教训清单(27 条)、诊断方法、量化基线;**配置层与 UI 占位已就位,重做时不用动** | 教训 结尾 / 计划 §10.6 ㊶ |
 | 失败的真正原因 | **不是代码不可修**(每轮都修对了当时认定的 bug),而是**诊断量错了对象**(用世界空间夹角当屏幕倾角)→ 信心被耗尽 → 在"两次修正之间没有任何一次可信改善信号"时被放弃 | 教训 §1 / §5.4 |
 
@@ -202,7 +203,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 ### 阶段 0:准备与护栏(不改代码)
 
-- [ ] **0.1** ~~把 stash 里的旧实现只读参考取出看一眼~~ →  **stash 已不存在**(2026-10-02 核实),改依据[教训 §6「已证伪思路」清单](archive/weather-rain-fog-postmortem-2026-09-27.md)逐条打勾 —— 目的是**知道哪些路已经证伪**,不是复用代码。
+- [ ] **0.1** ~~把 stash 里的旧实现只读参考取出看一眼~~ →  **stash 已不存在**(2026-10-02 核实),改依据[教训 §6「已证伪思路」清单](weather-rain-fog-postmortem-2026-09-27.md)逐条打勾 —— 目的是**知道哪些路已经证伪**,不是复用代码。
 - [ ] **0.2** 确认 `docs/archive/weather-rain-fog-postmortem-2026-09-27.md` 的 §5.1 铁律 1~5 与 §7 起步清单已读。
 - [ ] **0.3** **接上诊断三件套**(教训 §5.3 / 计划 §10.8),**先于任何渲染代码**:
   - GPU 回读:`_ArgsBuffer[1]` = `instanceCount`,每 10 s 一次(阈值表见计划 §10.8 ④:`instanceCount == 0` → 问题在**剔除/参数环节**,不是绘制环节);
@@ -261,7 +262,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 ### 阶段 5:接入天气状态机与相机相对坐标
 
-- [ ] **5.1** 复用现有 `Weather/VolkenWeather.cs`(**不要**引入全局天气档位,也**不要**引入"天气值"标量 —— `WeatherTypes` 与天气值状态机均已删除,见 [weather-cloud-decoupling](archive/weather-cloud-decoupling-2026-10-01.md) §8「移除天气值」;雨只按 `rain.enabled` + 自己的参数跑)。
+- [ ] **5.1** 复用现有 `Weather/VolkenWeather.cs`(**不要**引入全局天气档位,也**不要**引入"天气值"标量 —— `WeatherTypes` 与天气值状态机均已删除,见 [weather-cloud-decoupling](weather-cloud-decoupling-2026-10-01.md) §8「移除天气值」;雨只按 `rain.enabled` + 自己的参数跑)。
 - [ ] **5.2** 相机相对坐标系 + **手工构造视锥平面**(§3.4c)。
 - [ ] **5.3** 实例 `OnPreCull` 渲染回调(§3.4b);每次绘制前按当前相机重设 uniform(§3.4d)。
 - [ ] **5.4** `_frameVel` 保持恒 0 并**写注释说明是刻意的**(§3.4c)。
@@ -269,10 +270,10 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 **准出**:进出雨区淡入淡出正确(20 s / 2 s);俯仰/滚转/高速/时间加速下无朝向异常、无位置漂移;`ReferenceFrameRecentered` 后无错位。
 
-### 阶段 6:方案 B 遮挡(可选,二期)
+### 阶段 6:方案 B 遮挡(实施见 §10.8)
 
-- [ ] **6.1** 256² 正交深度 RT + 深度专用相机/CommandBuffer。
-- [ ] **6.2** **必做护栏**:`OcclusionEnabled && OcclusionDepthRendered` 双条件(§3.2),并给 `OcclusionDepthRendered` 加"深度确实渲过"的置位点与心跳。
+- [x] **6.1** 256² / 512² 正交深度 RT + BIRP 替换 shader 相机;实现见 §10.8,游戏地形捕获待验收。
+- [x] **6.2** 配置开关与 `RainCollision.DepthRendered` 双条件;置位点在成功渲染及上传对应矩阵之后,捕获失败降级。
 - [ ] **6.3** 先在**深度图非空**的前提下验证剔除率合理,再打开。
 
 **准出**:开启遮挡后雨**不消失**;低空穿建筑时雨丝被正确遮挡。
@@ -280,7 +281,7 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 
 ### 阶段 7:水花、雨声、图集变体(收尾)
 
-- [ ] **7.1** 落地水花(独立 sheet / 独立 pass,不要并进雨丝 pass)。
+- [x] **7.1** GPU 落地水花池 + 独立绘制 shader,当前使用程序化扩散环与飞溅点;图集素材未接,游戏验收见 §10.8。
 - [ ] **7.2** 雨声:素材导入 + 导入设置(`forceToMono` / `CompressedInMemory` / `preloadAudioData`)+ **进 `_otherAssets`**( 删资产**不会**让 GUID 自动消失,纳新资产也**不会**自动入包)→ 打包 → dev 命令 `volkenAssets` 复核台账。
 - [ ] **7.3** 贴图图集 UV 分格(用已传进 shader 的 seed)。
 - [ ] **7.4** 本地化文案(EN-US / ZH-CN / RU-RU,key 前缀 `Volken.UI.*`),并把雨组从「禁用占位」改为可用。
@@ -338,8 +339,8 @@ SP2 的遮挡 = `OcclusionDepthCam`(256×256 正交深度 RT)+ **`Jundroo.Common
 ## 10. 实施记录与当前状态
 
 > 本节**只留结论**:已落地物、当前参数、关键转弯点、已证伪思路、剩余项。
-> 原 §10.1~§10.23 的逐轮调试流水(734 行)已于 2026-10-02 精简;方法论沉淀见[复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) §5。
->  旧雨/雾实现**不可回取**:`%TEMP%\volken-rain-fog-stash` 已被清理、**不存在**;重写只能依据[复盘 §6「已证伪思路清单」](archive/weather-rain-fog-postmortem-2026-09-27.md)。
+> 原 §10.1~§10.23 的逐轮调试流水(734 行)已于 2026-10-02 精简;方法论沉淀见[复盘](weather-rain-fog-postmortem-2026-09-27.md) §5。
+>  旧雨/雾实现**不可回取**:`%TEMP%\volken-rain-fog-stash` 已被清理、**不存在**;重写只能依据[复盘 §6「已证伪思路清单」](weather-rain-fog-postmortem-2026-09-27.md)。
 
 ### 10.1 已落地(阶段 0 → 3)
 
@@ -413,14 +414,14 @@ SP2 雨的**出厂值(第一手:`sp2d4/Assets/Resources/prefabs/ParticleDomain.p
 | 雨声 | `RainAudio` 与 6 条 WAV 已在项目及资源清单中 | 游戏里回归淡入淡出、暂停、海拔 / 水下门控;不再列为待实现 |
 | 相机与坐标 | `OnPreCull` + 世界系构轴 + `TranslateFixed`;海拔 / 水下门控、场景重挂、每相机实例均已存在 | 继续浮动原点 / 切场景 / PIP 回归;完整相机相对存储、风和其它门控未视为全部完成 |
 | 软粒子 | 读取本相机 `CloudRenderer.LinearSceneDepth`;无可用深度时降级 | A/B 对照与近景穿插验证 |
-| 重生随机数 | `Hash01u(id, phase)`;CPU 传整数 `_phase` | [落点重复记录](archive/rain-spawn-hash-precision-2026-10-04.md) 有历史真机证据;长时间运行继续回归 |
+| 重生随机数 | `Hash01u(id, phase)`;CPU 传整数 `_phase` | [落点重复记录](rain-spawn-hash-precision-2026-10-04.md) 有历史真机证据;长时间运行继续回归 |
 | 调参 / 持久化 | 天气面板、`RainPreview`、独立天气预设已接通 | XML 保存 / 加载、跨场景与主视图 / PIP 一致性 |
 
-尚未收束:密度与 SP2 观感对比、`_mainLightIntensity` 对应光照、完整遮挡方案、风与相机相对坐标方案、水花 / 图集变体。阶段 6 的正交深度遮挡仍是可选二期;不要把已接软粒子深度当成该方案已完成。
+未排期后续项:密度与 SP2 观感对比、`_mainLightIntensity` 对应光照、风与相机相对坐标方案、图集变体。正交深度碰撞与程序化水花已于 §10.8 实现,水花不可见修复获用户真机确认;完整场景矩阵与性能仍未专项验收。软粒子深度与碰撞深度仍是两个独立来源。
 
 可选观感实验:每粒下落速度抖动 ±10~15%,是否采用须先做对比。旧 `volkenRainAxis*` / `volkenRainP2*` 已删除,不要恢复它们作为验收前提;预览和参数调整走面板。
 
-**游戏回归仍需部署一致的包**:软粒子、重定位、海拔 / 水下、配置持久化、场景切换与 PIP。判据入口见 [待办索引](README.md#四之三待办清单backlog);不能由静态源码核对勾选真机通过。
+**游戏回归仍需部署一致的包**:软粒子、重定位、海拔 / 水下、配置持久化、场景切换与 PIP。判据入口见 [待办索引](../README.md#四之三待办清单backlog);不能由静态源码核对勾选真机通过。
 
 ### 10.6 环境事故与纪律(已按此执行)
 
@@ -435,3 +436,73 @@ SP2 雨的**出厂值(第一手:`sp2d4/Assets/Resources/prefabs/ParticleDomain.p
 - 渲染复用既有 `_FadeAmount = gateFade × (1 − transparency)`,逐相机生效;仅改雨滴 alpha,雨声与粒子密度仍按原参数运行,无需修改 shader / compute。
 - 验证:`dotnet build Volken.csproj --no-restore` 0 错误 / 3 条既有警告;用生成的程序集确认旧 XML 默认值为 0,Clone 与 XML 往返保留 0.65;三语 XML 均合法且仅新增 `Volken.UI.RainTransparency`。
 - 验收:调到 0 / 0.5 / 1 对照视觉与雨声;保存 / 重载预设、主视图 / PIP、预览记忆与旧 XML 默认值都需回归。Unity / 游戏画面尚未验收。
+
+### 10.8 GPU 雨滴碰撞与水花(2026-10-08)
+
+源码与独立 Unity GPU 验证已完成;2026-10-08 用户确认游戏中水花已正常显示,本轮修复收束。性能实测与完整场景矩阵保留为后续项。
+
+#### 动机、参考与成本评估
+
+- 【决策:2026-10-08】用户授权实施雨滴碰撞并加入水花。采用沿实际下落方向的正交深度捕获 + GPU 位移段检测,海平面独立解析求交;不创建逐滴 Collider / Rigidbody,不常驻回读粒子位置。
+- 参考 `<SP2_CODE>/analysis/dll/Jundroo.Common.ParticleDomain.decompiled.cs:82、495、620、634`:SP2 使用 256² 正交相机与 `CullAndOccludePoints`,旧矩阵配合历史深度;其 URP 捕获不能直接用于本项目 BIRP。该源码证明遮挡结构,没有证明水花碰撞事件算法。
+- `<VOLRE_REF>/ParticleField.cs:321` 有独立水花材质 / pass 的结构,不能当作已获得碰撞 shader 源码。`<RVM_EA>` 原映射的副本目录已失效;此次找到同名无副本目录,有雨滴 / 水花 DDS,未导入素材或修改本机路径表。
+- 当前默认配置 100000 粒 / 相机。60 FPS 下全量 CPU 射线是 600 万次 / 秒 / 相机;float4 位置回读约 1.6 MB / 帧,并存在同步等待或异步延迟。40 万粒与多相机按粒子数和实例数放大。
+- GPU 每滴通常一次深度查询;已位于表面下方时再查旧位置,只在获准生成水花时做 4 邻点法线查询。额外捕获相机的剔除 / 提交 / 几何绘制与透明水花重叠须单独计时,不能据采样量承诺毫秒数。
+
+| 完整覆盖宽度 | 256² 每像素 | 512² 每像素 |
+|---|---|---|
+| 默认域约 100m | 0.39m | 0.20m |
+| 自适应域约 240m | 0.94m | 0.47m |
+
+捕获实际增加 1m 半径余量。单张 RFloat 为 256 KiB / 1 MiB,另有 24 位深度附件(实际分配由后端决定)。额外旧位置与表面数据共 32 B / 粒,10 万粒约 3.2 MB / 相机;水花位置 / 法线池合计 64 KiB。以上均为结构计算,不是游戏性能测量。
+
+#### 当前实现与配置
+
+- `Weather/Rain/RainCollision.cs` 按相机持有独立 compute 实例、深度相机 / RT、旧位置 / 表面 buffer 与水花池。`RainCollision.compute` 的 `Prepare → 原雨 Positioning → Resolve` 保留位移段,将积分、随机重生与真正穿越分开。
+- 捕获在雨的 `OnPreCull` 内显式调用独立禁用相机的 `RenderWithShader`,渲染完成后再上传同一份 GPU VP / View。不依赖 `CloudRenderer.LinearSceneDepth`,避免云关闭 / 上一帧纹理问题。
+- JNO 的 `QuadSphereScript.cs:862、1040` 在 LateUpdate 通过 `Graphics.DrawMesh(..., layer=29, camera=null)` 提交地形;游戏捕获掩码额外包含 29 层。**导出 shader 的 `DummyShaderTextExporter` 占位 SubShader 标签不代表游戏原始标签**,此前据其 `RenderType=Opaque` 判断可以直接捕获的结论已撤回,见下方根因记录。
+- GPU VP 使用 `GL.GetGPUProjectionMatrix(..., true)`;纹理坐标根据 `SystemInfo.graphicsUVStartsAtTop` 转换 Y,法线差分方向同步。D3D11 实测已修正直接采样导致地面查询落到空像素的问题。
+- `RainCollisionDepth.shader` 输出线性眼深度到 RFloat。游戏的 26/29/31 物理层使用空 replacement tag 捕获无标签建筑 / 地形 / 机体;其余可见层保留 `Opaque` / `TransparentCutout` 筛选,额外排除水面 / UI / ScaledSpace / NavSphere。两遍使用同一 RT,第一遍清屏为 far,第二遍保留颜色和深度以选择最近表面。独立预览保持单遍标签捕获。捕获失败跳过几何检测,已知水面仍可检测。
+- 物理层无标签捕获按 JNO `_BaseBlendModeDestination` 和 Standard `_Mode` 排除透明材质;Standard cutout 使用纹理 alpha。替换渲染中原材质缺少的属性可读为零,不能依赖替换 shader 的非零默认值来判断不透明。自定义透明着色、混合材质内部的逐像素透明仍有限制。
+- 位于表面下方的粒子隐藏并送出域,下一帧由原整数 hash 随机重生继续尝试;非法重生 / 瞬移不产生水花。`RainParticles.shader` 读取表面距离,隐藏回收粒子并裁切跨表面的雨丝。雨 shader 部署版本升为 8。
+- 海平面使用相机附近的局部球面差值,避免两个行星尺度 float 相减;相机 ASL 改为双精度帧中心计算。独立预览勾选“假设有水”时水面为 y=0 平面。
+- 水花为独立程序化扩散环与飞溅点,不是逐滴反弹或流体。每相机固定 2048 槽、每帧最多接受 128 个生成请求;活槽不覆盖,抽样比例和距离进一步限制工作量。法线来自几何深度差分或水面径向法线;固定小偏移防贴面闪烁。
+- 默认 `collisionEnabled=false`、`splashesEnabled=false`,旧 XML 保持关闭。面板 / 预览开启水花时自动开启碰撞,关闭碰撞时一并关闭水花;`collisionResolution=256/512`、`splashDistance=25m`、`splashLifetime=0.35s`、`splashSize=0.18m`(半径)、`splashDensity=0.35`。面板 / 三语 / `CopyFrom/Clone/ClampAll` / 预览 XML 与记忆 v7 同步,记忆兼容 v1~v6。
+- 浮动原点、雨关闭、海拔 / 水下完全抑制清水花历史;碰撞关闭释放其资源。碰撞与水花跟随雨滴视觉透明度,不改雨声音量和环境淡出诊断。新增 compute + 2 个 shader 均加入 `_otherAssets`。
+
+#### 首次游戏反馈与诊断补充
+
+- 2026-10-08 用户反馈“看不见”。读取其本机 `Player.log`:雨 shader 版本 8,10 万粒持续积分和重生,未发现 `RainCollision` 异常;日志未记录碰撞 / 水花开关及生成量,不能据此判定水花正常或断言渲染根因。只读检查已部署包确认三个新增资源均存在。
+- 当次加载的 `Stormy` XML 尚无碰撞 / 水花字段,加载时沿用默认关闭;面板未保存的运行时状态无法从磁盘预设还原。修正开关联动,避免单独开启水花而碰撞仍关闭。
+- `ApplyConfig effects` 记录碰撞 / 水花 / 透明度和参数;雨心跳记录开关与资产 / 深度状态。缺失资源使用始终输出的 `Mod.Diag`,不再只依赖开发模式日志。
+- 排障期间主视图曾沿用 10 秒诊断周期,异步读取两项生成计数、水花池存活数与碰撞深度覆盖率 / 最近深度。256² 时约 288 KiB / 次,512² 时约 1056 KiB / 次;没有逐帧同步回读。释放或重建后忽略过期回调。收工后已改为 §10.9 的手动请求。
+- 判读顺序:`collision=off` / `splashes=off` → 开关;`missing-*` → 打包 / 资源;`covered=0` → 场景捕获或范围;`alive=0` → 穿越 / 距离 / 密度;`alive>0` 且 `fade>0` 仍不可见 → 绘制与遮挡。`covered=0` 不排除独立解析水面的碰撞。
+- 当时游戏画面仍待重新打包复验,不能据诊断补充标记问题已修复;后续根因、修复与用户确认见下一节。
+- 本轮复验:编译 0 错误 / 3 条既有警告;独立 GPU 测试共 80 项通过。新增异步诊断在空场景返回 `covered=0/65536, alive=0`,平面撞击返回 `covered=2500/65536, alive=64`,无 GPU / Unity 错误。
+
+#### 深度全空根因与修复
+
+- 后续 `Player.log` 已确认 `collision=ready, splashes=on, fade=1` 且三资源加载成功;512² 深度连续四次 `covered=0/262144`,`poolCursor=0, alive=0`。故障发生在表面捕获阶段。
+- 直接读取游戏原始 `SimpleRockets2_Data/resources.assets` 的 shader `m_ParsedForm.m_SubShaders[].m_Tags`: `SrStandardTerrainShader`、`SrStandardObjectShader`、`SrStandardPartShader` 的标签均为空;原水面 shader 则为 `RenderType=Transparent`。`<JNO_D2>/Assets/Shader/` 中 `DummyShaderTextExporter` 生成的 `Opaque` 不能用来推断原始材质。
+- `<JNO_CODE>/SimpleRockets2/Assets/Scripts/Terrain/QuadMeshRaycaster.cs:170` 的官方 GPU 地形射线同样使用空 replacement tag。结合 `<JNO_D2>/ProjectSettings/TagManager.asset` 的 TerrainFeature=26 / Terrain=29 / Craft=31,修复为上述分层捕获,不改游戏原材质。
+- 已部署包的资源在普通 Standard 材质、嵌套 `OnPreCull` 捕获中可以正常工作;增加无 `RenderType` 材质后,旧实现稳定复现地形碰撞失败。该对照排除了资源缺失和普通嵌套渲染问题。
+- 游戏路径现在最多两次相机渲染,物理层与其余层互斥,几何不重复提交;额外剔除 / 相机设置成本需纳入性能测量。诊断增加 `mode=physical-untagged-v2` 与两组掩码以核实部署。
+- 修复复验:编译 0 错误 / 3 条既有警告;独立 GPU 验证 135 项通过,无 shader / Unity 错误。新增覆盖无标签 26/29/31 层、无标签 `DrawMesh`、透明机体排除、水面层排除、两遍捕获的前后遮挡,同时保留横向重力、球面水面、多相机与实际雨积分回归。修改前的无标签地形用例失败,修改后生成 64 个水花。
+- 【验收:2026-10-08】用户反馈“好了”,确认上述修复后的真机水花可见性问题已解决,并要求更新文档、归档、收工。此次确认不扩展为全部地形 / 机体材质、PIP、配置往返或性能矩阵均已验证。
+
+#### 验证记录与未排期后续项
+
+- `dotnet build Volken.csproj --no-restore`:0 错误 / 3 条既有警告;生成程序集验证旧 XML 的两个开关默认关闭、256 分辨率与水花默认值,全部新字段的 Clone / XML 往返保持一致。三语 XML 合法且新键各出现一次,`_otherAssets` 36 条 GUID 均可解析;文档 9 项校验通过。
+- 独立 Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop GPU 验证共 76 个断言通过,无 GPU / shader 错误:空场景、地面、屋顶下重生、瞬移、4096 同时撞击的 128 请求上限、512²、斜坡、横向重力、平面水面与半径 600 万米的球面水面、重定位清池、两相机交错隔离、29 层 `DrawMesh` 捕获。
+- 使用真实 `RainParticles.compute` 的 Randomize / Positioning 连续模拟 20000 粒 × 60 步:没有可见雨留在平面下,生成水花成功;雨丝与水花间接绘制已渲染并检查图像。该独立简单场景验证不代表 JNO 真机观感、全部材质或帧耗时。
+- 游戏需验证:地形 / 屋顶 / 机体进入深度图,斜坡法线,水面与地面优先关系,屋顶下无重生雨,深度空场景 / 失败不消雨,暂停 / 重定位 / 切场景 / PIP,透明度 0/1,旧 XML 与预设往返。
+- 性能对照:10 万 / 40 万粒、单相机 / PIP、256² / 512²、空旷地形 / 复杂机体;分别测捕获、Prepare / Resolve、水花绘制与总帧时间的平均 / P95。每相机独立捕获,尚未实现地图共享。
+- 单层深度不能完整表达桥下 / 洞穴 / 多层结构,低分辨率会漏细杆 / 机翼边缘;当前雨丝裁切使用下落方向局部平面近似。水花不会绑定到移动机体,高速机体上的残留漂移待评估。
+
+### 10.9 日志收口(2026-10-08)
+
+- 按用户要求清理运行时无关调试输出:移除雨每秒心跳、关闭状态心跳、首次绘制播报、调参回显、雨声定时状态和逐次落雷 / 雷声播放记录。
+- 保留天气面板 / 预览的手动日志按钮。按需输出雨自检、当前参数、轴向快照,并异步回读实例数、位置分布、重生计数、碰撞深度与水花池;最小请求间隔 10 秒。正常运行不再定时发起这些 GPU 回读。
+- GPU 数量与重生数改为最近一次手动采样,不将不定长采样区间伪装成每秒速率;重建缓冲时使主视图旧采样失效,计数缓冲显式清零。
+- 普通挂载 / 重定位 / 门控信息归开发日志开关;云轨道详细日志要求开发日志和 `orbitDebugMode` 同时开启。资源缺失、未就绪与节流异常保留;修正日志格式错误时的无关兜底文案。
+- 本次核对无被 Git 跟踪的 `.log` 文件;未删除游戏日志或测试证据。渲染与音频功能保持原管线,本节记录日志及诊断触发方式的调整。

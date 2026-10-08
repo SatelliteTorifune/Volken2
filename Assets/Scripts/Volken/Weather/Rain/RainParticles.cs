@@ -15,7 +15,7 @@ namespace Volken.Weather
     /// 雨粒子:手写 compute(Randomize/Positioning/FillArgs/TranslateFixed)+ 实例化雨丝 shader,经 Graphics.RenderMeshIndirect 绘制。
     ///  雨丝朝向必须**世界系**:C# 每帧算世界旋转矩阵 _RotationMatrix 传给材质 —— 不要用屏幕平面投影(贴相机,垂直看会糊成横块)。
     ///  本游戏编译器**没有** RWByteAddressBuffer 的 4 参 InterlockedAdd,必须用带下标的 RWStructuredBuffer&lt;uint&gt; 2/3 参形式;一个 kernel 编译失败会毒掉整个 compute。
-    /// 设计沿革与九轮踩坑见 docs/sp2-rain-particledomain-port-2026-09-28.md §10。
+    /// 设计沿革与九轮踩坑见 docs/archive/sp2-rain-particledomain-port-2026-09-28.md §10。
     /// </summary>
     public class RainParticles : MonoBehaviour
     {
@@ -41,6 +41,13 @@ namespace Volken.Weather
         public static float Falloff = 0.9f;          // SP2 _falloff(尾淡/软边)
         public static float Brightness = 0f;         // 亮度增益(= shader _Emission)
         public static float Transparency = 0f;       // 0 = 原效果,1 = 完全透明;不参与雨声门控
+        public static bool CollisionEnabled;
+        public static int CollisionResolution = 256;
+        public static bool SplashesEnabled;
+        public static float SplashDistance = 25f;
+        public static float SplashLifetime = 0.35f;
+        public static float SplashSize = 0.18f;
+        public static float SplashDensity = 0.35f;
 
         // 纵深线索(治"快速缩放时像一层平面":整片等长、等亮、平行 → 没有纵深)
         public static float DistanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关)
@@ -123,19 +130,21 @@ namespace Volken.Weather
         private ComputeShader _compute;
         private Shader _shader;
         private Material _mat;
+        private RainCollision _collision;
         private Mesh _mesh;
         private ComputeBuffer _positions;   // float4 × capacity
         private ComputeBuffer _randomData;  // float4 × capacity
+        private ComputeBuffer _collisionFallback;
         private ComputeBuffer _diag;        // uint × 4:x0 = 本帧重生次数(CPU 每帧复位)
         private Texture2D _streakTex;       // 程序化柔边雨丝贴图
         private GraphicsBuffer _args;       // 5×uint 间接参数(RenderMeshIndirect 要 GraphicsBuffer)
 
         private static readonly uint[] ArgsReset = { 12, 0, 0, 0, 0 };   // [0] = indexCount(十字四边形 12);建 buffer 时写入一次
         private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // 诊断计数(回读后清零重启累计)
-        private const float ReadbackInterval = 10f;                  // GPU 回读周期(秒)
+        private const float ReadbackInterval = 10f;                  // 手动诊断请求最小间隔(秒)
         private const float DistInterval = 300f;                     // 落点分布诊断周期(秒;整块回读,一次性成本约 cap×16B)
         private const float RespawnPhaseRate = 20f;                  // 重生相位速率(/秒):_phase = floor(_time × 本值)
-        private const float ShaderBuild = 7f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
+        private const float ShaderBuild = 8f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
         private const float AssetRetryInterval = 5f;                 // 资产加载重试间隔(秒)
         private const int AssetMaxRetries = 6;                       // 资产加载最多重试次数(Awake 那一刻资源加载器可能还没就绪)
 
@@ -144,11 +153,9 @@ namespace Volken.Weather
         private int _kernelTranslateFixed = -1;
         private int _kernelFillArgs = -1;
 
-        private float _lastDiagTime = -999f;
         private float _lastReadbackTime = -999f;
         private float _lastDistTime = -999f;   // 落点分布诊断(整块回读)的上次时间
         private float _lastAliveLogTime = -999f;
-        private bool _loggedFirstDraw;
         private CloudRenderer _cloudRenderer;      // 缓存本相机的云渲染器(每帧 GetComponent 是原生查找)
         private float _cloudProbeTime = -999f;     // 缓存未命中时的重探时间点
         private Vector3 _lastCamPos;
@@ -170,7 +177,6 @@ namespace Volken.Weather
         private float _adaptSpeed;                // 平滑后的相机速度(自适应域用;滤掉切视角/换帧的单帧瞬移)
         private bool _adaptiveRadiusWarned;
         private const float AdaptTeleportMeters = 15f;   // 单帧相机位移超过它 = 瞬移,不计入自适应
-        private bool _selfCheckLogged;
         private bool _rndChecked;      // _RandomData 只回读校验一次(验证包里的 compute 有没有写 yzw)            // SELFCHECK 只打一次(自适应扩容会反复重建 buffer)
         private Vector3 _lastReadbackPos0;        // 诊断:上次回读的 pos[0](算位移 → 判断下落是否在积分)
         private bool _hasLastReadbackPos0;
@@ -248,7 +254,7 @@ namespace Volken.Weather
                     string missing = "compute=" + (_compute != null) + " shader=" + (_shader != null) +
                                      " (检查 ModData.asset._otherAssets 是否含 RainParticles 两个资产并重建 bundle)";
                     if (_isMainView) AssetsStatus = missing;
-                    Mod.Log("Volken:RainParticles assets missing — " + missing);
+                    Mod.Diag("Volken:RainParticles assets missing — " + missing);
                     return;
                 }
                 _kernelRandomize = _compute.FindKernel("Randomize");
@@ -259,7 +265,7 @@ namespace Volken.Weather
                 {
                     const string kernelsMissing = "kernel FindKernel 失败(Randomize/Positioning/TranslateFixed/FillArgs)";
                     if (_isMainView) AssetsStatus = kernelsMissing;
-                    Mod.Log("Volken:RainParticles " + kernelsMissing);
+                    Mod.Diag("Volken:RainParticles " + kernelsMissing);
                     return;
                 }
                 _mat = new Material(_shader);
@@ -274,12 +280,12 @@ namespace Volken.Weather
                 _assetsReady = true;
                 const string readyStatus = "ok(compute+shader+kernels)";
                 if (_isMainView) AssetsStatus = readyStatus;
-                Mod.Diag("Volken:RainParticles assets ready: {0}", readyStatus);
+                Mod.Log("Volken:RainParticles assets ready: {0}", readyStatus);
             }
             catch (Exception ex)
             {
                 if (_isMainView) AssetsStatus = "加载异常: " + ex.Message;
-                Mod.Log("Volken:RainParticles assets ERROR: " + ex);
+                Mod.LogThrottled("RainParticles.Assets", ex);
             }
         }
 
@@ -289,8 +295,12 @@ namespace Volken.Weather
             if (!_assetsReady || _compute == null || _mat == null) return;   // 资产未就绪时静默(修复 Awake 竞态 NRE)
             int cap = Mathf.Clamp(Capacity, 1, Mathf.Max(1, AdaptiveMaxParticles));
             BufferCapacity = cap;
+            if (_isMainView) { LastInstanceCount = -1; LastRespawns = -1; }
             _positions = new ComputeBuffer(cap, 16);                          // float4
             _randomData = new ComputeBuffer(cap, 16);                         // float4
+            _collisionFallback = new ComputeBuffer(1, 16);
+            _collisionFallback.SetData(new[] { new Vector4(0f, 0f, 0f, 1f) });
+            _mat.SetBuffer("_RainCollisionData", _collisionFallback);
             // CPU 侧兜底初值:compute 只保证写 x;若包里的 compute 是旧版(不写 yzw),未初始化显存里的垃圾浮点
             //   会被 shader 当倍率 → 网格"宽"方向被拉成几百米 = 整片"斜针"。先填一份合法值(yzw ∈ [0,1])。
             var initRnd = new Vector4[cap];
@@ -298,6 +308,7 @@ namespace Volken.Weather
                 initRnd[i] = new Vector4(Hash01(i), Hash01(i + 1013), Hash01(i + 2027), Hash01(i + 3041));
             _randomData.SetData(initRnd);
             _diag = new ComputeBuffer(4, sizeof(uint));                       // 诊断计数
+            _diag.SetData(DiagReset);
             _args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, sizeof(uint));
             _args.SetData(ArgsReset);   // 置 indexCount = 12(Tick 里每帧只复位 instanceCount)
             //  关键绑定:shader 顶点着色器按 SV_InstanceID 读 _Positions —— 必须绑到**材质**上;
@@ -313,8 +324,7 @@ namespace Volken.Weather
             _compute.SetFloat("_domainRadius", DomainRadius);
             _compute.SetVector("_domainCenter", _cam != null ? _cam.transform.position : Vector3.zero);
             _compute.Dispatch(_kernelRandomize, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
-            Mod.Diag("Volken:RainParticles buffers created cap={0}(配置 {1})", cap, Capacity);
-            if (!_selfCheckLogged) { _selfCheckLogged = true; LogSelfCheck(cap); }   // 自检只打一次(自适应扩容会反复重建 buffer)
+            Mod.Log("Volken:RainParticles buffers created cap={0}(配置 {1})", cap, Capacity);
         }
 
         /// <summary>重建网格(雨丝长/宽改动后调用;先销毁旧网格)。</summary>
@@ -332,8 +342,11 @@ namespace Volken.Weather
 
         private void ReleaseBuffers()
         {
+            _collision?.Dispose();
+            _collision = null;
             if (_positions != null) { _positions.Release(); _positions = null; }
             if (_randomData != null) { _randomData.Release(); _randomData = null; }
+            if (_collisionFallback != null) { _collisionFallback.Release(); _collisionFallback = null; }
             if (_diag != null) { _diag.Release(); _diag = null; }
             if (_args != null) { _args.Release(); _args = null; }
         }
@@ -420,7 +433,7 @@ namespace Volken.Weather
             _nextSceneGateLog = now + 5f;
             string scene = "?";
             try { scene = Game.Instance?.SceneManager?.CurrentScene; } catch { }
-            Mod.Diag("RainParticles: 场景门控拦下({0}) —— 非飞行场景(scene={1})→ 不挂不画", what, scene);
+            Mod.Log("RainParticles: 场景门控拦下({0}) —— 非飞行场景(scene={1})→ 不挂不画", what, scene);
         }
 
         /// <summary>取当前视图相机:游戏近相机;独立模式(编辑器预览)或取不到时回退 <see cref="Camera.main"/>。</summary>
@@ -464,7 +477,7 @@ namespace Volken.Weather
         {
             if (cam == null)
             {
-                Mod.Diag("RainParticles: attach skipped — camera is null");
+                Mod.Log("RainParticles: attach skipped — camera is null");
                 return null;
             }
             // 非飞行场景的相机(设计器 / 主菜单 / 行星工坊)一律不挂:挂上去就会在那些场景里画雨
@@ -479,7 +492,7 @@ namespace Volken.Weather
                 if (existing != null) { _current = existing; return existing; }
                 var probe = cam.gameObject.AddComponent<RainParticles>();
                 _current = probe;
-                Mod.Diag("RainParticles: attached to camera '{0}'", cam.name);
+                Mod.Log("RainParticles: attached to camera '{0}'", cam.name);
                 return probe;
             }
             catch (Exception ex)
@@ -508,7 +521,7 @@ namespace Volken.Weather
                 var existing = cam.GetComponent<RainParticles>();
                 if (existing != null) return existing;
                 var inst = cam.gameObject.AddComponent<RainParticles>();
-                Mod.Diag("RainParticles: 附加相机挂载 camera='{0}' cap={1}(每相机约 {2:F1} MB 额外显存)", cam.name, Capacity, Capacity * 32f / 1048576f);
+                Mod.Log("RainParticles: 附加相机挂载 camera='{0}' cap={1}(每相机约 {2:F1} MB 额外显存)", cam.name, Capacity, Capacity * 32f / 1048576f);
                 return inst;
             }
             catch (Exception ex)
@@ -525,7 +538,7 @@ namespace Volken.Weather
             {
                 var inst = Live[i];
                 if (inst == null || inst._isMainView) continue;
-                Mod.Diag("RainParticles: 附加相机雨已关闭 → 移除 camera='{0}' 上的实例", inst._cam != null ? inst._cam.name : "?");
+                Mod.Log("RainParticles: 附加相机雨已关闭 → 移除 camera='{0}' 上的实例", inst._cam != null ? inst._cam.name : "?");
                 Destroy(inst);
             }
         }
@@ -601,6 +614,18 @@ namespace Volken.Weather
                 Mod.Diag("RainParticles STATUS counters: respawn={0} recenter={1}(ev{2}/jp{3}) craftJump={4:F0}m camSpd={5:F1}m/s",
                     LastRespawns, RecenterCount, RecenterEventCount, RecenterJumpCount, LastCraftJump, LastCamSpeed);
                 Mod.Diag("RainParticles STATUS ui: {0}", StatsLine());
+                Mod.Diag("RainParticles STATUS effects: collision={0} resolution={1} splashes={2} distance={3:F1}m lifetime={4:F2}s size={5:F2}m density={6:F2} transparency={7:F2}",
+                    CollisionEnabled, CollisionResolution, SplashesEnabled, SplashDistance, SplashLifetime, SplashSize, SplashDensity, Transparency);
+                foreach (var inst in Live)
+                {
+                    if (inst == null || !inst._isMainView || inst._positions == null || inst._args == null) continue;
+                    float now = Time.realtimeSinceStartup;
+                    if (now - inst._lastReadbackTime < ReadbackInterval) continue;
+                    inst._lastReadbackTime = now;
+                    inst.LogSelfCheck(inst._positions.count);
+                    inst.LogSnapshot(TestRow ? 20 : inst._positions.count);
+                    if (SystemInfo.supportsAsyncGPUReadback) inst.RequestReadbacks();
+                }
             }
             catch (Exception ex)
             {
@@ -612,17 +637,6 @@ namespace Volken.Weather
         {
             if (on != 0) AttachToCurrentView();   // 先确保挂载:只开开关不挂载 = 静默无效果
             Enabled = on != 0;
-            var sb = new StringBuilder();
-            sb.Append("RainParticles: enabled = ").Append(Enabled)
-              .Append(" | cap=").Append(Capacity)
-              .Append(" domainR=").Append(DomainRadius.ToString("F0"))
-              .Append(" stream=").Append(StreamMode ? 1 : 0)
-              .Append(" stretchAmt=").Append(StretchAmount.ToString("F3"))
-              .Append(" invFade=").Append(InvFade.ToString("F2"))
-              .Append(" soft=").Append(SoftDepthReady ? "ready" : "off")
-              .Append(" recenterHooked=").Append(RecenterHooked ? "yes" : "NO(事件没挂上)")
-              .Append(" | 日志看:SELFCHECK 有无 missing、axis 行 ·fwd(旧屏幕平面构轴恒≈0)、dist 行 mean/R≈0.75、diag respawns/s");
-            Mod.Diag(sb.ToString());
         }
 
         /// <summary>一帧一次的 craft 属性链采样:径向"下" / 本体速度 / 参考帧位置 / 相机海拔都取自同一条链。</summary>
@@ -637,6 +651,7 @@ namespace Volken.Weather
             public bool HasWater;         // 本行星有水(无水的行星不做水下抑制)
             public Vector3 PlanetCenter;  // 帧空间行星中心(= 海平面球心;与 _Positions 同空间)
             public float SeaRadius;       // 海平面半径(米;≤0 = 不做水下粒子剔除)
+            public Vector3 SeaUp;
         }
 
         /// <summary>取一次 craft 链(**独立模式不要调用**:在编辑器里访问游戏单例可能触发游戏侧半初始化)。</summary>
@@ -659,9 +674,12 @@ namespace Volken.Weather
                 }
                 if (craftNode.ReferenceFrame != null && craftNode.Parent?.PlanetData != null)
                 {
-                    Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+                    Vector3d planetCenterDouble = craftNode.ReferenceFrame.PlanetToFramePositiond(Vector3d.zero);
+                    Vector3 planetCenter = (Vector3)planetCenterDouble;
                     var planet = craftNode.Parent.PlanetData;
-                    sample.Altitude = (camPos - planetCenter).magnitude - (float)planet.Radius;
+                    Vector3d radial = (Vector3d)camPos - planetCenterDouble;
+                    sample.Altitude = (float)(radial.magnitude - planet.Radius);
+                    sample.SeaUp = ((Vector3)radial.normalized).normalized;
                     sample.HasWater = planet.HasWater;
                     sample.PlanetCenter = planetCenter;
                     sample.SeaRadius = planet.HasWater ? (float)planet.Radius : 0f;
@@ -701,6 +719,13 @@ namespace Volken.Weather
             Falloff = Mathf.Clamp01(cfg.tailFalloff);
             Brightness = Mathf.Max(0f, cfg.brightness);
             Transparency = Mathf.Clamp01(cfg.transparency);
+            CollisionEnabled = cfg.collisionEnabled;
+            CollisionResolution = cfg.collisionResolution >= 384 ? 512 : 256;
+            SplashesEnabled = cfg.splashesEnabled;
+            SplashDistance = Mathf.Clamp(cfg.splashDistance, 1f, 50f);
+            SplashLifetime = Mathf.Clamp(cfg.splashLifetime, 0.1f, 1f);
+            SplashSize = Mathf.Clamp(cfg.splashSize, 0.03f, 0.5f);
+            SplashDensity = Mathf.Clamp01(cfg.splashDensity);
             Strength = Mathf.Clamp(cfg.strength, 0f, 4f);             // 音频(见 RainAudio)
             Volume = Mathf.Clamp01(cfg.volume);
             CeilingAltitude = Mathf.Max(0f, cfg.ceilingAltitude);   // 0 = 关闭闸门(不限制)
@@ -722,13 +747,6 @@ namespace Volken.Weather
                 inst.EnsureAssets();    // 资产晚到时补加载(幂等;不调 AttachToCurrentView,避免与本方法互相递归)
                 inst.EnsureBuffers();
             }
-            Mod.Diag("RainParticles ApplyConfig: enabled={0} cap={1}{2} R={3:F0} fall={4:F1} len={5:F2}{6} w={7:F3} stretch={8:F3} edge={9:F2} soft={10:F2} stream={11} ceil={12} water={13}({14:F1}m) density={15:F4}/m³ strength={16:F2} rainVol={17:F2} adapt={18} distFade={19:F2} streakVar={20:F2}",
-                Enabled, Capacity, capChanged ? "(重建)" : "",
-                DomainRadius, FallSpeed, StreakLength, meshChanged ? "(重建)" : "", StreakThickness,
-                StretchAmount, EdgeFade, InvFade, StreamMode,
-                CeilingAltitude > 1f ? CeilingAltitude.ToString("F0") + "m(独立配置)" : "off(不限制)",
-                UnderwaterGate ? "on" : "off", UnderwaterFade,
-                DensityPerM3(), Strength, Volume, AdaptiveDomain, DistanceFade, StreakVariation);
         }
 
         /// <summary>当前密度(粒子/m³;SP2 出厂 100000@R50 = 0.191,EVE 参考 0.139)。</summary>
@@ -753,9 +771,9 @@ namespace Volken.Weather
                 return string.Format("suppressed underwater — 相机 ASL {0:F0}m(海平面以下不画雨)  R {1:F0}m  ρ {2:F3}/m³",
                     LastAltitude, radius, DensityPerM3());
             return string.Format(
-                "inst {0}/{1}  R {2:F0}m{3}  ρ {4:F3}/m³  respawn {5:F0}/s  stretch {6:F2}  屏倾 {7:F0}° 丝宽 {8:F1}px  axis {9}  edge {10:F2}  alt {11:F0}m ceil {12}  fade {13:F2}{14}  rec {15}(ev{16}/jp{17})  cam {18:F0}m/s",
+                "GPU sample {0}/{1}  R {2:F0}m{3}  ρ {4:F3}/m³  respawn sample {5}  stretch {6:F2}  屏倾 {7:F0}° 丝宽 {8:F1}px  axis {9}  edge {10:F2}  alt {11:F0}m ceil {12}  fade {13:F2}{14}  rec {15}(ev{16}/jp{17})  cam {18:F0}m/s",
                 LastInstanceCount, count, radius, AdaptiveDomain ? "(自适应)" : "", DensityPerM3(),
-                LastRespawns / Mathf.Max(1f, ReadbackInterval), LastStretch,
+                LastRespawns, LastStretch,
                 LastAxisScreenTilt, LastStreakWidthPx,
                 StreamMode ? "relVel" : "down", EdgeFade, LastAltitude,
                 LastCeiling > 0f ? LastCeiling.ToString("F0") : "off",
@@ -795,7 +813,7 @@ namespace Volken.Weather
                 _pendingRecenterDelta = delta;
                 _hasPendingRecenter = true;
                 if (_isMainView) RecenterEventCount++;
-                Mod.Diag("RainParticles RECENTER(event): delta=({0:F1},{1:F1},{2:F1}) |d|={3:F1}m (延迟到 Tick 应用,避免双重平移)",
+                Mod.Log("RainParticles RECENTER(event): delta=({0:F1},{1:F1},{2:F1}) |d|={3:F1}m (延迟到 Tick 应用,避免双重平移)",
                     delta.x, delta.y, delta.z, delta.magnitude);
             }
             catch (Exception ex)
@@ -826,7 +844,7 @@ namespace Volken.Weather
 
             delta = jump;
             if (_isMainView) RecenterJumpCount++;
-            Mod.Diag("RainParticles RECENTER(jump): |d|={0:F1}m threshold={1:F0}m dt={2:F4} craftSpd={3:F1} → TranslateFixed",
+            Mod.Log("RainParticles RECENTER(jump): |d|={0:F1}m threshold={1:F0}m dt={2:F4} craftSpd={3:F1} → TranslateFixed",
                 jumpMag, threshold, dt, _lastAxisVel.magnitude);
             return true;
         }
@@ -843,6 +861,7 @@ namespace Volken.Weather
                 _compute.SetVector("_translation", delta);
                 _compute.SetInt("_capacity", cap);
                 _compute.Dispatch(_kernelTranslateFixed, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
+                _collision?.Reset();
                 RecenterCount++;
                 _lastRecenterDelta = delta;
                 _hasLastCamPos = false;   // 那一帧相机位置会突跳,别污染 camVel 诊断
@@ -862,7 +881,7 @@ namespace Volken.Weather
                 Game.Instance.FlightScene.ViewManager.GameView.ReferenceFrameRecentered += OnReferenceFrameRecentered;
                 _recenterHooked = true;
                 RecenterHooked = true;
-                Mod.Diag("RainParticles: recenter hook ok (ModApi IGameView.ReferenceFrameRecentered)");
+                Mod.Log("RainParticles: recenter hook ok (ModApi IGameView.ReferenceFrameRecentered)");
             }
             catch (Exception ex)
             {
@@ -921,11 +940,7 @@ namespace Volken.Weather
             if (_isMainView) PreCullCalls++;
             if (!Enabled)
             {
-                if (_isMainView && Time.realtimeSinceStartup - _lastAliveLogTime > 5f)
-                {
-                    _lastAliveLogTime = Time.realtimeSinceStartup;
-                    Mod.Diag("RainParticles alive: calls={0} enabled=OFF assets='{1}' (在天气面板「雨」里勾选启用)", PreCullCalls, AssetsStatus);
-                }
+                _collision?.Reset();
                 return;
             }
             if (_cam == null || _compute == null || _positions == null || _args == null)
@@ -1029,6 +1044,7 @@ namespace Volken.Weather
             }
             if (gateFade <= 0.001f)
             {
+                _collision?.Reset();
                 //  抑制期间必须同步换帧状态:否则恢复下雨时,抑制期间累积的帧位置跳变会被 DetectRecenterJump 误判成一次换帧,整片雨被甩飞。
                 if (hasCraftFramePos) { _lastCraftFramePos = craftFramePos; _hasLastCraftFramePos = true; }
                 _hasPendingRecenter = false;
@@ -1037,9 +1053,9 @@ namespace Volken.Weather
                 {
                     _lastAltSkipLog = now;
                     if (submerged)
-                        Mod.Diag("RainParticles: 水下闸门 → 不绘制(相机 ASL {0:F1}m,水面下 {1:F1}m 内淡出)", camAlt, UnderwaterFade);
+                        Mod.Log("RainParticles: 水下闸门 → 不绘制(相机 ASL {0:F1}m,水面下 {1:F1}m 内淡出)", camAlt, UnderwaterFade);
                     else
-                        Mod.Diag("RainParticles: 高度闸门 → 不绘制(alt={0:F0}m 上限={1:F0}m 带宽={2:F2})太空/云层之上不下雨",
+                        Mod.Log("RainParticles: 高度闸门 → 不绘制(alt={0:F0}m 上限={1:F0}m 带宽={2:F2})太空/云层之上不下雨",
                             camAlt, ceiling, band);
                 }
                 return;
@@ -1075,12 +1091,37 @@ namespace Volken.Weather
             if (AdaptiveDomain && effR > baseR + 0.5f && !_adaptiveRadiusWarned)
             {
                 _adaptiveRadiusWarned = true;
-                Mod.Diag("RainParticles 自适应域: R={0:F0}m → {1:F0}m(相机 {2:F0}m/s);半径变大密度会变稀,不再自动重建 buffer",
+                Mod.Log("RainParticles 自适应域: R={0:F0}m → {1:F0}m(相机 {2:F0}m/s);半径变大密度会变稀,不再自动重建 buffer",
                     baseR, effR, _adaptSpeed);
             }
 
             int cap = Mathf.Max(1, BufferCapacity > 0 ? BufferCapacity : Capacity);
             int amount = TestRow ? 20 : cap;   // 等距排只画一小排(20 粒,30m 外 3m 间距)
+
+            bool collisionActive = false;
+            _mat.SetInt("_RainCollisionEnabled", 0);
+            _mat.SetBuffer("_RainCollisionData", _collisionFallback);
+            if (CollisionEnabled && !TestRow)
+            {
+                try
+                {
+                    if (_collision == null) _collision = new RainCollision();
+                    collisionActive = _collision.Begin(_cam, _positions, _mat, down, effR, dt,
+                        hasWater, StandaloneMode ? camPos.y : craft.Altitude, craft.SeaRadius,
+                        StandaloneMode || craft.SeaUp.sqrMagnitude < 0.5f ? -down : craft.SeaUp);
+                }
+                catch (Exception ex)
+                {
+                    _mat.SetInt("_RainCollisionEnabled", 0);
+                    _collision?.Reset();
+                    Mod.LogThrottled("RainCollision.Begin", ex);
+                }
+            }
+            else if (_collision != null)
+            {
+                _collision.Dispose();
+                _collision = null;
+            }
 
             // 1) 复位实例数(只写 args[1];args[0] = indexCount 建 buffer 时已置好,不必每帧上传整条)
             _args.SetData(ArgsReset, 1, 1, 1);
@@ -1110,6 +1151,17 @@ namespace Volken.Weather
                 _compute.SetVector("_camFwd", camFwd);
             }
             _compute.Dispatch(_kernelPositioning, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
+            if (collisionActive)
+            {
+                try { _collision.Resolve(); }
+                catch (Exception ex)
+                {
+                    collisionActive = false;
+                    _mat.SetInt("_RainCollisionEnabled", 0);
+                    _collision.Reset();
+                    Mod.LogThrottled("RainCollision.Resolve", ex);
+                }
+            }
 
             // 3) FillArgs:原子统计活跃数(复位已在 1)做完)。 原子加只能用**带下标的** RWStructuredBuffer 2/3 参形式,见类注释。
             _compute.SetBuffer(_kernelFillArgs, "_ArgsBuffer", _args);
@@ -1185,24 +1237,9 @@ namespace Volken.Weather
                 receiveShadows = false,
             };
             Graphics.RenderMeshIndirect(rp, _mesh, _args, 1, 0);
+            if (collisionActive) _collision.Draw(_cam, gateFade * (1f - Mathf.Clamp01(Transparency)));
             if (_isMainView) DrawCalls++;
 
-            // 5) 诊断:首次绘制 + 心跳 + GPU 回读
-            if (!_loggedFirstDraw)
-            {
-                _loggedFirstDraw = true;
-                Mod.Diag("RainParticles first draw: cap={0} amount={1} testRow={2} cam='{3}' mat={4} verts={5}",
-                    cap, amount, TestRow, _cam.name, _mat != null, _mesh.vertexCount);
-            }
-            // 心跳报告的是**共享静态量**(调用数 / 海拔 / 水下 / 域半径)→ 只有主视图实例有资格打,否则 1 Hz 里混进
-            // 一份"主视图的数 + 附加相机的相机名"的错配日志
-            if (_isMainView) LogHeartbeat(amount, now);
-            // 回读(位置分布 / 复活计数 / instanceCount)只服务诊断 → 只让主视图实例做:附加相机每 10 s 再排一次回读纯属浪费
-            if (_isMainView && now - _lastReadbackTime > ReadbackInterval)
-            {
-                _lastReadbackTime = now;
-                RequestReadbacks();
-            }
         }
 
         /// <summary>确定性 [0,1) 散列(CPU 兜底初值用;与 compute 里的 Hash01u 无关,只要求均匀)。</summary>
@@ -1226,12 +1263,13 @@ namespace Volken.Weather
             try
             {
                 AsyncGPUReadback.Request(_args, OnArgsReadback);
-                AsyncGPUReadback.Request(_positions, 64 * 16, 0, OnPositionsReadback);   // 前 64 粒(size/offset 字节)
+                AsyncGPUReadback.Request(_positions, Mathf.Min(64, _positions.count) * 16, 0, OnPositionsReadback);
                 if (_diag != null) AsyncGPUReadback.Request(_diag, OnDiagReadback);
+                _collision?.RequestDiagnostics(_cam);
                 if (!_rndChecked && _randomData != null)   // 一次性:验证包里的 compute 到底有没有写 yzw
                 {
                     _rndChecked = true;
-                    AsyncGPUReadback.Request(_randomData, 16 * 6, 0, OnRandomDataReadback);
+                    AsyncGPUReadback.Request(_randomData, 16 * Mathf.Min(6, _randomData.count), 0, OnRandomDataReadback);
                 }
                 // 落点分布诊断:必须**整块**回读 —— 随机数量化造成的重复是跨 id 区间的混叠,
                 // 连续 64/4096 粒永远看不出问题(前 64 粒恰好是分辨率最好的一批)。
@@ -1319,8 +1357,7 @@ namespace Volken.Weather
                 var data = req.GetData<uint>();
                 if (data.Length < 1) return;
                 LastRespawns = (int)data[0];
-                Mod.Diag("RainParticles diag: respawns={0} in last {1:F0}s → {2:F0}/s  (恒 0 且游戏在跑 = 粒子从不离域,回收没在工作)",
-                    LastRespawns, ReadbackInterval, LastRespawns / Mathf.Max(1f, ReadbackInterval));
+                Mod.Diag("RainParticles diag: respawnsSincePreviousSample={0}", LastRespawns);
                 if (_diag != null) _diag.SetData(DiagReset);   // 重启累计(数据已拷到 CPU,安全)
             }
             catch (Exception ex)
@@ -1395,10 +1432,8 @@ namespace Volken.Weather
             }
         }
 
-        private void LogHeartbeat(int amount, float now)
+        private void LogSnapshot(int amount)
         {
-            if (now - _lastDiagTime < 1f) return;
-            _lastDiagTime = now;
             var sb = new StringBuilder();
             sb.Append("RainParticles: calls=").Append(PreCullCalls)
               .Append(" draws=").Append(DrawCalls)
@@ -1423,6 +1458,9 @@ namespace Volken.Weather
               .Append("/").Append(_lastRecenterDelta.magnitude.ToString("F0"))
               .Append(" craftJump=").Append(LastCraftJump.ToString("F0"))
               .Append(" soft=").Append(SoftDepthReady ? InvFade.ToString("F1") : "off")
+              .Append(" collision=").Append(CollisionEnabled ? (_collision != null ? _collision.Status : "idle") : "off")
+              .Append(" splashes=").Append(SplashesEnabled ? "on" : "off")
+              .Append(" transparency=").Append(Transparency.ToString("F2"))
               .Append(" readback=").Append(LastInstanceCount)
               .Append(" time=").Append(Time.time.ToString("F0")).Append("s phase=").Append(PhaseNow())
               .Append(" assets='").Append(AssetsStatus).Append('\'')

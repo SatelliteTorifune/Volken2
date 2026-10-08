@@ -273,7 +273,28 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.streamMode ?? true,
                 v => ApplyRain(c => c.rain.streamMode = v)));
 
-            // 出域处置(SP2 风格 = 镜像重生:从边界进入,近旁不爆闪)
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainCollision"),
+                () => weather.Config?.rain?.collisionEnabled ?? false,
+                v => ApplyRain(c => { c.rain.collisionEnabled = v; if (!v) c.rain.splashesEnabled = false; })));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainCollisionHighPrecision"),
+                () => (weather.Config?.rain?.collisionResolution ?? 256) == 512,
+                v => ApplyRain(c => c.rain.collisionResolution = v ? 512 : 256)));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainSplashes"),
+                () => weather.Config?.rain?.splashesEnabled ?? false,
+                v => ApplyRain(c => { c.rain.splashesEnabled = v; if (v) c.rain.collisionEnabled = true; })));
+            AddSlider(group, "Volken.UI.RainSplashDistance",
+                () => weather.Config?.rain?.splashDistance ?? 25f,
+                v => ApplyRain(c => c.rain.splashDistance = v), 1f, 50f, 0);
+            AddSlider(group, "Volken.UI.RainSplashLifetime",
+                () => weather.Config?.rain?.splashLifetime ?? 0.35f,
+                v => ApplyRain(c => c.rain.splashLifetime = v), 0.1f, 1f, 2);
+            AddSlider(group, "Volken.UI.RainSplashSize",
+                () => weather.Config?.rain?.splashSize ?? 0.18f,
+                v => ApplyRain(c => c.rain.splashSize = v), 0.03f, 0.5f, 2);
+            AddSlider(group, "Volken.UI.RainSplashDensity",
+                () => weather.Config?.rain?.splashDensity ?? 0.35f,
+                v => ApplyRain(c => c.rain.splashDensity = v), 0f, 1f, 2);
+
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRespawnMirror"),
                 () => weather.Config?.rain?.respawnMirror ?? true,
                 v => ApplyRain(c => c.rain.respawnMirror = v)));

@@ -2,7 +2,7 @@
 
 > 状态:✅ 已归档(原状态:已修复,真机判据通过 唯一率 0.932 / 最大重复 5;见 §3 日志原文)
 > 日期:2026-10-04
-> 关联:[雨重做计划](../sp2-rain-particledomain-port-2026-09-28.md)(§10 实施记录是雨的事实源)/ [雨开关](rain-toggle-scene-switch-2026-10-02.md)(同一条渲染路径)/ [附加相机雨](extra-camera-rain-2026-10-04.md)(同一批实例各跑一份 compute)/ [复盘](weather-rain-fog-postmortem-2026-09-27.md) ㈦(材质实例化)
+> 关联:[雨重做计划](sp2-rain-particledomain-port-2026-09-28.md)(§10 实施记录是雨的事实源)/ [雨开关](rain-toggle-scene-switch-2026-10-02.md)(同一条渲染路径)/ [附加相机雨](extra-camera-rain-2026-10-04.md)(同一批实例各跑一份 compute)/ [复盘](weather-rain-fog-postmortem-2026-09-27.md) ㈦(材质实例化)
 
 ## 0. 现象与结论
 

@@ -1,13 +1,13 @@
 # Volken2 项目会话上下文
 
 > 新会话的代码导航与约束摘要。主题状态、待办和维护规则见 [README](README.md);实施记录只写进主题文档。
-> 核对:2026-10-08,代码基线 `8c4110f`。本次仅核对源码与仓库资产,未重新运行 Unity 或游戏。
+> 核对:2026-10-08;雨碰撞 / 水花修复获用户真机确认,135 项独立 GPU 验证通过,记录已归档。专项矩阵与性能测量不在本次确认范围内。
 
 ## 0. 定位与当前状态
 
 - SimpleRockets 2 / Juno: New Origins 的 `Volken` 模组;Unity **2022.3.62f3**,内置渲染管线 **BIRP**。
 - 云包含 raymarch、时序超采样、自带云分布、轨道云、水面反射;天气已有**雨视觉、雨声、闪电、雷声**。雾只有配置和面板占位。
-- 活跃工作见 [雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机和整数 hash 已落地,不要再按早期“阶段 3、雨声未做”开工。
+- 本轮雨功能已收束并归档,见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机、整数 hash、透明度、碰撞与水花均已落地。后续工作未排期,不要按早期计划重复实现。
 - 场景门控、预设下拉、雷电修复等记录已归档;**归档不代表真机验收通过**。待验证项目见 README §四之三。
 - 未排期方案在 [proposals/](proposals/)。天气母计划是历史底账,旧状态机、命令与路径不能当作当前接口。
 
@@ -53,9 +53,10 @@
 - **配置**:云在 `UserData/VolkenConfig/{行星}/{预设}.xml`,天气在 `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`;跨非飞行场景重读 XML,未保存改动不保留。Flight→Flight 同行星早退可保留内存状态。[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §3。
 - **子系统独立**:雨 / 雷各看自己的 `enabled` 和参数;天气不改云。直接读 `CloudConfig.TryGetBand` 和本相机 `CloudRenderer.LinearSceneDepth`,不恢复接口、注册表、编排器。[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §2.1、§8。
 - **多相机资源**:compute / buffer / 材质和 `_assetsReady` 均按实例持有;静态雨诊断与淡出量仅主视图写,否则会影响雨声。开关为 `ExtraCameraRain`。[附加相机雨](archive/extra-camera-rain-2026-10-04.md) §1、§2。
-- **雨朝向**:当前采用世界(帧)空间 `_RotationMatrix`,位置在帧空间下落,`TranslateFixed` 处理重定位。屏幕固定构轴已被后续实测推翻,不能套用早期复盘作为当前实现。[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.3。
-- **雨随机数与密度**:`id + _phase` 走整数 hash,禁止无界浮点 `frac` hash。自适应域目前只增半径,不自动重建 buffer 补密度。[落点重复](archive/rain-spawn-hash-precision-2026-10-04.md)、[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.5。
-- **雨滴透明度**:`RainSection.transparency` 为 0~1,0 保持原效果,1 完全透明;只作用于绘制 alpha,不改共享环境淡出或雨声。[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.7。
+- **雨朝向**:当前采用世界(帧)空间 `_RotationMatrix`,位置在帧空间下落,`TranslateFixed` 处理重定位。屏幕固定构轴已被后续实测推翻,不能套用早期复盘作为当前实现。[雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.3。
+- **雨随机数与密度**:`id + _phase` 走整数 hash,禁止无界浮点 `frac` hash。自适应域目前只增半径,不自动重建 buffer 补密度。[落点重复](archive/rain-spawn-hash-precision-2026-10-04.md)、[雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.5。
+- **雨滴透明度**:`RainSection.transparency` 为 0~1,0 保持原效果,1 完全透明;只作用于绘制 alpha,不改共享环境淡出或雨声。[雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.7。
+- **雨碰撞 / 水花**:`RainCollision` 为每相机独立 GPU 管线,同帧正交深度 + 局部海平面检测;默认关闭,面板开启水花自动开启碰撞。游戏原始地形 / 建筑 / 机体 shader 没有 RenderType,26/29/31 层须空标签捕获;导出 DummyShader 的 Opaque 不能当证据。深度全空修复已获用户真机确认。详见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.8。
 - **预设下拉**:列表变化须重建面板并保留可见性;切换前检查文件存在,避免隐式新建默认预设。[下拉修复](archive/weather-preset-dropdown-stale-2026-10-04.md) §1。
 - **坐标原点重置(浮动原点)**:离帧中心 >5000m、帧速 >1000m/s、时间加速或表面锁定切换可触发;订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)` 清云历史。[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §12。
 - **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)。
@@ -79,7 +80,7 @@
 
 ## 6. 调试与验证
 
-- `Mod.Log` 受 `ModSettings.DevMode` 控制;`Mod.Diag` 始终输出;`Mod.LogThrottled` 节流。shader 编译错误另查 Unity `Editor.log`。
+- `Mod.Log` 受 `ModSettings.DevMode` 控制;`Mod.Diag` 用于手动诊断与必要告警,始终输出;`Mod.LogThrottled` 保留异常节流。雨自检 / GPU 回读仅由面板日志按钮触发,不再自动心跳;云轨道诊断须同时开启开发日志和 `orbitDebugMode`。shader 编译错误另查 Unity `Editor.log`。
 - 当前仅注册 **`frs`、`brs`、`VolkenForceRefresh`**。归档中的 `volkenAssets` / `volkenBolt` / `volkenRainAxis*` 已删除;调参走面板,手动落雷走“立刻劈一道”。
 - 雨预览见 [开发工具说明](../Assets/Scripts/VolkenTests/README.md);场景、真实海拔、资源打包与音频仍需进游戏验证。
 - 改文档必跑 `powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-docs.ps1 -Root docs`;只改注释用 `strip-code-comments.ps1 -Old <快照> -New <改后>` 自证。

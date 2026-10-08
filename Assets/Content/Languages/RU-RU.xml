@@ -47,6 +47,13 @@
     <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи</s>
     <s id="Volken.UI.RainBrightness">Яркость (0 = исходная)</s>
     <s id="Volken.UI.RainTransparency">Прозрачность дождя (0 = исходная, 1 = полностью прозрачный)</s>
+    <s id="Volken.UI.RainCollision">Столкновения капель (рельеф / аппарат / вода)</s>
+    <s id="Volken.UI.RainCollisionHighPrecision">Высокая точность столкновений (512, по умолчанию 256)</s>
+    <s id="Volken.UI.RainSplashes">Всплески при ударе (включает столкновения)</s>
+    <s id="Volken.UI.RainSplashDistance">Дальность видимости всплесков (м)</s>
+    <s id="Volken.UI.RainSplashLifetime">Время жизни всплесков (с)</s>
+    <s id="Volken.UI.RainSplashSize">Максимальный радиус всплеска (м)</s>
+    <s id="Volken.UI.RainSplashDensity">Плотность всплесков</s>
     <s id="Volken.UI.RainDistanceFade">Глубина: затухание по дистанции в домене (0 = выкл)</s>
     <s id="Volken.UI.RainStreakVariation">Глубина: разброс длины/ширины струй (0 = все одинаковы)</s>
     <s id="Volken.UI.WeatherRainRemoved">Система дождя удалена и будет переделана; значения ниже — заготовки и ни на что не влияют.</s>

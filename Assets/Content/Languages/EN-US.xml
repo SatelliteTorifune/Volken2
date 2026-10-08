@@ -46,6 +46,7 @@
     <s id="Volken.UI.RainSoftParticles">Soft particles (0 = hard edge, 1 = default)</s>
     <s id="Volken.UI.RainTailFalloff">Streak tail falloff</s>
     <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
+    <s id="Volken.UI.RainTransparency">Rain transparency (0 = original, 1 = fully transparent)</s>
     <s id="Volken.UI.RainDistanceFade">Depth: in-domain distance fade (0 = off; near bright, far dim)</s>
     <s id="Volken.UI.RainStreakVariation">Depth: per-streak length/width variation (0 = all identical)</s>
     <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>

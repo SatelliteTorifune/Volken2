@@ -75,6 +75,8 @@ namespace Volken.Weather
 
             public float brightness = 0f;   // = shader _Emission;0 = 不额外提亮
 
+            public float transparency = 0f;   // 0 = 原有透明度,1 = 完全透明;仅影响雨滴视觉
+
             // 纵深线索(治"快速缩放时像一层平面"):整片雨丝等长、等亮、平行 → 没有纵深
             public float distanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关;近了亮远了暗)
             public float streakVariation = 0.5f;  // 逐粒长度/宽度倍率(0 = 全一样长)
@@ -116,6 +118,7 @@ namespace Volken.Weather
                 softParticles = s.softParticles;
                 tailFalloff = s.tailFalloff;
                 brightness = s.brightness;
+                transparency = s.transparency;
                 distanceFade = s.distanceFade;
                 streakVariation = s.streakVariation;
                 ceilingAltitude = s.ceilingAltitude;
@@ -314,6 +317,7 @@ namespace Volken.Weather
             rain.softParticles = Mathf.Clamp(rain.softParticles, 0f, 3f);
             rain.tailFalloff = Mathf.Clamp01(rain.tailFalloff);
             rain.brightness = Mathf.Clamp(rain.brightness, 0f, 3f);
+            rain.transparency = Mathf.Clamp01(rain.transparency);
             rain.distanceFade = Mathf.Clamp01(rain.distanceFade);
             rain.streakVariation = Mathf.Clamp01(rain.streakVariation);
             rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);

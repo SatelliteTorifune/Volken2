@@ -427,3 +427,11 @@ SP2 雨的**出厂值(第一手:`sp2d4/Assets/Resources/prefabs/ParticleDomain.p
 -  **命令行绝不写非 ASCII 路径 / 文件名**:曾因中文路径被 shell 编码破坏,`ReadAllText` 失败却未停 → **把 986 行文档覆盖成 1 节**(已用同目录 ASCII 全本镜像复原)。用编辑工具、或 `Get-ChildItem -Filter` 取 `.FullName`;脚本开头设 `$ErrorActionPreference='Stop'`,任何 `ReadAllText` 后必须确认成功。
 -  **Unity 陈旧编译状态**:AssetDatabase 缓存了磁盘上已删除的文件 → 大量 CS0234 级联错误、`Library/ScriptAssemblies` 停留旧版;聚焦窗口 / **Ctrl+R** 刷新即可(磁盘状态以 dotnet 编译为准)。
 -  **命名空间 `Volken.Debug` 会遮蔽 `UnityEngine.Debug`**(曾因此踩 CS0234):测试代码统一 `Volken.Tests`;测试与正式代码**单向依赖** —— 正式代码零引用,整个 `VolkenTests/` 可删除,契约见 `VolkenTests/README.md`。
+
+### 10.7 雨滴透明度(2026-10-08)
+
+- 【决策:2026-10-08】新增 `RainSection.transparency`,范围 0~1:0 保持原效果,1 完全透明;旧 XML 缺少该字段时默认 0。
+- 天气面板与 `RainPreview` 都可即时调整。`CopyFrom/Clone/ClampAll`、预览记忆(v6,兼容 v1~v5)、重置与 XML 复制同步该参数。
+- 渲染复用既有 `_FadeAmount = gateFade × (1 − transparency)`,逐相机生效;仅改雨滴 alpha,雨声与粒子密度仍按原参数运行,无需修改 shader / compute。
+- 验证:`dotnet build Volken.csproj --no-restore` 0 错误 / 3 条既有警告;用生成的程序集确认旧 XML 默认值为 0,Clone 与 XML 往返保留 0.65;三语 XML 均合法且仅新增 `Volken.UI.RainTransparency`。
+- 验收:调到 0 / 0.5 / 1 对照视觉与雨声;保存 / 重载预设、主视图 / PIP、预览记忆与旧 XML 默认值都需回归。Unity / 游戏画面尚未验收。

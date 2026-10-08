@@ -46,6 +46,7 @@
     <s id="Volken.UI.RainSoftParticles">软粒子强度(0=硬边,1=默认)</s>
     <s id="Volken.UI.RainTailFalloff">雨丝尾淡</s>
     <s id="Volken.UI.RainBrightness">亮度增益(0=原色)</s>
+    <s id="Volken.UI.RainTransparency">雨滴透明度(0=原效果,1=全透明)</s>
     <s id="Volken.UI.RainDistanceFade">纵深:域内距离衰减(0=关;近了亮远了暗)</s>
     <s id="Volken.UI.RainStreakVariation">纵深:逐粒长度/宽度变化(0=全一样长)</s>
     <s id="Volken.UI.WeatherRainRemoved">雨系统已整体移除待重做,以下参数为占位,修改不会有任何效果。</s>

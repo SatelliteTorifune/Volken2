@@ -79,7 +79,7 @@
 
 | 范围 | 要验证的行为 | 判据 |
 |---|---|---|
-| 雨与配置 | 软粒子 / 海拔 / 水下 / 重定位 / XML 往返 / 切场景 | [雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.5、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §2、§4 |
+| 雨与配置 | 透明度 / 软粒子 / 海拔 / 水下 / 重定位 / XML 往返 / 切场景 | [雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.5、§10.7、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §2、§4 |
 | Inspector | 冷启动列表完整、缺失文件不新建、另存为可见 | [下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §2 |
 | PIP | 相机有雨,主视图雨声不被覆盖,参数同步 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §4 |
 | 场景 / 解耦 | 非飞行停表、离场收雨雷、环境抑制不改用户开关 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §4、[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §6 |

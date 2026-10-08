@@ -55,6 +55,7 @@
 - **多相机资源**:compute / buffer / 材质和 `_assetsReady` 均按实例持有;静态雨诊断与淡出量仅主视图写,否则会影响雨声。开关为 `ExtraCameraRain`。[附加相机雨](archive/extra-camera-rain-2026-10-04.md) §1、§2。
 - **雨朝向**:当前采用世界(帧)空间 `_RotationMatrix`,位置在帧空间下落,`TranslateFixed` 处理重定位。屏幕固定构轴已被后续实测推翻,不能套用早期复盘作为当前实现。[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.3。
 - **雨随机数与密度**:`id + _phase` 走整数 hash,禁止无界浮点 `frac` hash。自适应域目前只增半径,不自动重建 buffer 补密度。[落点重复](archive/rain-spawn-hash-precision-2026-10-04.md)、[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.5。
+- **雨滴透明度**:`RainSection.transparency` 为 0~1,0 保持原效果,1 完全透明;只作用于绘制 alpha,不改共享环境淡出或雨声。[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10.7。
 - **预设下拉**:列表变化须重建面板并保留可见性;切换前检查文件存在,避免隐式新建默认预设。[下拉修复](archive/weather-preset-dropdown-stale-2026-10-04.md) §1。
 - **坐标原点重置(浮动原点)**:离帧中心 >5000m、帧速 >1000m/s、时间加速或表面锁定切换可触发;订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)` 清云历史。[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §12。
 - **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)。

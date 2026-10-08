@@ -47,6 +47,7 @@ namespace Volken.Tests
         public float softParticles = 1f;
         public float tailFalloff = 0.9f;
         public float brightness = 0f;
+        [Range(0f, 1f)] public float transparency = 0f;
         public bool streamMode = true;
         public bool respawnMirror = false;
         public float ceilingAltitude = 12000f;
@@ -267,6 +268,7 @@ namespace Volken.Tests
             RainParticles.InvFade = Mathf.Max(0f, softParticles);
             RainParticles.Falloff = Mathf.Clamp01(tailFalloff);
             RainParticles.Brightness = Mathf.Max(0f, brightness);
+            RainParticles.Transparency = Mathf.Clamp01(transparency);
             RainParticles.StreamMode = streamMode;
             RainParticles.RespawnMirror = respawnMirror;
             RainParticles.CeilingAltitude = Mathf.Max(0f, ceilingAltitude);
@@ -309,6 +311,7 @@ namespace Volken.Tests
                     softParticles = softParticles,
                     tailFalloff = tailFalloff,
                     brightness = brightness,
+                    transparency = transparency,
                     streamMode = streamMode,
                     respawnMirror = respawnMirror,
                     ceilingAltitude = ceilingAltitude,
@@ -447,6 +450,7 @@ namespace Volken.Tests
             softParticles = Slider("软粒子(预览无云的深度图→通常无效)", softParticles, 0f, 3f, false);
             tailFalloff = Slider("尾淡(SP2 0.9)", tailFalloff, 0f, 1f, false);
             brightness = Slider("亮度增益", brightness, 0f, 3f, false);
+            transparency = Slider("雨滴透明度(0=原效果,1=全透明)", transparency, 0f, 1f, false);
 
             GUILayout.Label("── 纵深线索(治\"快速缩放像一层平面\")──");
             distanceFade = Slider("域内距离衰减(0=关;近了亮远了暗)", distanceFade, 0f, 1f, false);
@@ -551,6 +555,7 @@ namespace Volken.Tests
             softParticles = 1f;
             tailFalloff = 0.9f;
             brightness = 0f;
+            transparency = 0f;
             streamMode = true;
             respawnMirror = false;
             ceilingAltitude = 12000f;
@@ -581,7 +586,7 @@ namespace Volken.Tests
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var parts = new[]
                 {
-                    "v5",
+                    "v6",
                     rainEnabled ? "1" : "0",
                     amount.ToString("R", inv), domainRadius.ToString("R", inv), fallSpeed.ToString("R", inv),
                     streakLength.ToString("R", inv), streakWidth.ToString("R", inv),
@@ -595,6 +600,7 @@ namespace Volken.Tests
                     distanceFade.ToString("R", inv), streakVariation.ToString("R", inv), streakRoll.ToString("R", inv),
                     adaptiveDomain ? "1" : "0", adaptiveMaxRadius.ToString("R", inv),
                     underwaterGate ? "1" : "0", underwaterFade.ToString("R", inv), assumeWater ? "1" : "0",
+                    transparency.ToString("R", inv),
                 };
                 PlayerPrefs.SetString(ParamsPref, string.Join(";", parts));
                 PlayerPrefs.Save();
@@ -610,8 +616,9 @@ namespace Volken.Tests
                 string s = PlayerPrefs.GetString(ParamsPref, "");
                 if (string.IsNullOrEmpty(s)) return false;
                 var p = s.Split(';');
-                // v5 = v4 + 水下闸门;v4 = v3 + 纵深线索/自适应域;v3 = v2 + 连播遍数/交叉淡化;v2 = v1 + 雨强度/音量 —— 旧存档照样读(新增字段留默认值)
-                bool hasWater = p.Length >= 29 && p[0] == "v5";
+                // 新字段追加在末尾,旧版本的字段索引保持不变。
+                bool hasTransparency = p.Length >= 30 && p[0] == "v6";
+                bool hasWater = hasTransparency || (p.Length >= 29 && p[0] == "v5");
                 bool hasDepth = hasWater || (p.Length >= 26 && p[0] == "v4");
                 bool hasLoop = hasDepth || (p.Length >= 21 && p[0] == "v3");
                 bool hasAudio = hasLoop || (p.Length >= 19 && p[0] == "v2");
@@ -634,6 +641,7 @@ namespace Volken.Tests
                     adaptiveDomain = p[24] == "1"; adaptiveMaxRadius = F(25);
                 }
                 if (hasWater) { underwaterGate = p[26] == "1"; underwaterFade = F(27); assumeWater = p[28] == "1"; }
+                transparency = hasTransparency ? Mathf.Clamp01(F(29)) : 0f;
                 UnityEngine.Debug.Log("[Volken] RainPreview: 已恢复上次记忆的参数(想从出厂值开始就点「重置为 SP2 出厂参数」)");
                 return true;
             }
@@ -669,6 +677,7 @@ namespace Volken.Tests
                 sb.AppendLine("    <softParticles>" + N(softParticles) + "</softParticles>");
                 sb.AppendLine("    <tailFalloff>" + N(tailFalloff) + "</tailFalloff>");
                 sb.AppendLine("    <brightness>" + N(brightness) + "</brightness>");
+                sb.AppendLine("    <transparency>" + N(Mathf.Clamp01(transparency)) + "</transparency>");
                 sb.AppendLine("    <distanceFade>" + N(distanceFade) + "</distanceFade>");
                 sb.AppendLine("    <streakVariation>" + N(streakVariation) + "</streakVariation>");
                 sb.AppendLine("    <ceilingAltitude>" + N(ceilingAltitude) + "</ceilingAltitude>");

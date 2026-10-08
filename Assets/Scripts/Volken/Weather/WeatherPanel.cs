@@ -265,6 +265,10 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.brightness ?? 0f,
                 v => ApplyRain(c => c.rain.brightness = v), 0f, 3f, 2);
 
+            AddSlider(group, "Volken.UI.RainTransparency",
+                () => weather.Config?.rain?.transparency ?? 0f,
+                v => ApplyRain(c => c.rain.transparency = v), 0f, 1f, 2);
+
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainStreamMode"),
                 () => weather.Config?.rain?.streamMode ?? true,
                 v => ApplyRain(c => c.rain.streamMode = v)));

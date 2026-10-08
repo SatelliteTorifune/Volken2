@@ -40,6 +40,7 @@ namespace Volken.Weather
         public static float InvFade = 1.0f;          // SP2 _InvFade(软粒子因子;0 = 关闭软粒子)
         public static float Falloff = 0.9f;          // SP2 _falloff(尾淡/软边)
         public static float Brightness = 0f;         // 亮度增益(= shader _Emission)
+        public static float Transparency = 0f;       // 0 = 原效果,1 = 完全透明;不参与雨声门控
 
         // 纵深线索(治"快速缩放时像一层平面":整片等长、等亮、平行 → 没有纵深)
         public static float DistanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关)
@@ -699,6 +700,7 @@ namespace Volken.Weather
             StreamMode = cfg.streamMode;
             Falloff = Mathf.Clamp01(cfg.tailFalloff);
             Brightness = Mathf.Max(0f, cfg.brightness);
+            Transparency = Mathf.Clamp01(cfg.transparency);
             Strength = Mathf.Clamp(cfg.strength, 0f, 4f);             // 音频(见 RainAudio)
             Volume = Mathf.Clamp01(cfg.volume);
             CeilingAltitude = Mathf.Max(0f, cfg.ceilingAltitude);   // 0 = 关闭闸门(不限制)
@@ -1170,8 +1172,8 @@ namespace Volken.Weather
                 _mat.SetFloat("_InvFade", softReady ? InvFade : 0f);
                 if (softReady) _mat.SetTexture("_LinearSceneDepth", depthTex);   // 必须用本实例的 softReady(静态量只反映主视图)
 
-                // 海拔 / 水下淡出
-                _mat.SetFloat("_FadeAmount", gateFade);
+                // 视觉透明度叠加环境淡出;环境诊断量保持供雨声独立读取。
+                _mat.SetFloat("_FadeAmount", gateFade * (1f - Mathf.Clamp01(Transparency)));
                 _mat.SetFloat("_Emission", Brightness);
             }
             var rp = new RenderParams(_mat)

@@ -1,8 +1,9 @@
 # 天气 ↔ 云 解耦审计与重构方案
 
-> 状态: 🚧 部分落地(2026-10-01 已完成 A1/A3/B/C/E + 环境抑制修复;**A2、D、F 未排期**)
+> 状态:✅ 已归档(已落地重构的记录;A2 / D 未排期,真机回归未确认)
+> 2026-10-08 核对:行星生命周期与高度带去重仍在代码中。当前配置文件 / 类名为 `Weather/VolkenWeatherConfig.cs` / `VolkenWeatherConfig`;§8 的 Settings 改名仅是当时记录。F 的天气值通道被后续删除天气值的决策取代。
 > 日期: 2026-10-01
-> 关联: [`proposals/sp2-weather-port-2026-09-27.md`](proposals/sp2-weather-port-2026-09-27.md)(天气母计划,本文只谈**结构**不谈功能范围)、[`proposals/thunder-realism-2026-09-28.md`](proposals/thunder-realism-2026-09-28.md)(雷电)、[`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md)(雨,本文的 C3/C4/C8 直接落在它身上)、[`archive/weather-rain-fog-postmortem-2026-09-27.md`](archive/weather-rain-fog-postmortem-2026-09-27.md)(雨雾复盘)
+> 关联: [`sp2-weather-port-2026-09-27.md`](sp2-weather-port-2026-09-27.md)(天气母计划,本文只谈**结构**不谈功能范围)、[`thunder-realism-2026-09-28.md`](thunder-realism-2026-09-28.md)(雷电)、[`sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md)(雨,本文的 C3/C4/C8 直接落在它身上)、[`weather-rain-fog-postmortem-2026-09-27.md`](weather-rain-fog-postmortem-2026-09-27.md)(雨雾复盘)
 > 主题: 审计「天气」与「云」两个模块之间**实际存在**的依赖,给出把边界划回 OOP 的分阶段重构方案。
 
 ---
@@ -63,7 +64,7 @@ var cr = _cam.GetComponent<CloudRenderer>();
 if (cr != null) depthTex = cr.LinearSceneDepth;   // CloudRenderer.cs:69
 ```
 
-`CloudRenderer.cs:56-69` 的「**当前无消费者**」**已过期**(`README.md` 决策速查第 72 行已更正);该只读口无契约(相机、ready、单位均未约定)。
+`CloudRenderer.cs:56-69` 的「**当前无消费者**」**已过期**([会话上下文](../AGENT_CONTEXT.md) §2 已注明消费者);该只读口无契约(相机、ready、单位均未约定)。
 
 ### C4 — 相机海拔公式三份实现,回退值还不一致 【严重度:中】
 
@@ -220,7 +221,7 @@ VolkenClouds.Instance.MainLayer.config / .planetConfigList / .LinearSceneDepth
 
 - [x] ~~`Assets/Scripts/Volken/Weather/**` 内 grep 不到 `VolkenMod.Instance` / `CloudRenderer` / `layerHeights`~~ → **已作废**(§2.1):现在**允许**直接读云 config 与 `GetComponent<CloudRenderer>()`
 - [x] **修订断言**:`Weather/` 没有一处**自己重写**云层高度带遍历(统一走 `CloudConfig.TryGetBand`)
-- [ ] 同一份云配置下,`volkenWeather` 的 `cloudFade` 与改前一致
+- [ ] 同一份云配置下,天气面板 / 运行日志中的云内淡化读数与改前一致(旧 `volkenWeather` 命令已删除)
 - [ ] 闪电仍从云层带内起(近地雷 + 高云雷各测一次)
 - [ ] 雨软粒子开关 A/B 画面一致;云渲染器未挂时雨正常降级(不消失、不报错 —— 见雨计划 §3 的"空深度图让雨整体消失"护栏)
 - [ ] 默认配置(天气全关 + 云 `enabled=false`)下行为与改前逐字节一致
@@ -292,7 +293,7 @@ Weather/ VolkenWeather.cs / VolkenWeatherSettings.cs / WeatherPanel.cs   ← 域
 | `CloudNoiseCompute.compute` | 同上,**悬空** |
 | `enviro_thunder_1.ogg` | 资产早已删除(`eab24b4`),GUID 仍在清单 → **悬空**(另有 4 条同类残留此前已清) |
 
-**后果**:打包后这两个资产**不进 bundle**,云 shader 与噪声 compute 都取不到,`Shader.Find("Hidden/Clouds")` 在成品里同样取不到 → **云整体消失且无编译错误**(`AGENT_CONTEXT.md` 铁律:**删/搬资产不会自动更新 GUID**)。**已修**:两条 GUID 换新值、删掉已删 ogg 残留 —— 现 **26 条 0 悬空**(见 [`README.md`](README.md) §四之三「打包 + 核对资产清单」)。
+**后果**:打包后这两个资产**不进 bundle**,云 shader 与噪声 compute 都取不到,`Shader.Find("Hidden/Clouds")` 在成品里同样取不到 → **云整体消失且无编译错误**(`AGENT_CONTEXT.md` 铁律:**删/搬资产不会自动更新 GUID**)。**已修**:两条 GUID 换新值、删掉已删 ogg 残留 —— 现 **26 条 0 悬空**(见 [`README.md`](../README.md) §四之三「打包 + 核对资产清单」)。
 
 **顺带修掉的既有 bug(C5 之外,README「四之二」#1)**:三处(`VolkenClouds` / `CloudRenderer` / `VolkenUserInterface`)把 `config.enabled` 当"环境开关"来回写,而它属**玩家预设本体**、随"保存配置"落盘 —— 绕无大气卫星保存会把该行星云预设静默写成"关闭",回到有大气行星后 `enabled` 仍 false(**"切换至有大气星球时 config 卡住"**)。改法:新增 `CloudLayer.EnvironmentSuppressed`(运行时,不落盘),渲染只认 `enabled && !EnvironmentSuppressed`。**这是本次唯一的行为变更**,也是删掉 UI 重复门控的前提。
 

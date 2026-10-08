@@ -1,8 +1,9 @@
 # 附加相机(PIP)下雨 —— 每相机一套雨实例
 
-> 状态:🚧 实施中 —— C# 侧已落地(`dotnet build Volken.csproj` = 0 错误),**未做 Unity 真机验收**
+> 状态:✅ 已归档(实现已落地;真机回归未确认)
+> 2026-10-08 核对:已对照当前源码确认实现存在;历史编译结果不等于本次复验。待验收见 §4 及 [待办索引](../README.md#四之三待办清单backlog)。
 > 日期:2026-10-04
-> 关联:[场景门控](monobehaviour-scene-gate-2026-10-02.md)(额外相机扫描的出处)/ [雨开关](rain-toggle-scene-switch-2026-10-02.md)(同类的"每实例一套资源"铁律)/ [反射相机适配](archive/reflection-adaptation-2026-09-02.md) / [TSS 移植](archive/ksa-temporal-upscale-port-2026-08-24.md) §299(单一主相机挂载的原始决策)
+> 关联:[场景门控](monobehaviour-scene-gate-2026-10-02.md)(额外相机扫描的出处)/ [雨开关](rain-toggle-scene-switch-2026-10-02.md)(同类的"每实例一套资源"铁律)/ [反射相机适配](reflection-adaptation-2026-09-02.md) / [TSS 移植](ksa-temporal-upscale-port-2026-08-24.md) §7(单一主相机挂载的原始决策)
 
 ## 0. 现象与结论
 
@@ -14,7 +15,7 @@
 | 体积云 | 相机上的 `CloudRenderer`(屏幕空间后处理) | `VolkenUserInterface` 的 1 Hz 额外相机扫描自动挂 |
 | 雨 | 相机上的 `RainParticles`(GPU 粒子 + `Graphics.RenderMeshIndirect`,绘制参数 `camera = 本相机`) | **原来只在主视图相机上(单实例)** → 额外相机没有 |
 
-即:这不是某个相机的渲染故障,而是"单一主相机挂载"(见 [TSS 移植](archive/ksa-temporal-upscale-port-2026-08-24.md) §299 的原始决策)在雨这一侧的必然表现。
+即:这不是某个相机的渲染故障,而是"单一主相机挂载"(见 [TSS 移植](ksa-temporal-upscale-port-2026-08-24.md) §7 的原始决策)在雨这一侧的必然表现。
 
 ## 1. 方案 A:跟随既有扫描挂雨(【决策:2026-10-04,用户】)
 
@@ -57,4 +58,4 @@
 ## 5. 已知限制(刻意没做)
 
 - 雨的**高度 / 水下闸门参考系 = 玩家飞行器采样 + 本相机海拔**:PIP 看同一飞行器时正确;若 PIP 看的是**别的**飞行器或远处,闸门会按玩家的 craft 采样算(要正确就得给每个实例独立的 craft 采样,收益低、改动大)。
-- 未走"单实例多相机绘制"(方案 B):那能省 N 倍 compute,但雨丝朝向必须**按目标相机重设** → 要每相机一份材质实例,正是 [雨雾移植复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) ㈦ 出过事故的那条线;当前方案 A 用每相机独立实例天然绕开它。
+- 未走"单实例多相机绘制"(方案 B):那能省 N 倍 compute,但雨丝朝向必须**按目标相机重设** → 要每相机一份材质实例,正是 [雨雾移植复盘](weather-rain-fog-postmortem-2026-09-27.md) ㈦ 出过事故的那条线;当前方案 A 用每相机独立实例天然绕开它。

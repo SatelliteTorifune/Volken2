@@ -1,14 +1,12 @@
 # Volken 雷声真实化可行性分析(2026-09-28)
 
-> 状态:⏸ **已转 proposals(暂停)** —— 代码 / 配置 / UI / 文案已落地(C# 0 错误),**Unity 侧打包与真机验收未做**(未做完雷声仍静音);暂不排期。**母计划**:[`sp2-weather-port-2026-09-27.md`](sp2-weather-port-2026-09-27.md)。
+> 状态:✅ 已归档(代码 / 配置 / UI 已落地;当前部署与完整听感回归未确认)
+> 日期:2026-09-28;归档核对:2026-10-08
+> 关联:[天气母计划](sp2-weather-port-2026-09-27.md)、[待验收索引](../README.md#四之三待办清单backlog)。
+> 当前实现:`LightningModule` 按距离和 `AtmosphereSample.SpeedOfSound` 调度 near / far 雷声,并保留多声部、暂停处理和兜底声速。资源静态核对见索引。
+> 阅读顺序:当前打包检查见 §5.3,行为判据见 §5.4 / §6。§0 的旧 OGG / 无 GUID / 必然静音是 2026-09-28 故障现场,不能套用到当前资产或部署。
 
-需求(用户原话拆成三条):①确定"雷声来源"与 **craft** 之间的距离;②根据 craft 当前处的**声速**确定延迟;③根据某个**阈值**去 `Assets/Scripts/Volken/Weather/Audio` 里选 near 或 far 播放。
-结论:**三条都可行,游戏 API 已现成提供声速。**但**动手前必须先修一条已有的致命故障** —— 雷声资源在 bundle 里指向的是**已被删除的 5 个 .ogg**。
-**实施状态(2026-09-28)**:§5.2 的代码 / 配置 / UI / 文案**已全部落地**,`dotnet build Volken.csproj` = **0 错误**(仅仓库原有 5 条既有警告)。**§5.3 的 Unity 侧打包(导入 WAV + 设导入设置 + 改 `_otherAssets` + 重建)尚未做** —— 完成前雷声仍是**静音**的。素材已由用户补齐为 **9 条**(`near-1~4` / `far-1~5`),`far-1` 与 `far-2` 的重复问题已解决(§3.1 的提醒作废)。
-
----
-
-## 0. ⛔ 前置故障:现在的雷声在游戏里完全不会响
+## 0. 历史前置故障:2026-09-28 的雷声静音
 
 | 事实 | 证据 |
 |---|---|
@@ -198,18 +196,13 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 
 **这次**没有**改 `DistanceVolume` 的距离尺度为"完全删除"**:保留它作为"远雷额外软化"(以阈值为尺度),把公式从 `near/d` 换成 `sqrt(near/d)` —— 原因是 AudioSource 的对数 rolloff 已经压了一轮,再用 `near/d` 会把远雷压到听不见,阈值切换就听不出差别了。若实听仍觉得远雷太轻/太重,调 `thunderVolume` 即可。
 
-### 5.3 打包(必须在 Unity 里做,且分两轮)—— ⏳ 待做
+### 5.3 打包与部署核对(2026-10-08 更新)
 
-> 这是**唯一还没做、且不做就依然静音**的一步。需要 Unity 编辑器焦点。
-
-1. 焦点切回 Unity → 让它导入 9 个 WAV(此时才生成 `.meta`/GUID);
-2. 逐条设导入设置:`forceToMono=1`、`loadType=CompressedInMemory`、`compressionFormat=Vorbis`、`quality≈70`、`preloadAudioData=1`、`3D=1`;
-   > **实测现状(2026-09-28,Unity 导入后自动生成的 `.meta`)**:9 条 WAV 都已经是 `loadType: 1`(CompressedInMemory)、`compressionFormat: 1`(**PCM**)、`forceToMono: 1` ✅、`3D: 1` ✅、`preloadAudioData: 0`。需要手工改的是两处:**`compressionFormat` 1 → 0(Vorbis)** 与 **`quality` 1 → 70**、`preloadAudioData` 0 → 1。只改前者即可把 16.1 MB 压到 2~3 MB。(注意 `compressionFormat` 是位标志枚举:0=PCM、1=Vorbis、2=ADPCM;旧 OGG 素材的 `.meta` 里写的就是 1 = Vorbis。)
-3. 把 9 个新 GUID 加进 `Assets/ModData.asset` 的 `_otherAssets`,**删掉 5 条悬空的旧 OGG GUID**(`fe540ed2…` / `28e67960…` / `f84ba73f…` / `b294e2e8…` / `26002a38…`,已逐条验过全部悬空);
-4. 重新构建 mod;复核 `Temp/ModManifest.xml` 与 `ModAssetBundles/StandaloneWindows64/volken.manifest` 含 9 条新 `volkenThrunder-*.wav` 路径、不含 OGG;
-5. 进游戏用 dev 命令 `volkenAssets` 看台账全 `ok`,日志里应出现 `loaded thunder clips: near=4/4 far=5/5 voices=4`(不再是 `SILENT`)。
-
-**包体预估**:9 条裸 PCM ≈ 17 MB(48 kHz/16bit/立体声),当前整包才 5.8 MB。按 Vorbis(q≈70)+ `forceToMono` 导入,预计 → 2~3 MB;若误用 PCM / `DecompressOnLoad`,运行时会就地解成 ~34 MB 内存。**必须显式定导入设置,不能吃默认值**。
+- 新 WAV 的 `.meta` 与 `_otherAssets` 引用已存在;不再重复执行“首次导入 / 添加 9 个 GUID / 删除悬空 OGG”的旧步骤。完整清单静态结果只记在 [README](../README.md) §四之三。
+- 当前抽查 `volkenThrunder-near-1.wav.meta`: `loadType: 1`、`compressionFormat: 1`、`quality: 1`、`forceToMono: 1`、`preloadAudioData: 0`、`3D: 1`。这是序列化原值;旧文档对枚举与 quality 单位的解释互相矛盾,不能照旧数字批改,须先在 Unity Inspector 核实语义与预期。
+- 本次未重新打包,也未核实游戏正在加载哪一版 bundle。部署时核对生成 manifest 含雷声 WAV,并确认运行日志 `loaded thunder clips: near=4/4 far=5/5 voices=4`。
+- `volkenAssets` 命令已删除。资产核对用清单 / manifest / 加载日志;手动落雷走面板“立刻劈一道”。
+- 然后执行 §5.4、§6、§7.4、§8.6 的声速延迟、音色、并发、暂停及视觉回归;不能由 GUID 齐全推断听感通过。
 
 ### 5.4 验证判据
 
@@ -227,7 +220,7 @@ delay = lerp(thunderDelay, strikeDist / c, thunderDistanceAttenuation)   // 现�
 
 **已被用户确认的决策**:
 
-1. 范围 = 代码 + 配置 + UI + 文案(✅ 已做),Unity 侧打包由用户操作(⏳ 待做,见 §5.3);
+1. 范围 = 代码 + 配置 + UI + 文案(✅ 已做),部署与听感仍需按更新后的 §5.3 核对;
 2. 阈值**做成一个新的雷的配置项** `thunderNearDistance`(✅ 默认 2000 m);
 3. `far-1` / `far-2` 重复素材 —— 用户已自行修正(现有 9 条互不相同)。
 

@@ -1,32 +1,10 @@
 # Volken —— SP2 天气系统移植计划(原生 BIRP)
 
-> 状态:⏸ **已转 proposals(暂停 / 转参考)** —— 原状态:🚧 实施中且已大幅缩减范围(2026-09-27 末);**当前活跃工作已拆出**:雨重做见 [`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md),雷声收尾见 [`thunder-realism-2026-09-28.md`](thunder-realism-2026-09-28.md)。本文档继续作为**决策沿革 + 素材/反编译底账**使用。
->
-> ** 当前实际范围:只做雷电。雨(阶段 2)与雾(阶段 3)的实现已整体移除,准备重做。**
-> 保留:阶段 0 骨架 + 阶段 1 雷电 + 天气状态机。移除详情与原因见 **§10.5**。
-> 因此下文 §5.2/§5.3/§6.1/§7 阶段 2/3 的内容是**原始计划**,不是当前代码状态。
->
-> ** 另一条作废路线:不移植 SP2 的天气标度/档位系统。**
-> SP2 的 `WeatherTypes`(Clear/Few/Rainy/Stormy… 全局预设,统一驱动云/雨/雾)已按用户决定**删除**;
-> Volken 改为**让玩家直接设置云/雨/雾/雷的逐项参数并序列化**。详见 **§10.6**。
->
-> ** 天气配置形态(以本行为准;§10.6 里记载的两个早期方案均已被取代)**:天气参数**按预设名独立存**,
-> 与云层预设**完全独立、互不干扰** —— `UserData/VolkenWeatherConfig/{行星}/{预设}.xml`;
-> 预设名记在 `<PlanetConfig WeatherConfigName>` 上,与 `CloudConfigName` 各不相干,
-> 可在天气面板**自由新建 / 保存 / 读取**(「另存为新配置」+「加载配置」下拉)。
-> 云与天气的**配对联动暂不做,留到后期**再考虑。
-> `PlanetConfigList.xml` 里那条 `<PlanetConfig>` **只记预设名**,不再内联 `<Weather>`
-> (旧内联格式在读取清单时会自动迁移成预设文件)。
-> §10.6 记的两个早期方案 ——「内联进 PlanetConfig」与更早的「多预设」—— 都保留作决策沿革,**均勿照做**。
->
-> 目标:把 SimplePlanes 2(SP2) 的天气系统(雨/雾/雷电)以**原生 BIRP** 方式移植进 Volken mod,与现有体积云管线合并。
-> 决策:已确认走**原生 BIRP 实现**(不引入 Enviro3),闪电纯 C#、雾写成 BIRP 全屏 pass、雨用 ParticleDomain 计算管线。
-> *(原始决策,雾/雨部分待重做时重新评估。)*
-
->
-> 实施进展、与原计划不符之处的实测更正,见 [§10 实施进展与计划更正](#10-实施进展与计划更正2026-09-27-实测)。
-
----
+> 状态:✅ 已归档(被后续方案取代的母计划与反编译 / 素材底账)
+> 日期:2026-09-27;归档核对:2026-10-08
+> 当前工作:[雨计划](../sp2-rain-particledomain-port-2026-09-28.md) §10、[雷声](thunder-realism-2026-09-28.md)、[解耦](weather-cloud-decoupling-2026-10-01.md) §8。
+> 适用范围:正文记录当时的调查和决策,保留 §10 的证据及编号供引用。“只剩雷电”、旧天气状态机、旧配置路径和 dev 命令均不代表当前项目。
+> 当前代码已有雨视觉 / 雨声 / 闪电 / 雷声,雾仍占位;云 / 天气预设独立,无全局天气值。现行约束与调试入口见 [会话上下文](../AGENT_CONTEXT.md)。
 
 ## 1. 背景与目标
 
@@ -245,7 +223,7 @@ Weather/
 | `GetPlayerVelocity()` | 联机 `FlightScenePlayer.Velocity` | `ICraftNode.SurfaceVelocity` / `ICraftFlightData.SurfaceVelocity`,或 `VolkenWeather.CameraVelocity` |
 | `GetWindVelocity()` | `WindManager.WindVelocity` | 见 ④ |
 | `IsCameraSubmerged()` | `WaterRenderer.ViewerHeightAboveWater < 0` | `CameraAltitudeAsl < 0 && PlanetData.HasWater`(`VolkenWeather.CameraSubmerged`) |
-| 云内淡化 `CameraCloudFadeVal` | Enviro 的 `bottom/topCloudsHeight` | Volken 主层 `layerHeights/layerSpreads/layerStrengths` 推出的 [云底, 云顶−400](`VolkenWeather.CameraCloudFade`) |
+| 云内淡化 `CameraCloudFadeVal` | Enviro 的 `bottom/topCloudsHeight` | Volken 主层 `layerHeights/layerSpreads/layerStrengths` 推出的 [云底, 云顶−400](../proposals/`VolkenWeather.CameraCloudFade`) |
 | `TimeOfDay`(黎明起雾) | Enviro 时间模块 | 由太阳方向与地表法线夹角现算局部太阳时(`VolkenWeather.ComputeLocalSolarHour`),见 §10.7 |
 
 **⑦ mod 自己的资源加载器没有 `LoadAudio`,也没有 `Load<T>`。** `Mod.Instance.ResourceLoader` 是 `IModResourceLoader`,只暴露 **`LoadAsset<T>(path)`**;`Load<T>(path, logErrors)` 与 `LoadAudio(path, logErrors)` 在游戏的 `IResourceLoader` 上,而 `LoadAudio` 内部是 `Resources.Load`(读不到 mod bundle 素材)。
@@ -570,7 +548,7 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 
 **保留的东西**:**雷电全链路** `LightningBolt.cs` / `LightningModule.cs` / `LightningBolt.shader` / 5 条雷声;**天气状态机**(`VolkenWeather` + `WeatherConfig` + `WeatherTypes`;其中 `WeatherTypes` 后由 ㊿ 整个删除,见 §10.6)。`WeatherTypes.RainTrigger` / `IsRaining` / `foggyDawn`(黎明起雾)**现在没有渲染消费者**,只是天气标度里的分档与状态机行为,保留是因为它们是天气系统的一部分且重做雨/雾时是最自然的触发判据(SP2 也是 2.25); 别误以为"改了 `foggyDawn` 会起雾" —— 雾的渲染已删除。
 
-**经验教训**:完整复盘已成文 [`../archive/weather-rain-fog-postmortem-2026-09-27.md`](../archive/weather-rain-fog-postmortem-2026-09-27.md)(4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线 / 重做起步清单),重做雨/雾前必读;三条通用结论:**观感由投影决定,不由世界空间几何决定**(细长 billboard 的"长"必须在屏幕平面内表达);**"长度/朝向"轴只由物理量决定,"宽度"轴由视线决定**;**每帧都会调到的路径里禁止出现"重置动画进度"的副作用**(重入守卫只能看目标值)。
+**经验教训**:完整复盘已成文 [`weather-rain-fog-postmortem-2026-09-27.md`](weather-rain-fog-postmortem-2026-09-27.md)(4 层根因 / 27 条铁律 / 8 条已证伪思路 / 量化基线 / 重做起步清单),重做雨/雾前必读;三条通用结论:**观感由投影决定,不由世界空间几何决定**(细长 billboard 的"长"必须在屏幕平面内表达);**"长度/朝向"轴只由物理量决定,"宽度"轴由视线决定**;**每帧都会调到的路径里禁止出现"重置动画进度"的副作用**(重入守卫只能看目标值)。
 
 ### 10.6 天气配置沿革:多预设 → 并入 PlanetConfig → 删除全局档位
 
@@ -590,7 +568,7 @@ lengthAxis = normalize( −camUp·upComp + camRight·rightComp + view·(fwdComp 
 - **㊾ 旧记录兼容:`<Weather>` 节点不存在时会怎样?** 改前实测(这台机器的 `UserData/VolkenConfig/PlanetConfigList.xml`,16 条记录):**没有 `<Weather>` 的记录是自闭合标签**(`… />`)而不是带子节点的元素;`XmlSerializer` 对缺失元素是"不碰"而非"置 null",但**不去赌** —— `PlanetConfigList.LoadFromFile` 里加了显式兜底(缺失就补一份默认 + `EnsureSections` + `ClampAll`),老玩家的清单不会读坏,只是天气部分是默认关闭。而且**实际会自愈**:进一次飞行场景,这份文件就会被重写成带 `<Weather>` 的形态,但**第一次进场景的那一瞬间**必须靠上面的兜底才不出 NRE。 **同一条思路现行仍适用**:读配置一律"缺就补默认 + 兜底",不依赖 `XmlSerializer` 的行为细节。编译验证:`dotnet build Volken.csproj -t:Rebuild` → **0 错误**;三语言文件用 `XmlReader` 严格校验**全部 well-formed**;面板/清单/状态机引用的本地化 key 在三份文件里全部存在。
 - **㊿ 把 §2/§5 里"移植 SP2 天气标度"这条路线正式作废。** SP2 是一套**全局预设系统**:`WeatherTypes`(Clear / Few / Broken / Overcast / Rainy / Stormy / Heavy / Foggy)是**中间层**(天气档位先被统一决定,再由它去驱动云层、雨、雾各自的预设与阈值,玩家调的是"今天什么天气");Volken 去掉这个中间层 —— **每个子系统(云层 / 雨 / 雾 / 雷)的参数全部是玩家直接设置并序列化的数值**,面板上就是一堆直接的滑块;"天气值"这个连续量一度仍然存在(驱动状态机随机与淡变、各子系统自己的触发阈值),但**不再映射到任何档位、也不驱动任何"预设"**;云层**完全由 `CloudConfig` 决定,天气不碰**(见 §10.8 ㉔)。
   删除:`Weather/WeatherTypes.cs`(**整个文件**,连带 `.meta` 与 `.csproj` 条目);档位常量 `Foggy`/`Clear`/`Few`/`Broken`/`Overcast`/`Rainy`/`Stormy`/`Heavy`(不再需要,默认值改字面量);派生阈值 `RainTrigger`/`HeavyRainThreshold`/`LightRainCeiling`/`LightningTrigger`/`FogCeiling` → 变成配置字段;`Classify` → `VolkenWeather.DescribeWeatherValue(float)`(纯显示,无逻辑);`VolkenWeather.IsRaining` 里的 `RainTrigger` 常量 → 读 `Config.rain.triggerValue`。新增:`VolkenWeatherConfig.DefaultWeatherValue`(**常量**)`0.25f`(**没有档位含义**,原 `WeatherTypes.Few`)、`OverallSection.maxWeatherValue` `3f`(随机天气目标的**取值上限**,下限恒 0;原为 SP2 硬编码 `[0,3]`)、`RainSection.triggerValue` `2.25f`(原 `WeatherTypes.RainTrigger`)、`LightningSection.stormValue` `2.5f`(原 `WeatherTypes.Stormy` / `LightningTrigger`)。
-   其中 `rain.triggerValue` / `lightning.stormValue` 与整个"天气值"标度**后来被整体删除**(各子系统只看自己的 `enabled` + 节奏参数;见 [`../weather-cloud-decoupling-2026-10-01.md`](../weather-cloud-decoupling-2026-10-01.md) §8)。保留 `VolkenWeather.DescribeWeatherValue` 时的判断依据是**它不驱动任何逻辑**(没有任何 `if (name == "Rainy")`),所以不构成"预设系统",只是个 `float → string` 的格式化函数; **不要在它上面加逻辑** —— 那一步就等于把 SP2 的中间层又建回来了。细节:`PickRandomWeather` 的"晴后必转云"偏置从硬编码 `0.4f` 改成**按上限的比例**(`ceiling * 0.133f`);面板「天气值(强制)」滑块范围从写死的 `[-1, 2.75]` 改成 `[-1, ceiling]`。编译验证:`dotnet build -t:Rebuild` → **0 错误**;全工程 `WeatherTypes` **只剩文档注释里的历史说明**,零代码引用。
+   其中 `rain.triggerValue` / `lightning.stormValue` 与整个"天气值"标度**后来被整体删除**(各子系统只看自己的 `enabled` + 节奏参数;见 [`weather-cloud-decoupling-2026-10-01.md`](weather-cloud-decoupling-2026-10-01.md) §8)。保留 `VolkenWeather.DescribeWeatherValue` 时的判断依据是**它不驱动任何逻辑**(没有任何 `if (name == "Rainy")`),所以不构成"预设系统",只是个 `float → string` 的格式化函数; **不要在它上面加逻辑** —— 那一步就等于把 SP2 的中间层又建回来了。细节:`PickRandomWeather` 的"晴后必转云"偏置从硬编码 `0.4f` 改成**按上限的比例**(`ceiling * 0.133f`);面板「天气值(强制)」滑块范围从写死的 `[-1, 2.75]` 改成 `[-1, ceiling]`。编译验证:`dotnet build -t:Rebuild` → **0 错误**;全工程 `WeatherTypes` **只剩文档注释里的历史说明**,零代码引用。
 
 ### 10.7 待真机确认的开放问题(原 §10.3)
 

@@ -296,7 +296,7 @@ namespace Volken.Weather
             UpdateLightning();
         }
 
-        // 【不做联动】天气不修改云的任何参数。要做的话见 docs/weather-cloud-decoupling-2026-10-01.md §3.6。
+        // 【不做联动】天气不修改云的任何参数。要做的话见 docs/archive/weather-cloud-decoupling-2026-10-01.md §3.6。
 
         /// <summary>按当前配置/行星起停雷电(只管总开关 + 行星启停;雷暴节奏由 <see cref="LightningModule"/> 自己管)。</summary>
         private void UpdateLightning()

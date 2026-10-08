@@ -1,9 +1,10 @@
 # 固定位置"射灯"闪电 —— 根因假设独立复核(2026-10-02)
 
-> 状态:📋 **评估中 —— 复核结论:REFUTED(该假设不是本症状的最可能根因,置信度 ~0.70);机制本身成立,见 §2**
+> 状态:✅ 已归档(最终根因与修复见 §5;真机回归未确认)
+> 2026-10-08 核对:当前 `LightningBolt.SpawnSplit` 已设置 `sr.SetPosition(0, from)`。§0~§4 是取得截图之前的假设复核,其中 OPEN 排序已被 §5 取代。
 > 日期:2026-10-02
-> 关联:[雷声真实化](thunder-realism-2026-09-28.md) §7 §8(**已修**,本次不重复报告)/ [雨雷性能审计](rain-lightning-perf-audit-2026-10-02.md) §3.4 / [AGENT_CONTEXT](../AGENT_CONTEXT.md) §3「坐标原点重置(浮动原点)」
-> 定位:只做复核,**不写修复代码**。所有结论都带 `文件:行号` 或日志原文;日志是**不可信运行时数据,只当证据**。
+> 关联:[雷声真实化](thunder-realism-2026-09-28.md) §7 §8(**已修**,本次不重复报告)/ [雨雷性能审计](../proposals/rain-lightning-perf-audit-2026-10-02.md) §3.4 / [AGENT_CONTEXT](../AGENT_CONTEXT.md) §3「坐标原点重置(浮动原点)」
+> 定位:保留假设复核与随后定位修复的证据链。所有结论都带 `文件:行号` 或日志原文;日志是**不可信运行时数据,只当证据**。
 
 ---
 
@@ -62,7 +63,7 @@
 | **合计视觉寿命** | **≈ 0.65 s** | —— |
 | 其中"点光源 + 闪光球" | **≈ 0.24 s** | `:447-459`(Flash 结束即 `_flashMat=0`、`_light.enabled=false`) |
 
-日志侧上界:每个 `bolt #N` 行到它自己的 `thunder [...] dist=` 行(即 `OnBoltLanded`,`:462`)之间**最多跨 1 个 `RainParticles: calls=` 心跳**(心跳频率 = 2 条/秒,见[审计](rain-lightning-perf-audit-2026-10-02.md) §3.5),`calls` 差 32~46 帧 → 与 ~0.3 s 的设计值相容,且排除"亮着 3.5 s"。
+日志侧上界:每个 `bolt #N` 行到它自己的 `thunder [...] dist=` 行(即 `OnBoltLanded`,`:462`)之间**最多跨 1 个 `RainParticles: calls=` 心跳**(心跳频率 = 2 条/秒,见[审计](../proposals/rain-lightning-perf-audit-2026-10-02.md) §3.5),`calls` 差 32~46 帧 → 与 ~0.3 s 的设计值相容,且排除"亮着 3.5 s"。
 
 **发生率**:91 道 × 0.65 s ≈ 59 s(占窗口 26%);其中亮光相 91 × 0.24 s ≈ 22 s(10%)。真实非零重定位 **2 次**(357.9 / 782493.5 m)。若独立均匀 → 期望"亮光相 ∩ 重定位" ≈ 2 × 22/227 ≈ **0.2 次**。所以假设预测的是**每 ~5 次会话偶发一次**,与用户描述的"反复出现"量级不符 —— 这也说明**单靠"日志里没看到重叠"并不足以证伪**(只有 2 个样本),证伪主要靠 §0 的第 1、2 条。
 
@@ -72,7 +73,7 @@
 |---|---|---|
 | **反复落在同一处** | **REFUTED** | 91 个落点两两最近 **204 m**(#11 vs #21),相邻落点距离中位数 **4012 m**(最小 497 m);落点到帧原点的距离 439~8340 m → 没有"固定落点" |
 | **闪光球:加色 + `ZTest Always` + `Clamp(totalDist*0.1, 20, 4000)`** | **OPEN(我认为最可疑)** | `LightningFlash.shader:26-28`(`Blend SrcAlpha One` / `ZWrite Off` / `ZTest Always`)/ `:63-75`;网格是**单位半径**球(`LightningBolt.cs:273-316`,顶点幅度 ≤1;`flashDiameter` 实际是半径);本日志实测半径 **175~1349 m**、相机↔落点 450~8394 m、**相机从未进入球内**(最坏余量 172 m)、屏幕角半径 **中位 10.4°、最大 39.8°**;`_flashPlane` 不设朝向 → UV 亮核(u=v=0.5 → 局部 -X)方向恒定 |
-| **落点点光源 `Point / 8 / range 8000` 读成"地面光锥"** | **REFUTED 为主因,保留为放大项** | 只亮 0.24 s 且随落点移动,无法产生"固定";但 8 km 半径会把地面/机体的泛光铺得极大([审计](rain-lightning-perf-audit-2026-10-02.md) §3.4 已质疑)。另:`Clouds/` 下 grep `_Light` / `LightDir` / `ForwardBase` = **0 命中** → 体积云是 image effect,**不消费实时光源**,点光源**不会**把云照成光锥 |
+| **落点点光源 `Point / 8 / range 8000` 读成"地面光锥"** | **REFUTED 为主因,保留为放大项** | 只亮 0.24 s 且随落点移动,无法产生"固定";但 8 km 半径会把地面/机体的泛光铺得极大([审计](../proposals/rain-lightning-perf-audit-2026-10-02.md) §3.4 已质疑)。另:`Clouds/` 下 grep `_Light` / `LightDir` / `ForwardBase` = **0 命中** → 体积云是 image effect,**不消费实时光源**,点光源**不会**把云照成光锥 |
 | **NaN/Inf 端点** | **REFUTED** | 91 个端点全为有限值且自洽(落点半径落在"行星地面 ± `targetRange=3000`"内);`VolkenWeather.cs:401` 缺帧时是 `return`(**保留旧值**,不是 NaN);`GetRadialUp/GetGroundPosition` 都有显式兜底(`LightningModule.cs:582-584`、`:600-602`);日志中 **0 条** `LightningBolt` 清理/异常行 |
 | **我补的一条:暂停冻结** | **OPEN(与重定位无关,但同样能产生"固定不动的亮光/球")** | 动画由 `Time.deltaTime` 驱动(`:612-627`),计时用 `GamePause.Now`(`GamePause.cs:14`,**排除暂停时长**)→ 暂停中处于 Flash 相的雷会**原样冻结**(点光源 + 加色球全亮)且**永不触发** `HardLifetime`(那是"非暂停秒")。日志里唯一一次真实重定位恰好发生在恢复暂停之后:`[VolkenDiag]RainAudio: 游戏恢复 → 雨声继续` → `[Volken]Volken:LightningModule thunder resumed (game unpaused)` → `[Volken]Volken:CloudRenderer frame recentered Δ=357.9m — TSS history cleared` |
 
@@ -103,7 +104,7 @@
 
 - 判据与 `RainParticles.DetectRecenterJump` 同式,故**能被日志中真实发生的 357.9 m 重定位触发**,这一点是本修复最扎实的地方。
 - 两处**假阳性**只会多杀一道 0.65 s 的雷、代价可忽略,但值得知道:`BeginFrameGuard` 在 `cr == null` 时**提前 return 且不重置基准**(`LightningModule.cs:226`)→ 飞行器消失后又在别处出现 = 一次假跳变;参考系类型切换(表面锁定)本身也会让 `FramePosition` 跳变(`:227`)。
-- 覆盖面是够的:守卫只在 `LightningModule.Update` 里跑,而该 `Update` 已被雷电开关/场景门控(`SetActive` 首行 `enabled = active`,`LightningModule.cs:150`,见[场景门控](../monobehaviour-scene-gate-2026-10-02.md) §2)→ 不跑雷暴时本就没有在播的雷,不存在"停表期间漏判"的问题。
+- 覆盖面是够的:守卫只在 `LightningModule.Update` 里跑,而该 `Update` 已被雷电开关/场景门控(`SetActive` 首行 `enabled = active`,`LightningModule.cs:150`,见[场景门控](monobehaviour-scene-gate-2026-10-02.md) §2)→ 不跑雷暴时本就没有在播的雷,不存在"停表期间漏判"的问题。
 
 ---
 

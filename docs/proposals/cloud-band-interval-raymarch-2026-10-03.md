@@ -1,6 +1,6 @@
 # Volken2 提案 —— 解析云带区间求交,把 raymarch 步进预算集中在云带内
 
-> 状态:📋 提案(已论证,待拍板;未动手)
+> 状态:📋 评估中(已论证,待拍板;未动手)
 > 日期:2026-10-03
 > 关联:[`../README.md`](../README.md) §四之三(默认关偏好)· [`cloud-optimization-roadmap-2026-08-28.md`](cloud-optimization-roadmap-2026-08-28.md) #8「层壳相交区间排序」
 > 参考:theplatecrafter/Ringworld-Clouds-KSP(公开仓库)`RingCloudVolume.cginc`(`cloudShellRoots` / `cloudIntervals`)

@@ -2,7 +2,7 @@
 
 > 状态:📋 规划 —— **未拍板、未排期**。A 组按用户决定**不做**(仅留档);D 组待选值/待拍板。
 > 日期:2026-10-02
-> 关联:[场景门控 + 每帧回调审计](../monobehaviour-scene-gate-2026-10-02.md)(已落地部分;其 §3 的剩余项本文件不重复)· [云优化路线图](cloud-optimization-roadmap-2026-08-28.md)(其 §3 首选 #1 的现状描述已过时,见 §5)· [雨/雷性能审计](rain-lightning-perf-audit-2026-10-02.md)(GPU 侧 §3 的原始条目)
+> 关联:[场景门控 + 每帧回调审计](../archive/monobehaviour-scene-gate-2026-10-02.md)(已落地部分;其 §3 的剩余项本文件不重复)· [云优化路线图](cloud-optimization-roadmap-2026-08-28.md)(其 §3 首选 #1 已同步现状,见 §5)· [雨/雷性能审计](rain-lightning-perf-audit-2026-10-02.md)(GPU 侧 §3 的原始条目)
 > 定位:把"还有哪些高开销"分成 **A 拖 UI 尖峰 / B 每帧 CPU / C 一次性尖峰 / D GPU 大头** 四组落到可执行条目,并给出 **D 各方案的代价**(改动面 / 是否动 shader 或 compute / 是否重打 asset bundle / 真机验证点)。分析口径 = 源码追踪 + 量级估算,无 profiler 捕获。
 
 ---
@@ -37,7 +37,7 @@
 | B7 | `RainParticles.cs:712-719` | `OnPreCull` 在 `Enabled == false` 时仍每帧一次调用,并每 5 s 一条 always-on Diag | 新发现 |
 | B8 | `RainParticles.cs:925-1022` | 每 10 s 一次 `RequestReadbacks`:3 次 `AsyncGPUReadback` + 5~6 条 always-on Diag | 新发现(与审计 §3.5 同源) |
 | B9 | `VolkenUserInterface.cs:55-66` `:84-87` | 每秒一次 `Camera.allCameras`(数组分配)+ 每相机 5 次 `GetComponent` | 新发现(量级小) |
-| B10 | `VolkenWeather.UpdateCameraMetrics` | `IsActive == false` 时照跑完整 craft 链 + 三角函数,且与 `RainParticles.SampleCraft` 重复 | **已登记**,见[场景门控](../monobehaviour-scene-gate-2026-10-02.md) §3 / 审计 §3.6 |
+| B10 | `VolkenWeather.UpdateCameraMetrics` | `IsActive == false` 时照跑完整 craft 链 + 三角函数,且与 `RainParticles.SampleCraft` 重复 | **已登记**,见[场景门控](../archive/monobehaviour-scene-gate-2026-10-02.md) §3 / 审计 §3.6 |
 
 ## 3. C 组 · 一次性尖峰(进场 / 启动)
 
@@ -82,7 +82,7 @@
 
 ## 5. 对已有文档的更正
 
-- [云优化路线图](cloud-optimization-roadmap-2026-08-28.md) §0/§3/§4 #1 的两条现状描述**已过时**:①默认值不是 50 而是 `CreateDefault()` 的 **25**(`CloudConfig.cs:309`;另一份 `CreateAnotherDefault()` 是 5,`CloudConfig.cs:373`);②"光步进用视图主步长、未解耦"不成立 —— `lightStepSize` 已是独立 uniform。
+- [云优化路线图](cloud-optimization-roadmap-2026-08-28.md) §0/§3/§4 #1 的两条旧描述已在 2026-10-08 同步更正:①默认值不是 50 而是 `CreateDefault()` 的 **25**(`CloudConfig.cs:309`;另一份 `CreateAnotherDefault()` 是 5,`CloudConfig.cs:373`);②"光步进用视图主步长、未解耦"不成立 —— `lightStepSize` 已是独立 uniform。
 - [雨/雷性能审计](rain-lightning-perf-audit-2026-10-02.md) §3.1/§3.2/§3.4 的条目本身仍然准确,本文件只补"代价"这一维。
 
 ## 6. 建议顺序与待拍板

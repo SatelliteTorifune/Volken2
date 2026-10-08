@@ -1,6 +1,7 @@
 # Volken2 体积云优化点分析 —— 借鉴 VolRe(blackrack KSP EVE)与 KSAre(KSA)
 
-> 状态:📋 优化路线图(**已转 proposals,未排期**;分析完成,T0 已部分被方案 C / 轨道云消化,Light Volume/PlaceRays 为长期项)
+> 状态:📋 规划(部分已由 TSS / 轨道云实现,其余未排期)
+> 核对:2026-10-08 更新 #1 光照与 #2 轨道分派现状;其它排名保留原分析口径,收益为估算,实施前须重新核对源码和 profiler。
 > 分析日期:2026-08-28
 > 关联:[`../sp2-rain-particledomain-port-2026-09-28.md`](../sp2-rain-particledomain-port-2026-09-28.md)(当前唯一活跃方案;#2 距离淡出、#8 层壳相交排序与其雨渲染同源)
 > 范围:
@@ -13,7 +14,7 @@
 ## 0. 结论速览
 
 Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时序上采样)已经与 KSA 对齐。
-剩余可借鉴点按收益排序集中在:**光照解耦、距离淡出、自适应步长、噪声 mipmap、密度 LUT、Light Volume、PlaceRays**。
+剩余候选集中在光样本数与旧配置迁移、自适应步长、噪声 mipmap、密度 LUT、Light Volume、PlaceRays。独立光步长和按海拔切换轨道云已有实现。
 
 ---
 
@@ -24,8 +25,8 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 
 | 排名 | 优化项 | FPS 收益 | 额外性能开销 | 移植难度 | 一句话理由 |
 |---|---|---|---|---|---|
-| 1 | 光照解耦 + 光照样本数降到 ~6 | ★★★★★ | 近零(反而大降) | 极低 | 当前 numLightSamplePoints=50 且光步进用视图主步长,是最大热点 |
-| 2 | 远距离淡出 / LOD 分级(激活已注释字段) | ★★★★★ | 近零(高空直接跳过 raymarch) | 低~中 | 字段已在 CloudConfig 里预留,只是未接线 |
+| 1 | 光照样本数与配置迁移 | ★★★★★ | 近零(反而大降) | 极低 | 独立光步长已实现;CreateDefault 为 25,剩余降低样本数与旧配置迁移 |
+| 2 | 远距离淡出 / LOD 分级 | 已部分实现 | 轨道云过渡带双渲染 | 待评估 | `useOrbitClouds` 已按海拔分派;不恢复已删阈值字段 |
 | 3 | 空域自适应步长连续化 | ★★★★ | 近零 | 低 | 已有离散 2 档雏形,升级为 base/max/factor 连续模型 |
 | 4 | 3D 噪声 mipmap + 距离 LOD | ★★★☆(远处明显) | 一次性生成 mip | 低~中 | 远处云质量 + 带宽同时改善 |
 | 5 | 密度/层形状 LUT 烘焙 | ★★★ | 一次性烘焙(启动时) | 低~中 | 砍掉每样本 4 层 exp + 部分纹理采样 |
@@ -42,10 +43,9 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 
 ## 2. 分档
 
-### T0 — 立即做(零风险零成本,直接掉 FPS 大头)
-1. **光照解耦**(#1):numLightSamplePoints 默认 50 → 6,光步进用独立粗步长。
-2. **距离淡出**(#2):把 CloudConfig 里被注释的
-   lowAltitudeThreshold / midAltitudeThreshold / highAltitudeThreshold / minDistanceFactor / maxStepSizeMultiplier / minLightSamplesFactor 接上。
+### T0 — 优先评估(未排期)
+1. **光样本数**(#1):选默认值并评估旧配置迁移;独立光步长已完成。
+2. **距离分派**(#2):先复用现有轨道云方案做性能对照,再决定是否还需要额外 LOD;旧 low/mid/highAltitudeThreshold 已删除。
 
 ### T1 — 高性价比(1~2 个文件内可完成)
 3. 自适应步长连续化(#3)
@@ -56,33 +56,23 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 6. HDR 颜色(#6)、MV 修复(#9)、非平铺/curl/flowmap(#13)
 
 ### T3 — 长期/重工程
-7. Light Volume(#11,与 #1 同一热点:#1 立即止血,#11 彻底根治)
+7. Light Volume(#11,预计算光照体积与当前逐样本光步进的取舍)
 8. PlaceRays(#10,下一个「方案 D」级别,质量型)
 
 ---
 
-## 3. 立竿见影推荐(视觉不明显降级 + 帧数明显提升)
+## 3. 优先评估项与验证代价
 
-### 首选:#1 光照解耦 + 光照样本数降到 ~6
+### 首选:#1 光照样本数与配置迁移
 
-- **为什么视觉几乎不变**:云的透光是漫射介质,光步进数量只影响云内部的软阴影/二次散射精细度;
-  主视图的**密度步进完全不动**,所以云的轮廓、覆盖、形状、细节全部保持不变。
-  6 步光照在 VolRe/KSA 都是生产默认值,证明视觉上可接受。
-- **为什么帧数立竿见影**:当前每次密度命中都沿 -lightDir 用**视图主步长**步进,硬上限 50;
-  一个默认配置就是 50 样本,是 VolRe/KSA 典型值(6)的 8 倍以上。
-  这是整条 raymarch 里最贵的部分,砍到 6 直接大幅降低每样本成本。
-- **改动点**:
-  - Clouds.shader 的 SampleLightRay:步长与 stepSize 解耦,新增 lightStepSize / lightMarchDistance,样本数取 min(numLightSamplePoints, ...)。
-  - CloudConfig.cs:CreateDefault() 里 numLightSamplePoints = 50 → 6。
-  -  **2026-10-02 更正**:上面**第一条已在位** —— `Clouds.shader:290-291` / `:567-568` 已是独立步长 + 按壳内长度自适应样本数,`CloudLayer.cs:85-87` 负责上传;`CreateDefault()` 的默认值是 **25**(不是 50)。本条只剩「改默认值 + 老配置迁移」,代价见 [hotpath 清单](hotpath-optimization-backlog-2026-10-02.md) §4.2 / §5。
+- **2026-10-08 源码核对**:`Clouds.shader` 已用独立 `lightStepSize`,样本数按壳内长度自适应;`CloudConfig.CreateDefault()` 为 **25**,`CreateAnotherDefault()` 为 **5**。不再重复实施光步长解耦。
+- 剩余提案:默认值采用 6 或 12,以及是否迁移旧 XML;代价见 [热点清单](hotpath-optimization-backlog-2026-10-02.md) §4.2 / §5。
+- 调整仅影响光照步进预算,仍须对比内部阴影、散射和 GPU 耗时;收益是待实测假设,不能保证画面不变。
 
 ### 次选:#2 远距离淡出 / LOD 分级
 
-- **为什么视觉可接受**:高空看行星时云体积占比小,淡出或直接关闭 raymarch,视觉损失很小。
-- **为什么帧数明显**:高空直接跳过整段 raymarch(而不是每帧白跑)。
-- **改动点**:激活 CloudConfig 已预留的 LOD 字段,并在 CloudRenderer.SetLayerDynamicProperties
-  或 OnRenderImage 里按相机高度(参考 VolRe checkVisible 的 scaledFadeStartAltitude/EndAltitude)
-  对 stepSize / numLightSamplePoints 分级缩放,超过上限直接禁用层。
+- 当前 `useOrbitClouds` 已通过 `orbitTransitionStartAltitude/EndAltitude` 分派体积 / 轨道云,高于过渡带可跳过体积 raymarch;见 [轨道云记录](../archive/orbit-clouds-crossfade-2026-08-27.md)。
+- 若仍有性能需求,先测关闭 / 开启轨道云与过渡带的耗时,再评估额外步长分级;不直接照旧方案恢复废弃字段。
 
 ### 第三:#3 空域自适应步长连续化
 
@@ -99,12 +89,12 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 ### #1 光照解耦(VolRe lightMarchSteps / KSA LightSamples=6)
 - VolRe 把光照拆成独立参数:lightMarchSteps(典型 6)+ stepSizeLight = LightMarchDistance / LightMarchSteps(粗步长)。
 - KSA RaymarchingReference.cs 默认 LightSamples = 6,LightDistance 独立于主步长。
-- Volken2 现状:光步进用视图主步长 stepSize,硬上限 numLightSamplePoints(默认 50 / 另一配置 5)。
+- Volken2 现状:独立 `lightStepSize`,壳内长度自适应采样;默认配置 25 / 另一配置 5,详见 §3。
 
 ### #2 距离淡出 / LOD
 - VolRe CloudsRaymarchedVolume.checkVisible:scaledFadeStartAltitude/EndAltitude,超高度直接 SetActive(false) + 淡出。
 - KSA RenderWithCompute:高于 OrbitTransitionStartAltitude 只画 2D 云层,低于 OrbitTransitionEndAltitude 才跑体积云。
-- Volken2 现状:CloudConfig 已预留 LOD 字段,但 CreateDefault/Clone/CopyFrom 里全部注释,等于未接线。
+- Volken2 现状:`useOrbitClouds` 与过渡高度已接入默认值、Clone、CopyFrom 和渲染分派;旧高度阈值字段已删除。
 
 ### #3 自适应步长(VolRe/KSA 三参数模型)
 - VolRe CloudsRaymarchedVolume.ApplyShaderParams:baseStepSize / maxStepSize / adaptiveStepSizeFactor。
@@ -161,8 +151,8 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 
 ## 5. 实施顺序
 
-1. 光照解耦 + numLightSamplePoints 默认 6
-2. 距离淡出 + LOD 字段接线
+1. 选择 numLightSamplePoints 默认值并评估旧配置迁移(光步长解耦已完成)
+2. 对照现有轨道云分派,评估是否还需要额外 LOD
 3. 自适应步长连续化
 4. 3D 噪声 mipmap + 距离 LOD
 5. 密度/层形状 LUT 烘焙

@@ -10,7 +10,7 @@ namespace Volken.Weather
     /// 必须由 <see cref="Update"/> 驱动、**不能用协程**:层级 inactive 时 Unity 会静默拒绝启动协程(只打一行警告),
     /// 销毁就再没有别的触发路径 → 闪电永久残留;分叉用整道雷共享的一份材质拷贝(<see cref="SplitMaterial"/>),
     /// **不能**直接用主干材质 —— 主干收尾的 <c>Destroy(_boltMat)</c> 会让还在渲染的分叉变成品红/淡紫。
-    /// 残留/紫红根因与打包清单见 docs/proposals/thunder-realism-2026-09-28.md §7 §8。
+    /// 残留/紫红根因与打包清单见 docs/archive/thunder-realism-2026-09-28.md §7 §8。
     public class LightningBolt : MonoBehaviour
     {
         public Camera targetCamera;   // 每道闪电各持一个:改成 static 会在多相机(PIP)下互相覆盖,闪光朝向会串

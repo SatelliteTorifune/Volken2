@@ -1,8 +1,9 @@
 # MonoBehaviour 场景门控 + 每帧热点审计(2026-10-02)
 
-> 状态:🚧 实施中 —— C# 侧已落地(`dotnet build Volken.csproj` = 0 错误),**未做 Unity 真机 / 编辑器验收**。
+> 状态:✅ 已归档(实现已落地;真机回归未确认)
+> 2026-10-08 核对:已对照当前源码确认实现存在;历史编译结果不等于本次复验。待验收见 §4 及 [待办索引](../README.md#四之三待办清单backlog)。
 > 日期:2026-10-02
-> 关联:[雨/雷性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md)(其 §3.6 的 craft 链重复、§3.2 分叉合批)· [天气↔云解耦](weather-cloud-decoupling-2026-10-01.md)(行星生命周期只归 `VolkenClouds`)
+> 关联:[雨/雷性能审计](../proposals/rain-lightning-perf-audit-2026-10-02.md)(其 §3.6 的 craft 链重复、§3.2 分叉合批)· [天气↔云解耦](weather-cloud-decoupling-2026-10-01.md)(行星生命周期只归 `VolkenClouds`)
 > 定位:回答"这些 `Update` 是不是只在 FlightScene 跑",把**确实跨场景空转**的几处按场景信号关掉,并清掉渲染路径里每帧的 LINQ 分配。
 
 ---
@@ -16,7 +17,7 @@
 | 相机 / 场景物体(随 Flight 场景卸载销毁) | `CloudRenderer`、`FarCameraScript`、`RainParticles`(面板开关才挂)、`LightningBolt` + `SelfDestruct` | ❌ 不跑 |
 | `DontDestroyOnLoad` 常驻物体 · **本次已门控** | `WeatherTicker`、`RainAudio`、`LightningModule`(懒建后常驻)、`VolkenUserInterface` | ✅ 改成不跑 |
 | `DontDestroyOnLoad` 常驻物体 · 刻意保留 | `ProfilerController`(每帧只读一个设置项,做双向同步)、`BootstrapRunner`(注册完即自毁) | 跑,量可忽略 |
-| 编辑器 / 控制台专用 | `RainPreview`(仅编辑器)、`RainAxisProbe`、`NoiseVisualizer` / `RaymarchDebug`(全工程零实例化) | 玩家不受影响 |
+| 编辑器 / 控制台专用 | `RainPreview`(仅编辑器)、`NoiseVisualizer` / `RaymarchDebug`(全工程零实例化) | 玩家不受影响 |
 
 量级:常驻那几项合计 **<1 µs/帧(估算)** —— 门控是"卫生",不是帧率;真正吃帧的是飞行内两条,已按 §2 的后两行改掉,其余剩余项见 §3。
 
@@ -47,11 +48,11 @@
 
 ## 3. 未做 / 剩余项
 
-- **`LightningBolt` 分叉合批**(最多 549 个 `LineRenderer` + 各自 `Update`/`LateUpdate`)—— 收益最高、风险也最高,按 [性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) §3.2 继续挂起。
+- **`LightningBolt` 分叉合批**(最多 549 个 `LineRenderer` + 各自 `Update`/`LateUpdate`)—— 收益最高、风险也最高,按 [性能审计](../proposals/rain-lightning-perf-audit-2026-10-02.md) §3.2 继续挂起。
 - **`VolkenWeather.UpdateCameraMetrics` 的按需门控**(`IsActive == false` 时也在跑完整 craft 链 + 三角函数)—— 要保留"面板打开时的实时读数"就得先有"面板可见"这个信号,现在没有;见审计 §3.6。
 - **`CloudRenderer.OnRenderImage` 里每层 `new RenderBuffer[3]`** —— 每帧一个 3 元素数组,量小;没动是因为改法要在 GPU 路径上验证(不能离线判定 `Graphics.SetRenderTarget` 是否保留该数组引用)。
 - **`ProfilerController.Update`**(常驻,每帧只读 `ModSettings.ShowProfiler` 做双向同步)与 **`BootstrapRunner`**(30 帧后自毁)—— 量可忽略,**刻意没动**。
-- **死代码**:`Clouds/DepthCapture.cs`(全工程零 `AddComponent` / `Init` 调用)、`PlanetRing/PlanetRingsZWriteFix.cs` 与 `HarmonyPatches/PlanetRingsShaderPatch.cs`(`Postfix` 首行 `return` 且 `Apply` 在 `Mod.cs` 里被注释)。**只登记未删** —— 见 [索引 §四之三](README.md#四之三待办清单backlog)。
+- **死代码**:`Clouds/DepthCapture.cs`(全工程零 `AddComponent` / `Init` 调用)、`PlanetRing/PlanetRingsZWriteFix.cs` 与 `HarmonyPatches/PlanetRingsShaderPatch.cs`(`Postfix` 首行 `return` 且 `Apply` 在 `Mod.cs` 里被注释)。**只登记未删** —— 见 [索引 §四之三](../README.md#四之三待办清单backlog)。
 
 ## 4. 验收判据
 

@@ -10,11 +10,11 @@ namespace Volken.Weather
 {
     
     // --------------------------------------------------------------------------------------------
-    //  天气预设(一份预设 = 一个文件;5 个 Section = XML 节点 = 面板分组)。
-    //  【兼容约定】新增字段初始值必须是"关闭/恒等";已移除的字段保留占位而非删除(删字段会让旧 XML 的同名节点被静默丢弃)。
+    //  天气预设(一份预设 = 一个文件;总体、雨、雾、雷四个 XML 节点)。
+    //  新增效果默认关闭或恒等;旧 XML 中已移除的字段由 XmlSerializer 忽略。
     // --------------------------------------------------------------------------------------------
 
-    /// <summary>一套天气预设(总体 / 云联动遗留占位 / 雨 / 雾 / 雷)。存于 <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> ——
+    /// <summary>一套天气预设(总体 / 雨 / 雾 / 雷)。存于 <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> ——
     /// **独立目录**,与云的 <c>UserData/VolkenConfig/</c> 分开(否则同名预设互相覆盖);两边预设名也互相独立。</summary>
     [Serializable]
     public class VolkenWeatherConfig
@@ -31,7 +31,7 @@ namespace Volken.Weather
             }
         }
 
-        // ③ 雨(占位)
+        // ③ 雨
 
         /// <summary>雨子系统参数;密度/域半径的标定基线与踩坑见 <c>docs/archive/sp2-rain-particledomain-port-2026-09-28.md</c> 与 <c>docs/archive/weather-rain-fog-postmortem-2026-09-27.md</c>。</summary>
         [Serializable]
@@ -144,22 +144,36 @@ namespace Volken.Weather
             }
         }
 
-        // ④ 雾(占位)
+        // ④ 雾
 
-        /// <summary>雾子系统参数(占位,无消费者);重做时深度取本相机 <c>CloudRenderer.LinearSceneDepth</c>。</summary>
+        /// <summary>独立的径向高度雾与流动体积雾;密度单位为每米。</summary>
         [Serializable]
         public class FogSection
         {
             public bool enabled = false;
+            public bool heightEnabled = true;
+            public bool volumetricEnabled = false;
+            public float volumeDensity = 0f;
+            public float maxDistance = 30000f;
+            public int quality = 1;
+            public float noiseScale = 800f;
+            public float coverage = 0.65f;
+            public float contrast = 1.5f;
+            public float windSpeed = 5f;
+            public float windDirection = 45f;
+            public float anisotropy = 0.35f;
+            public float colorR = 0.72f, colorG = 0.78f, colorB = 0.85f;
+            public bool diagnostics = true;
+            public int debugMode = 0;
 
-            /// <summary>黎明起雾:在日出/日落前后(按 <c>VolkenWeather.LocalSolarHour</c>)自动抬升雾密度。**局限**:分不出日出侧与日落侧,两侧对等触发。</summary>
+            /// <summary>按太阳方向与本相机径向上方的夹角增强晨昏密度,日出日落两侧对等,最多两倍。</summary>
             public bool dawnFog = false;
 
             public float baseHeight = 0f;   // 米,相对行星半径
 
-            public float height = 800f;   // 雾层厚度(米)
+            public float height = 800f;   // 米;实际指数尺度 H = height / heightFalloff
 
-            public float density = 0f;   // 1/米 量级;SP2 预设里是 0.01 这一档
+            public float density = 0f;   // 薄雾在基准高度以下的消光系数,单位 1/米
 
             public float heightFalloff = 0.5f;   // 越大雾越贴着地面
 
@@ -167,12 +181,26 @@ namespace Volken.Weather
 
             public float startDistance = 0f;   // 相机前方多远开始起雾(米)
 
-            public float colorBlend = 0.5f;   // 雾色向天空色混合的比例
+            public float colorBlend = 0.5f;   // 雾色受环境光色相影响的比例
 
             public void CopyFrom(FogSection s)
             {
                 if (s == null) return;
                 enabled = s.enabled;
+                heightEnabled = s.heightEnabled;
+                volumetricEnabled = s.volumetricEnabled;
+                volumeDensity = s.volumeDensity;
+                maxDistance = s.maxDistance;
+                quality = s.quality;
+                noiseScale = s.noiseScale;
+                coverage = s.coverage;
+                contrast = s.contrast;
+                windSpeed = s.windSpeed;
+                windDirection = s.windDirection;
+                anisotropy = s.anisotropy;
+                colorR = s.colorR; colorG = s.colorG; colorB = s.colorB;
+                diagnostics = s.diagnostics;
+                debugMode = s.debugMode;
                 dawnFog = s.dawnFog;
                 baseHeight = s.baseHeight;
                 height = s.height;
@@ -317,7 +345,7 @@ namespace Volken.Weather
         {
             EnsureSections();
 
-            // ---- ③ 雨(占位) ----
+            // ---- ③ 雨 ----
             rain.amount = Mathf.Clamp(rain.amount, 0f, 400000f);
             rain.domainRadius = Mathf.Clamp(rain.domainRadius, 10f, 400f);
             rain.fallSpeed = Mathf.Clamp(rain.fallSpeed, 0.1f, 200f);
@@ -344,13 +372,27 @@ namespace Volken.Weather
             rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
             rain.underwaterFade = Mathf.Clamp(rain.underwaterFade, 0.1f, 50f);
 
-            // ---- ④ 雾(占位) ----
-            fog.height = Mathf.Clamp(fog.height, 1f, 20000f);
-            fog.density = Mathf.Clamp(fog.density, 0f, 1f);
-            fog.heightFalloff = Mathf.Clamp(fog.heightFalloff, 0.001f, 10f);
-            fog.maxOpacity = Mathf.Clamp01(fog.maxOpacity);
-            fog.startDistance = Mathf.Max(0f, fog.startDistance);
-            fog.colorBlend = Mathf.Clamp01(fog.colorBlend);
+            // ---- ④ 雾 ----
+            fog.baseHeight = FogFinite(fog.baseHeight, 0f, -500f, 50000f);
+            fog.height = FogFinite(fog.height, 800f, 1f, 20000f);
+            fog.density = FogFinite(fog.density, 0f, 0f, 1f);
+            fog.volumeDensity = FogFinite(fog.volumeDensity, 0f, 0f, 1f);
+            fog.heightFalloff = FogFinite(fog.heightFalloff, 0.5f, 0.001f, 10f);
+            fog.maxOpacity = FogFinite(fog.maxOpacity, 1f, 0f, 1f);
+            fog.maxDistance = FogFinite(fog.maxDistance, 30000f, 100f, 200000f);
+            fog.startDistance = FogFinite(fog.startDistance, 0f, 0f, fog.maxDistance);
+            fog.colorBlend = FogFinite(fog.colorBlend, 0.5f, 0f, 1f);
+            fog.quality = Mathf.Clamp(fog.quality, 0, 2);
+            fog.noiseScale = FogFinite(fog.noiseScale, 800f, 20f, 10000f);
+            fog.coverage = FogFinite(fog.coverage, 0.65f, 0.01f, 1f);
+            fog.contrast = FogFinite(fog.contrast, 1.5f, 0.2f, 5f);
+            fog.windSpeed = FogFinite(fog.windSpeed, 5f, 0f, 200f);
+            fog.windDirection = FogFinite(fog.windDirection, 45f, 0f, 360f);
+            fog.anisotropy = FogFinite(fog.anisotropy, 0.35f, -0.8f, 0.8f);
+            fog.colorR = FogFinite(fog.colorR, 0.72f, 0f, 1f);
+            fog.colorG = FogFinite(fog.colorG, 0.78f, 0f, 1f);
+            fog.colorB = FogFinite(fog.colorB, 0.85f, 0f, 1f);
+            fog.debugMode = Mathf.Clamp(fog.debugMode, 0, 3);
 
             // ---- ⑤ 雷 ----
             lightning.minDelay = Mathf.Max(0.05f, lightning.minDelay);
@@ -372,6 +414,11 @@ namespace Volken.Weather
             lightning.thunderNearDistance = Mathf.Max(1f, lightning.thunderNearDistance);
             lightning.thunderFallbackSpeedOfSound = Mathf.Clamp(lightning.thunderFallbackSpeedOfSound, 1f, 5000f);
             lightning.thunderSourceBlend = Mathf.Clamp01(lightning.thunderSourceBlend);
+        }
+
+        private static float FogFinite(float value, float fallback, float minimum, float maximum)
+        {
+            return Mathf.Clamp(float.IsNaN(value) || float.IsInfinity(value) ? fallback : value, minimum, maximum);
         }
 
         /// <summary>拷贝全部字段(供"重置为默认"/复制记录时用)。</summary>
@@ -509,4 +556,3 @@ namespace Volken.Weather
         }
     }
 }
-

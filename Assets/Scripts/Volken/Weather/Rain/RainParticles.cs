@@ -144,7 +144,7 @@ namespace Volken.Weather
         private const float ReadbackInterval = 10f;                  // 手动诊断请求最小间隔(秒)
         private const float DistInterval = 300f;                     // 落点分布诊断周期(秒;整块回读,一次性成本约 cap×16B)
         private const float RespawnPhaseRate = 20f;                  // 重生相位速率(/秒):_phase = floor(_time × 本值)
-        private const float ShaderBuild = 8f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
+        private const float ShaderBuild = 9f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
         private const float AssetRetryInterval = 5f;                 // 资产加载重试间隔(秒)
         private const int AssetMaxRetries = 6;                       // 资产加载最多重试次数(Awake 那一刻资源加载器可能还没就绪)
 
@@ -1237,7 +1237,8 @@ namespace Volken.Weather
                 receiveShadows = false,
             };
             Graphics.RenderMeshIndirect(rp, _mesh, _args, 1, 0);
-            if (collisionActive) _collision.Draw(_cam, gateFade * (1f - Mathf.Clamp01(Transparency)));
+            if (collisionActive) _collision.Draw(_cam, gateFade * (1f - Mathf.Clamp01(Transparency)),
+                _cloudRenderer != null ? _cloudRenderer.LinearSceneDepth : null);
             if (_isMainView) DrawCalls++;
 
         }

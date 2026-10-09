@@ -1,5 +1,7 @@
 # Volken2 提案 —— 解析云带区间求交,把 raymarch 步进预算集中在云带内
 
+> 2026-10-08 复核:见 [帧率优化清单](frame-rate-optimization-audit-2026-10-08.md) §2 C3、§6。高斯项没有硬边界,须先推导保守密度界或误差阈值,不能沿用“近似零风险”的判断。当前 Profiler 的 CloudRenderInfo 仅含配置、GPU timing 为整帧,未提供平均云步数或云专属 GPU 耗时;下文相关测量描述属于待实现能力。
+
 > 状态:📋 评估中(已论证,待拍板;未动手)
 > 日期:2026-10-03
 > 关联:[`../README.md`](../README.md) §四之三(默认关偏好)· [`cloud-optimization-roadmap-2026-08-28.md`](cloud-optimization-roadmap-2026-08-28.md) #8「层壳相交区间排序」

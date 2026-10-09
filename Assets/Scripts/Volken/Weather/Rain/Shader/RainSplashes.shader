@@ -12,11 +12,12 @@ Shader "Volken/RainSplashes"
             #pragma fragment frag
             #pragma target 5.0
             #include "UnityCG.cginc"
+            #include "../../Fog/Shader/FogCommon.cginc"
             StructuredBuffer<float4> _SplashPositions;
             StructuredBuffer<float4> _SplashNormals;
             float _Lifetime, _Size, _Fade, _MaxDistance;
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
-            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float age : TEXCOORD1; float fade : TEXCOORD2; float water : TEXCOORD3; };
+            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float age : TEXCOORD1; float fade : TEXCOORD2; float water : TEXCOORD3; float3 fogWorld : TEXCOORD4; };
             v2f vert(appdata v, uint instanceID : SV_InstanceID)
             {
                 v2f o;
@@ -28,10 +29,11 @@ Shader "Volken/RainSplashes"
                 float3 right = normalize(cross(n, reference));
                 float3 forward = cross(n, right);
                 float distance = length(splash.xyz - _WorldSpaceCameraPos);
-                bool alive = splash.w >= 0.0 && splash.w < _Lifetime && distance < _MaxDistance;
+                bool alive = surface.w < 0.5 && splash.w >= 0.0 && splash.w < _Lifetime && distance < _MaxDistance;
                 float size = _Size * lerp(0.35, 1.0, age) * (alive ? 1.0 : 0.0);
                 float3 local = (right * v.vertex.x + forward * v.vertex.y) * size;
                 o.pos = UnityWorldToClipPos(splash.xyz + local);
+                o.fogWorld = splash.xyz+local;
                 o.uv = v.uv * 2.0 - 1.0;
                 o.age = age;
                 o.fade = (alive ? _Fade : 0.0) * saturate((_MaxDistance - distance) / max(1.0, _MaxDistance * 0.2));
@@ -47,7 +49,8 @@ Shader "Volken/RainSplashes"
                 float crown = droplets * (1.0 - smoothstep(0.10, 0.25, abs(radius - 0.88)));
                 float alpha = max(ring * lerp(0.65, 1.0, i.water), crown * (1.0 - i.age)) * (1.0 - i.age);
                 clip(alpha - 0.005);
-                return fixed4(0.72, 0.82, 0.95, alpha * i.fade * 0.65);
+                float4 fog = VolkenFogAtWorld(i.fogWorld);
+                return fixed4(float3(0.72,0.82,0.95)*fog.a+fog.rgb, alpha*i.fade*0.65);
             }
             ENDCG
         }

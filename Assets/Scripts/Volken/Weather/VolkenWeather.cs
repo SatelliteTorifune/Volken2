@@ -9,7 +9,7 @@ using Volken.Clouds;
 namespace Volken.Weather
 {
     /// <summary>
-    /// 天气系统:按行星装载天气预设,并托管其下的子系统(雨 / 雷电 / 雾占位)。
+    /// 天气系统:按行星装载天气预设并驱动雨 / 雷电;雾由每相机 CloudRenderer 按本配置显式绘制。
     ///
     /// 与云的关系:**直接读对方 config,不造接口层**;但**读 ≠ 联动** —— 天气不修改云的任何参数。
     /// 行星切换订阅 <see cref="VolkenClouds.PlanetChanged"/>,不自己监听场景事件。
@@ -45,7 +45,7 @@ namespace Volken.Weather
 
         public bool CameraSubmerged { get; private set; }
 
-        /// <summary>局部太阳时(0~24,12 ≈ 正午,6 ≈ 日出,18 ≈ 日落)。见 <see cref="ComputeLocalSolarHour"/>;黎明雾用它判定窗口。</summary>
+        /// <summary>遗留太阳角度指标,当前公式不是完整地方时;雾直接使用太阳仰角,不消费此字段。</summary>
         public float LocalSolarHour { get; private set; } = 12f;
 
         /// <summary>相机正在云层中/云层高度附近的淡化因子(0=云外, 1=云内)。</summary>
@@ -462,8 +462,8 @@ namespace Volken.Weather
         }
 
         /// <summary>
-        /// 由太阳方向与地表法线夹角现算局部太阳时(0~24),仅供黎明雾特例用。
-        /// **局限**:分不出日出侧 6 点与日落侧 18 点(行星自转轴朝向在 SR2 不可靠),故黎明雾两侧对等触发。
+        /// 由太阳方向与地表法线夹角产生遗留诊断值(0~12),只用于状态面板。
+        /// 不能区分晨昏,雾系统不依赖此值。
         /// </summary>
         private float ComputeLocalSolarHour(Vector3 camPos, Vector3 planetCenter)
         {
@@ -478,7 +478,7 @@ namespace Volken.Weather
                 up.Normalize();
 
                 float cosAngle = Mathf.Clamp(Vector3.Dot(up, toSun), -1f, 1f);
-                // dot=+1 → 12 时;dot=−1 → 0 时
+                // 遗留角度映射:dot=+1 → 0,dot=-1 → 12;不代表真实钟点。
                 float hour = Mathf.Acos(cosAngle) * Mathf.Rad2Deg / 15f;
                 if (hour > 12f) hour = 24f - hour;
 

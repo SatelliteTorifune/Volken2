@@ -21,6 +21,9 @@ namespace Volken.Clouds
         private RenderTexture combinedDepthTex;
         private RenderTexture lowResDepthTex;
         private Camera cam;
+        private Material _sceneDepthMaterial;
+        private Volken.Weather.FogRenderer _fog;
+        private float _nextFogDepthLog;
         private static Mesh _fullscreenTriangle; // 全屏三角形(一次构建,所有相机复用)
 
         // 本相机的远相机深度源(主视角 = 游戏 FarCamera;PIP = 与克隆主相机共享 targetTexture 的更低 depth 相机)
@@ -69,6 +72,15 @@ namespace Volken.Clouds
             // 额外相机不会被游戏开 depthTextureMode,而 Clouds.shader 的 NearDepth pass 要采样 _CameraDepthTexture
             if (cam != null) cam.depthTextureMode |= DepthTextureMode.Depth;
             TryResolveFarDepthSource();
+        }
+
+        private void OnPreRender() => Volken.Weather.FogRenderer.ClearGlobals();
+        private void OnPostRender() => Volken.Weather.FogRenderer.ClearGlobals();
+        private void OnDisable()
+        {
+            Volken.Weather.FogRenderer.ClearGlobals();
+            _fog?.Dispose();
+            _fog = null;
         }
 
         private void OnPlanetChanged(PlanetEnvironment env)
@@ -156,8 +168,11 @@ namespace Volken.Clouds
                 combinedDepthTex.width == renderW && combinedDepthTex.height == renderH)
                 return;
 
-            if (combinedDepthTex != null && combinedDepthTex.IsCreated())
+            if (combinedDepthTex != null)
+            {
                 combinedDepthTex.Release();
+                Destroy(combinedDepthTex);
+            }
             combinedDepthTex = new RenderTexture(renderW, renderH, 0, RenderTextureFormat.RFloat);
             combinedDepthTex.Create();
         }
@@ -169,8 +184,11 @@ namespace Volken.Clouds
                 lowResDepthTex.height == targetSize.y)
                 return;
 
-            if (lowResDepthTex != null && lowResDepthTex.IsCreated())
+            if (lowResDepthTex != null)
+            {
                 lowResDepthTex.Release();
+                Destroy(lowResDepthTex);
+            }
 
             lowResDepthTex = new RenderTexture(Mathf.Max(1, targetSize.x), Mathf.Max(1, targetSize.y), 0, RenderTextureFormat.RFloat);
             lowResDepthTex.Create();
@@ -178,10 +196,18 @@ namespace Volken.Clouds
 
         private void ReleaseAllRenderTextures()
         {
-            if (combinedDepthTex != null && combinedDepthTex.IsCreated())
+            if (combinedDepthTex != null)
+            {
                 combinedDepthTex.Release();
-            if (lowResDepthTex != null && lowResDepthTex.IsCreated())
+                Destroy(combinedDepthTex);
+                combinedDepthTex = null;
+            }
+            if (lowResDepthTex != null)
+            {
                 lowResDepthTex.Release();
+                Destroy(lowResDepthTex);
+                lowResDepthTex = null;
+            }
 
             foreach (var view in _views.Values)
             {
@@ -250,7 +276,9 @@ namespace Volken.Clouds
                     farDepthSource = fcs;
                     return;
                 }
-                if (Volken.Clouds.VolkenClouds.Instance?.farCam != null) farDepthSource = Volken.Clouds.VolkenClouds.Instance.farCam;
+                var mainCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera;
+                if (cam == mainCamera && Volken.Clouds.VolkenClouds.Instance?.farCam != null)
+                    farDepthSource = Volken.Clouds.VolkenClouds.Instance.farCam;
             }
             catch (Exception ex)
             {
@@ -650,20 +678,38 @@ namespace Volken.Clouds
         {
             try
             {
+                if (cam == null) cam = GetComponent<Camera>();
+                if (_fog == null) _fog = new Volken.Weather.FogRenderer(cam);
                 TryResolveFarDepthSource();
                 RenderTexture farDepthTex = farDepthSource != null ? farDepthSource.farDepthTex : null;
-                if (farDepthTex == null)
-                {
-                    Graphics.Blit(source, destination);
-                    return;
-                }
 
                 // 本帧渲染层走复用缓冲(判据仍是 VolkenClouds 那一份,不在这里另写一遍)
                 Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
                 var activeLayers = _activeLayers;
+                var gameCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera;
+                if (cam != gameCamera?.NearCamera && !ModSettings.Instance.ExtraCameraClouds.Value) activeLayers.Clear();
+                if (_sceneDepthMaterial == null) _sceneDepthMaterial = SceneDepth.CreateMaterial();
+                if (_sceneDepthMaterial == null)
+                {
+                    _fog.BlockFrame("scene-depth-shader-missing");
+                    Graphics.Blit(source, destination);
+                    return;
+                }
+                bool fogActive = _fog.Prepare(source.width,source.height);
+                EnsureDepthTextures(source.width,source.height);
+                _sceneDepthMaterial.SetFloat("_HasFarDepth",farDepthTex != null ? 1 : 0);
+                _sceneDepthMaterial.SetFloat("_DepthFarClip",farDepthSource != null ? farDepthSource.maxFarDepth : cam.farClipPlane);
+                Graphics.Blit(farDepthTex != null ? (Texture)farDepthTex : Texture2D.whiteTexture,combinedDepthTex,_sceneDepthMaterial,1);
+                if (fogActive && Volken.Weather.VolkenWeather.Instance.Config.fog.diagnostics && Time.realtimeSinceStartup >= _nextFogDepthLog)
+                {
+                    _nextFogDepthLog = Time.realtimeSinceStartup+5f;
+                    Mod.Diag("Fog depth: camera='{0}' size={1}x{2} mode={3} farSource='{4}' farReady={5} clip={6:F1}/{7:F1} clouds={8} rainDepthReady={9}",
+                        cam.name,source.width,source.height,cam.depthTextureMode,farDepthSource != null ? farDepthSource.name : "none",
+                        farDepthTex != null && farDepthTex.IsCreated(),cam.nearClipPlane,cam.farClipPlane,activeLayers.Count,combinedDepthTex.IsCreated());
+                }
                 if (activeLayers.Count == 0)
                 {
-                    Graphics.Blit(source, destination);
+                    _fog.Render(source,destination,combinedDepthTex);
                     return;
                 }
 
@@ -708,9 +754,7 @@ namespace Volken.Clouds
                 EnsureLowResDepthTex(new Vector2Int(maxLowW, maxLowH));
 
                 var matRef = activeLayers[0].material; // 深度 pass 用哪层的材质都一样
-                int nearDepthPass = matRef.FindPass("NearDepth");
                 int downsamplePass = matRef.FindPass("DownsampleDepth");
-                Graphics.Blit(farDepthTex, combinedDepthTex, matRef, nearDepthPass);
                 Graphics.Blit(combinedDepthTex, lowResDepthTex, matRef, downsamplePass);
 
                 int orbitPass = matRef.FindPass("OrbitClouds");
@@ -821,7 +865,7 @@ namespace Volken.Clouds
                 // 逐层链式合成,每层按其 compositeMode 混合
                 int compositePass = matRef.FindPass("Composite");
                 RenderTexture result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
-                Graphics.Blit(source, result);
+                _fog.Render(source, result, combinedDepthTex);
 
                 foreach (var layer in activeLayers)
                 {
@@ -830,6 +874,10 @@ namespace Volken.Clouds
                     matRef.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
                     matRef.SetTexture("OrbitCloudTex", view.orbitCloudTex);
                     matRef.SetTexture("SceneDepthTex", combinedDepthTex);
+                    matRef.SetTexture("FogCloudDepthTex", view.cloudDepthTex);
+                    matRef.SetFloat("_VolkenFogComposite", fogActive ? 1 : 0);
+                    float fogBottom, fogTop;
+                    matRef.SetFloat("_FogOrbitAltitude",layer.config.TryGetBand(out fogBottom,out fogTop) ? (fogBottom+fogTop)*0.5f : layer.config.maxCloudHeight);
                     matRef.SetFloat("_CompositeMode",
                         layer.config.compositeMode == CompositeMode.Standard ? 1.0f : 0.0f);
                     // 交叉淡入因子:orbit pass 不可用 → 强制 0(纯体积云,等同未开启本特性)
@@ -860,12 +908,16 @@ namespace Volken.Clouds
             catch (Exception e)
             {
                 Mod.Log("Volken:CloudRenderer.OnRenderImage ERROR: " + e);
+                Volken.Weather.FogRenderer.ClearGlobals();
                 try { Graphics.Blit(source, destination); } catch { }
             }
         }
 
         private void OnDestroy()
         {
+            _fog?.Dispose();
+            _fog = null;
+            if (_sceneDepthMaterial != null) Destroy(_sceneDepthMaterial);
             try
             {
                 Game.Instance.FlightScene.ViewManager.GameView.ReferenceFrameRecentered -= OnReferenceFrameRecentered;

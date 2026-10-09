@@ -1,72 +1,57 @@
 <Strings>
     <!-- Mod Settings -->
     <s id="Volken.ModSettings.NoiseMapIndex">Noise Map</s>
-    <s id="Volken.ModSettings.NoiseMapIndexDesc">Selects the noise texture used for the volumetric cloud shape (1-5).</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">Select the noise texture for volumetric clouds.</s>
     <s id="Volken.ModSettings.MinHeight">MinHeight</s>
-    <s id="Volken.ModSettings.MinHeightDesc">Altitude (m) below which the water transparency override takes effect (when Alter Transparency is enabled).</s>
+    <s id="Volken.ModSettings.MinHeightDesc">Maximum altitude for the water transparency override, in metres.</s>
     <s id="Volken.ModSettings.ShowDevLog">Show Dev Log</s>
     <s id="Volken.ModSettings.ShowDevLogDesc">Show log messages for developers.</s>
     <s id="Volken.ModSettings.AlterTransparency">Alter Transparency</s>
-    <s id="Volken.ModSettings.AlterTransparencyDesc">Override the game's water transparency setting based on altitude (the original transparency setting has been altered into this one).</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">Adjust water transparency based on altitude.</s>
     <s id="Volken.ModSettings.WaterReflection">Water Reflection</s>
     <s id="Volken.ModSettings.WaterReflectionDesc">Render volumetric clouds into the water reflection.</s>
     <s id="Volken.ModSettings.ExtraCameraClouds">Extra Camera Clouds</s>
-    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Auto-render volumetric clouds on extra world cameras (PIP windows etc.). Detect by behavior only, no mod-specific code.</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Show clouds on additional cameras.</s>
     <s id="Volken.ModSettings.ExtraCameraRain">Extra Camera Rain</s>
-    <s id="Volken.ModSettings.ExtraCameraRainDesc">Also render rain on extra world cameras (PIP windows etc.). Each camera gets its own rain instance (VRAM and GPU cost scale with the number of cameras); only active while rain is enabled.</s>
+    <s id="Volken.ModSettings.ExtraCameraRainDesc">Show rain on additional cameras.</s>
     <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay.</s>
 
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
 
     <s id="Volken.UI.Weather">Weather</s>
-    <s id="Volken.UI.WeatherUnavailable">Weather system not initialized (reload the flight scene).</s>
-    <s id="Volken.UI.WeatherPlanet">Planet</s>
-    <s id="Volken.UI.WeatherActive">Active</s>
-    <s id="Volken.UI.WeatherActiveOn">ON (this planet's weather is enabled)</s>
-    <s id="Volken.UI.WeatherActiveOff">OFF (enable this planet's weather)</s>
-    <s id="Volken.UI.WeatherAltitude">Altitude / Solar / Cloud fade</s>
-    <s id="Volken.UI.WeatherEnabled">Weather Enabled (this planet)</s>
+    <s id="Volken.UI.WeatherUnavailable">Weather system unavailable. Reload the flight scene.</s>
+    <s id="Volken.UI.WeatherEnabled">Enable weather</s>
     <s id="Volken.UI.WeatherEnabledOn">Weather enabled for this planet.</s>
     <s id="Volken.UI.WeatherEnabledOff">Weather disabled for this planet.</s>
-    <s id="Volken.UI.WeatherConfigSaved">Weather config saved (same PlanetConfigList.xml as the clouds).</s>
-    <s id="Volken.UI.WeatherResetToDefault">Reset to default (remember to click "Save Current Config")</s>
-    <s id="Volken.UI.WeatherNotImplemented">This linkage is not implemented yet; the values below are placeholders (0 = clouds unchanged).</s>
+    <s id="Volken.UI.WeatherConfigSaved">Weather configuration saved.</s>
+    <s id="Volken.UI.WeatherResetToDefault">Defaults restored. Save the configuration to keep them.</s>
 
 
-    <s id="Volken.UI.WeatherRain">Rain (live)</s>
-    <s id="Volken.UI.RainStats">Status (live)</s>
-    <s id="Volken.UI.RainToggleNow">Toggle rain now</s>
-    <s id="Volken.UI.RainOnMsg">Rain enabled</s>
-    <s id="Volken.UI.RainOffMsg">Rain disabled</s>
-    <s id="Volken.UI.RainStreamMode">Streaks along relative velocity (off = always radial down)</s>
-    <s id="Volken.UI.RainStretch">Stretch vs speed (0 = none)</s>
-    <s id="Volken.UI.RainStretchLimit">Stretch limit (max streak length = length x this; lower if too long)</s>
-    <s id="Volken.UI.RainEdgeFade">Domain edge fade width (fraction of radius; 0 = off, default 0.2)</s>
-    <s id="Volken.UI.RainSoftParticles">Soft particles (0 = hard edge, 1 = default)</s>
+    <s id="Volken.UI.WeatherRain">Rain</s>
+    <s id="Volken.UI.RainStreamMode">Align streaks with relative velocity</s>
+    <s id="Volken.UI.RainStretch">Speed stretch factor</s>
+    <s id="Volken.UI.RainStretchLimit">Maximum stretch multiplier</s>
+    <s id="Volken.UI.RainEdgeFade">Boundary fade fraction</s>
+    <s id="Volken.UI.RainSoftParticles">Soft particle strength</s>
     <s id="Volken.UI.RainTailFalloff">Streak tail falloff</s>
-    <s id="Volken.UI.RainBrightness">Brightness gain (0 = original)</s>
-    <s id="Volken.UI.RainTransparency">Rain transparency (0 = original, 1 = fully transparent)</s>
-    <s id="Volken.UI.RainCollision">Rain collision (terrain / craft / water)</s>
-    <s id="Volken.UI.RainCollisionHighPrecision">High precision collision (512, default 256)</s>
-    <s id="Volken.UI.RainSplashes">Impact splashes (enables collision)</s>
+    <s id="Volken.UI.RainBrightness">Brightness gain</s>
+    <s id="Volken.UI.RainTransparency">Rain transparency</s>
+    <s id="Volken.UI.RainCollision">Rain collision</s>
+    <s id="Volken.UI.RainCollisionHighPrecision">High precision collision</s>
+    <s id="Volken.UI.RainSplashes">Impact splashes</s>
     <s id="Volken.UI.RainSplashDistance">Splash visibility distance (m)</s>
     <s id="Volken.UI.RainSplashLifetime">Splash lifetime (s)</s>
     <s id="Volken.UI.RainSplashSize">Maximum splash radius (m)</s>
     <s id="Volken.UI.RainSplashDensity">Splash density</s>
-    <s id="Volken.UI.RainDistanceFade">Depth: in-domain distance fade (0 = off; near bright, far dim)</s>
-    <s id="Volken.UI.RainStreakVariation">Depth: per-streak length/width variation (0 = all identical)</s>
-    <s id="Volken.UI.WeatherRainRemoved">The rain system was removed and will be redone; the values below are placeholders and do nothing.</s>
+    <s id="Volken.UI.RainDistanceFade">Distance fade</s>
+    <s id="Volken.UI.RainStreakVariation">Streak size variation</s>
     <s id="Volken.UI.RainEnabled">Rain Enabled</s>
-    <s id="Volken.UI.RainCeilingAltitude">Rain ceiling altitude (m; 0 = no limit (gate off))</s>
-    <s id="Volken.UI.RainCeilingBand">Ceiling fade band (fraction of ceiling; 0.4 = top 40% fades)</s>
-    <s id="Volken.UI.RainUnderwaterGate">No rain underwater (hidden below the water surface)</s>
-    <s id="Volken.UI.RainUnderwaterFade">Underwater fade depth (m; avoids flicker at the surface)</s>
-    <s id="Volken.UI.RainRespawnMirror">Mirror respawn (on = deterministic conveyor, periodic clumps; off = randomized mixing, recommended)</s>
-    <s id="Volken.UI.RainDumpLog">Dump rain status to the log (for troubleshooting)</s>
-    <s id="Volken.UI.RainDumped">Rain status written to Player.log</s>
-    <s id="Volken.UI.RainAudioStats">Rain Audio</s>
-    <s id="Volken.UI.RainRowTest">Dev: evenly spaced test row</s>
+    <s id="Volken.UI.RainCeilingAltitude">Rain altitude limit (m)</s>
+    <s id="Volken.UI.RainCeilingBand">Altitude limit fade fraction</s>
+    <s id="Volken.UI.RainUnderwaterGate">Hide rain underwater</s>
+    <s id="Volken.UI.RainUnderwaterFade">Underwater fade depth (m)</s>
+    <s id="Volken.UI.RainRespawnMirror">Mirror respawn</s>
     <s id="Volken.UI.RainAmount">Particle Amount</s>
     <s id="Volken.UI.RainDomainRadius">Domain Radius (m)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Adaptive Domain Radius</s>
@@ -77,13 +62,12 @@
     <s id="Volken.UI.RainStreakWidth">Streak Width (m)</s>
     <s id="Volken.UI.RainVolume">Rain Volume</s>
 
-    <s id="Volken.UI.WeatherFog">Fog (removed, placeholder)</s>
-    <s id="Volken.UI.WeatherFogRemoved">The fog system was removed and will be redone; the values below are placeholders and do nothing.</s>
-    <s id="Volken.UI.FogEnabled">Fog Enabled</s>
-    <s id="Volken.UI.FogDawnFog">Dawn Fog</s>
-    <s id="Volken.UI.FogBaseHeight">Fog Base Height (m)</s>
-    <s id="Volken.UI.FogHeight">Fog Height (m)</s>
-    <s id="Volken.UI.FogDensity">Fog Density</s>
+    <s id="Volken.UI.WeatherFog">Fog</s>
+    <s id="Volken.UI.FogEnabled">Enable fog</s>
+    <s id="Volken.UI.FogDawnFog">Dawn / dusk boost</s>
+    <s id="Volken.UI.FogBaseHeight">Density base altitude (m)</s>
+    <s id="Volken.UI.FogHeight">Height scale (m)</s>
+    <s id="Volken.UI.FogDensity">Height fog density (1/m)</s>
     <s id="Volken.UI.FogHeightFalloff">Height Falloff</s>
     <s id="Volken.UI.FogMaxOpacity">Max Opacity</s>
     <s id="Volken.UI.FogStartDistance">Start Distance (m)</s>
@@ -91,16 +75,11 @@
 
     <s id="Volken.UI.WeatherLightning">Lightning</s>
     <s id="Volken.UI.LightningEnabled">Lightning Enabled</s>
-    <s id="Volken.UI.LightningTriggerNow">Strike Now</s>
-    <s id="Volken.UI.LightningTriggered">Lightning triggered.</s>
-    <s id="Volken.UI.LightningTriggerBlocked">Too high: no strike (above lightning ceiling altitude)</s>
-    <s id="Volken.UI.LightningStats">Bolt status</s>
-    <s id="Volken.UI.LightningInactive">inactive (needs lightning enabled + storm-level weather)</s>
     <s id="Volken.UI.LightningMinDelay">Min Interval (s)</s>
     <s id="Volken.UI.LightningMaxDelay">Max Interval (s)</s>
     <s id="Volken.UI.LightningTargetRange">Target Scatter (m)</s>
     <s id="Volken.UI.LightningSpawnRange">Source Scatter (m)</s>
-    <s id="Volken.UI.LightningCeilingAltitude">Lightning ceiling altitude (m; 0 = no limit (gate off))</s>
+    <s id="Volken.UI.LightningCeilingAltitude">Lightning altitude limit (m)</s>
     <s id="Volken.UI.LightningArcs">Arc Segments</s>
     <s id="Volken.UI.LightningInaccuracy">Arc Inaccuracy</s>
     <s id="Volken.UI.LightningSplits">Branch Splits</s>
@@ -196,17 +175,16 @@
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
 
     <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
-    <s id="Volken.UI.OrbitClouds">Orbit Clouds (2D)</s>
-    <s id="Volken.UI.UseOrbitClouds">Use Orbit Clouds (2D at high altitude)</s>
+    <s id="Volken.UI.OrbitClouds">Orbit clouds</s>
+    <s id="Volken.UI.UseOrbitClouds">Enable orbit clouds</s>
     <s id="Volken.UI.OrbitTransitionStart">Transition Band Start (m)</s>
     <s id="Volken.UI.OrbitTransitionEnd">Transition Band End (m)</s>
-    <s id="Volken.UI.OrbitSampleAltitude">2D Shading Anchor Altitude (0 = auto)</s>
-    <s id="Volken.UI.OrbitDensityBoost">2D Optical Depth Multiplier</s>
-    <s id="Volken.UI.OrbitBrightness">2D Brightness</s>
-    <s id="Volken.UI.OrbitReliefStrength">2D Relief (normal-map) Strength</s>
-    <s id="Volken.UI.OrbitDetailStrength">2D Detail Texture Strength</s>
-    <s id="Volken.UI.OrbitResolutionScale">2D Resolution Scale</s>
-    <s id="Volken.UI.OrbitDebugMode">2D Debug Split-Screen (vol/2D, transition band only)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">Sample altitude (m)</s>
+    <s id="Volken.UI.OrbitDensityBoost">Optical thickness multiplier</s>
+    <s id="Volken.UI.OrbitBrightness">Brightness</s>
+    <s id="Volken.UI.OrbitReliefStrength">Relief strength</s>
+    <s id="Volken.UI.OrbitDetailStrength">Detail strength</s>
+    <s id="Volken.UI.OrbitResolutionScale">Resolution scale</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Config '{0}' saved!</s>
@@ -245,4 +223,27 @@
     <!--Misc-->
     <s id="Volken.VolkenCloud.MainLayerName">Main</s>
     <s id="Volken.VolkenCloud.ExtraLayerName">Extra</s>
+    <s id="Volken.UI.FogHeightEnabled">Height fog</s>
+    <s id="Volken.UI.FogVolumeEnabled">Moving volumetric fog</s>
+    <s id="Volken.UI.FogVolumeDensity">Volume density (1/m)</s>
+    <s id="Volken.UI.FogMaxDistance">Maximum fog distance (m)</s>
+    <s id="Volken.UI.FogQuality">Volume quality</s>
+    <s id="Volken.UI.FogNoiseScale">Fog patch scale (m)</s>
+    <s id="Volken.UI.FogCoverage">Volume coverage</s>
+    <s id="Volken.UI.FogContrast">Patch contrast</s>
+    <s id="Volken.UI.FogWindSpeed">Fog wind speed (m/s)</s>
+    <s id="Volken.UI.FogWindDirection">Wind direction (deg)</s>
+    <s id="Volken.UI.FogAnisotropy">Sun scattering anisotropy</s>
+    <s id="Volken.UI.FogColorR">Fog color: red</s>
+    <s id="Volken.UI.FogColorG">Fog color: green</s>
+    <s id="Volken.UI.FogColorB">Fog color: blue</s>
+    <s id="Volken.UI.FogPresetThin">Apply height fog preset</s>
+    <s id="Volken.UI.FogPresetVolume">Apply volume fog preset</s>
+    <s id="Volken.UI.FogPresetBoth">Apply combined fog preset</s>
+    <s id="Volken.UI.FogPresetApplied">Fog preset applied. Save the configuration to keep it.</s>
+    <s id="Volken.ModSettings.ExtraCameraFog">Extra camera fog</s>
+    <s id="Volken.ModSettings.ExtraCameraFogDesc">Show fog on additional cameras.</s>
+    <s id="Volken.UI.QualityLow">Low</s>
+    <s id="Volken.UI.QualityMedium">Medium</s>
+    <s id="Volken.UI.QualityHigh">High</s>
 </Strings>

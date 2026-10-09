@@ -45,6 +45,7 @@ Shader "Hidden/Volken/LightningBolt"
             // 都需要 ≥3.0;不写会落到默认 2.5,在部分平台上出现难查的编译/表现问题。
             #pragma target 3.0
             #include "UnityCG.cginc"
+            #include "../../Fog/Shader/FogCommon.cginc"
 
             struct appdata
             {
@@ -56,6 +57,7 @@ Shader "Hidden/Volken/LightningBolt"
             {
                 float4 vertex : SV_POSITION;
                 float4 color  : COLOR;
+                float3 fogWorld : TEXCOORD0;
             };
 
             float4 _Color;
@@ -65,6 +67,7 @@ Shader "Hidden/Volken/LightningBolt"
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
+                o.fogWorld = mul(unity_ObjectToWorld,v.vertex).xyz;
                 // LineRenderer 的顶点色渐变(两端渐隐)保留下来,乘上材质色
                 o.color = v.color * _Color;
                 return o;
@@ -76,7 +79,7 @@ Shader "Hidden/Volken/LightningBolt"
                 float3 c = i.color.rgb;
                 c = lerp(c, float3(1, 1, 1), saturate(_Intensity / 50.0) * 0.85);
                 float a = i.color.a * _Intensity;
-                return fixed4(c * _Intensity, a);
+                return fixed4(c * _Intensity * VolkenFogAtWorld(i.fogWorld).a, a);
             }
             ENDCG
         }

@@ -35,6 +35,7 @@ Shader "Hidden/Volken/LightningFlash"
             #pragma fragment frag
             #pragma target 3.0
             #include "UnityCG.cginc"
+            #include "../../Fog/Shader/FogCommon.cginc"
 
             struct appdata
             {
@@ -46,6 +47,7 @@ Shader "Hidden/Volken/LightningFlash"
             {
                 float4 vertex : SV_POSITION;
                 float2 uv     : TEXCOORD0;
+                float3 fogWorld : TEXCOORD1;
             };
 
             float4 _Color;
@@ -56,6 +58,7 @@ Shader "Hidden/Volken/LightningFlash"
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
+                o.fogWorld = mul(unity_ObjectToWorld,v.vertex).xyz;
                 o.uv = v.uv;
                 return o;
             }
@@ -71,7 +74,7 @@ Shader "Hidden/Volken/LightningFlash"
 
                 float3 c = lerp(_Color.rgb, float3(1, 1, 1), core);
                 float a = saturate(glow * _Intensity * 0.05);
-                return fixed4(c * a, a);
+                return fixed4(c * a * VolkenFogAtWorld(i.fogWorld).a, a);
             }
             ENDCG
         }

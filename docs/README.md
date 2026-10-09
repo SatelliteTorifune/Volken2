@@ -1,20 +1,24 @@
 # Volken2 文档索引(docs/)
 
 > 新会话先读 [AGENT_CONTEXT.md](AGENT_CONTEXT.md)。本索引只保留入口、待办与维护规则;实现细节归主题文档。
-> 2026-10-08 更新:雨碰撞 / 水花修复获用户真机确认并归档。**其他记录的归档状态不代替各自验收证据**;剩余回归见 §四之三。
+> 2026-10-09 更新:近地薄雾、流动体积雾与可操作 UI 已写入原工程,旧占位已清理;独立 GPU 验证完成,游戏表现待验收,见 §一。雨碰撞 / 水花已获用户真机确认并归档;归档不代替其他项目验收,剩余回归见 §四之三。
 
-## 一、当前活跃(已动手)
+## 一、当前推进
 
-当前无活跃实施文档;本轮雨功能工作已收束,后续专项回归与未排期工作见 §四之三。
+| 文档 | 状态 / 下一步 |
+|---|---|
+| [雨滴水面溅射修复](rain-water-splash-fix-2026-10-09.md) | 🚧 水面专用涟漪 / 竖直飞溅 / 场景深度遮挡已接入;53 项独立 GPU 回归通过,待用户打包与游戏水面验收 |
+| [雾重做实施方案](fog-implementation-plan-2026-10-09.md) | 🚧 两种雾代码 / 面板 / 日志已接入原工程;独立 GPU 验证通过,待游戏画质 / 水面 / PIP / 性能验收;UI 修复见 §10;§12 已取得游戏帧时间,薄雾 / 体积资源均生效,持续分配稳定;CPU / GPU 主瓶颈尚未分离,已修正调参额外刷新;§13 夜间光照修正及 161 项验证通过,待游戏验收;用户指定本轮不负责打包 |
 
 ## 二、提案 · 待拍板(proposals/)
 
 | 文档 | 状态 / 范围 |
 |---|---|
+| [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) | 📋 当前入口:云 / 雨碰撞 / 雷击 / 多相机,按当前源码排序;未实施、未测耗时 |
 | [云带区间步进](proposals/cloud-band-interval-raymarch-2026-10-03.md) | 📋 评估中:区间求交集中 raymarch 预算,未动手 |
 | [云优化路线图](proposals/cloud-optimization-roadmap-2026-08-28.md) | 📋 规划:部分已被 TSS / 轨道云覆盖,剩余项未排期 |
-| [雨 / 雷性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) | 📋 规划:C# 优化已有实现,GPU 归约与分叉合批未排期 |
-| [剩余热点与代价](proposals/hotpath-optimization-backlog-2026-10-02.md) | 📋 规划:B/C/D 组待取舍,A 组按既有决定不做 |
+| [雨 / 雷性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) | 📋 历史审计与剩余方案;当前计数 / 碰撞 / 日志状态见新清单 |
+| [剩余热点与代价](proposals/hotpath-optimization-backlog-2026-10-02.md) | 📋 历史代价分析;部分 B 组已完成,A 组按既有决定不做 |
 | [水体大修](proposals/water-system-overhaul-2026-09-02.md) | 📋 规划:A~E 路线待选,未排期 |
 
 ## 三、已归档(archive/)
@@ -23,6 +27,7 @@
 
 | 文档 | 已落地结论 / 保留价值 |
 |---|---|
+| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;保留正常调参与后台日志,游戏视觉待验收 |
 | [雨重做](archive/sp2-rain-particledomain-port-2026-09-28.md) | 雨视觉 / 雨声 / 透明度 / GPU 碰撞与水花已落地;无标签 shader 捕获修复获用户真机确认,135 项 GPU 验证通过;性能和专项矩阵未排期 |
 | [天气与云解耦](archive/weather-cloud-decoupling-2026-10-01.md) | 生命周期与高度带去重已落地;A2 / D 未排期,回归待验证 |
 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) | 常驻停表、相机扫描与渲染集合优化已落地;待回归 |
@@ -67,35 +72,37 @@
 | 3 | N/S 风未纳入云空间重投影;[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §5、§12 | 未修;另有双缓冲与非新采样硬回退缺口 |
 | 4 | `low/mid/highAltitudeThreshold` 已删除,旧“不可删”告警错误;[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8 | ✅ 已更正;旧 XML 未知节点由 `XmlSerializer` 忽略 |
 | 5 | 自适应雨域变大但粒子数固定,密度变稀;`RainParticles.OnPreCull` | 已知代价;不恢复渲染回调内自动重建 GPU buffer |
+| 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[帧率清单](proposals/frame-rate-optimization-audit-2026-10-08.md) §4 L1 | 源码已确认,尚未修复;未做运行时复验 |
+| 7 | 夜间雾偏亮:环境光强制下限、颜色空间处理与太阳状态消费缺口;[雾记录](fog-implementation-plan-2026-10-09.md) §13 | ✅ 源码已修正,161 项独立验证通过;待游戏昼夜画面 / 光照日志验收 |
 
 ## 四之三、待办清单(backlog)
 
 待办只保留动作与来源;已落地修复台账合并在 §三,具体判据留在主题文档。
 
-**已收束**:[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.8 的水花不可见问题已获用户真机确认;不再列为活跃故障。密度标定、性能测量和以下专项回归保留为未排期工作。
+**原修复已收束**:[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.8 的无标签表面捕获修复已获用户确认。2026-10-09 新反馈的水面无溅射由 §一的[水面修复](rain-water-splash-fix-2026-10-09.md) 接管;密度标定、性能测量和以下专项回归仍未排期。
 
 **尚未完成的专项回归**(未排期;不扩大本次用户确认的验收范围):
 
 | 范围 | 要验证的行为 | 判据 |
 |---|---|---|
 | 雨与配置 | 复杂材质与场景矩阵 / 透明度边界 / 软粒子 / 海拔 / 水下 / 重定位 / XML 往返 / 切场景 | [雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.5、§10.7、§10.8、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §2、§4 |
-| Inspector | 冷启动列表完整、缺失文件不新建、另存为可见 | [下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §2 |
+| Inspector / 设置 | 列表完整、缺失文件不新建、另存为可见;诊断控件消失、三语 / 参数 / 预设功能正常 | [下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §2、[UI 清理](archive/user-ui-cleanup-2026-10-09.md) §3 |
 | PIP | 相机有雨,主视图雨声不被覆盖,参数同步 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §4 |
 | 场景 / 解耦 | 非飞行停表、离场收雨雷、环境抑制不改用户开关 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §4、[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §6 |
-| 闪电 | 分叉起点、暂停 / 重定位、海拔上限与手动反馈 | [固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) §5、[海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) §4 |
+| 闪电 | 分叉起点、暂停 / 重定位、海拔上限与开发 API 反馈 | [固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) §5、[海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) §4 |
 | 雷声 / 资源 | 已部署包素材加载、声速延迟、near-far 听感和多声部 | [雷声](archive/thunder-realism-2026-09-28.md) §5.3、§5.4、§6 |
 
-**资源核对(2026-10-08)**:`_otherAssets` 共 **36** 条,GUID 全可解析;含 **6 条雨声 + 9 条雷声**,以及新增碰撞 compute / 深度 shader / 水花 shader。三个碰撞 / 水花资源已核实入包,修复后的游戏效果获用户确认;未做整包逐文件一致性审计。
+**资源核对(2026-10-09)**:`_otherAssets` 共 **40** 条,GUID 全可解析,水面溅射 shader 引用唯一;含 **6 条雨声 + 9 条雷声**。此前三个碰撞 / 水花资源已核实入包并获用户确认;雾补回引用的证据见[雾记录](fog-implementation-plan-2026-10-09.md) §11。当前新增水面 shader 仅已登记,待打包验收,见[水面修复](rain-water-splash-fix-2026-10-09.md) §3、§4。
 
 **未排期 / 低优先度**:
 
 - 解耦 A2 相机海拔去重、D 行星映射双写者:[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8;F 的全局天气值通道已被后续决策撤销。
-- 雨 / 雷 GPU 性能与剩余热点:见 §二;拖 UI 的 A 组维持不做。
+- 性能工作统一从 [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) 选项与测量;未实施,拖 UI 的 A 组维持不做。
 - 死代码候选 `DepthCapture` 和未启用星环补丁:[场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §3;本次未删代码。
 - 注释中的阶段号、日期与过期描述:按 §五.10 清理;旧占比只代表 2026-10-02,不当作当前实测。
-- 二期可选项:雨图集、雾、落雷贴地形、联机表现、机体反射探头;雨碰撞 / 水花本轮已收束,见雨记录 §10.8。
+- 雾的两种效果已进入 [游戏适配 / 验证阶段](fog-implementation-plan-2026-10-09.md);雨图集、落雷贴地形、联机表现、机体反射探头仍未排期。
 - 新功能保持可关闭且默认关闭;天气联动云须用户另行提出,不能恢复旧占位字段或天气值方案。
-- 日志已收口:雨 / 雨声自动心跳、调参回显、逐次雷声记录已移除;雨 GPU 诊断通过面板按钮手动触发,错误告警保留。见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.9。
+- 日志已收口:雨 / 雨声自动心跳、调参回显、逐次雷声记录已移除;错误告警保留;游戏诊断按钮已移除,GPU 回读留给开发接口。见 [UI 清理](archive/user-ui-cleanup-2026-10-09.md) §2、[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.9。
 
 ## 五、文档写入规则(维护约定)
 

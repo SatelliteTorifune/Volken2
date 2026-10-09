@@ -20,11 +20,14 @@ namespace Volken.Weather
         private ComputeShader _compute;
         private Shader _depthShader;
         private Material _splashMaterial;
+        private Material _waterSplashMaterial;
         private Camera _capture;
         private RenderTexture _depth;
         private ComputeBuffer _previous, _surfaces, _splashes, _normals, _counters;
         private GraphicsBuffer _args;
+        private GraphicsBuffer _waterArgs;
         private Mesh _mesh;
+        private Mesh _waterMesh;
         private int _prepare, _resolve, _clear;
         private bool _reset = true;
         private float _retryAt, _captureRetryAt;
@@ -34,14 +37,15 @@ namespace Volken.Weather
         private int _taggedMask, _physicalMask;
         internal bool DepthRendered { get; private set; }
         internal string Status => _compute == null ? "missing-compute" :
-            !DepthRendered ? "no-scene-depth" : _splashMaterial == null ? "missing-splash-shader" : "ready";
+            !DepthRendered ? "no-scene-depth" : _splashMaterial == null ? "missing-splash-shader" :
+            _waterSplashMaterial == null ? "missing-water-splash-shader" : "ready";
 
         internal void Reset() { _reset = true; DepthRendered = false; }
 
         private bool EnsureAssets()
         {
             bool ready = _compute != null;
-            if (ready && _depthShader != null && _splashMaterial != null) return true;
+            if (ready && _depthShader != null && _splashMaterial != null && _waterSplashMaterial != null) return true;
             if (Time.realtimeSinceStartup < _retryAt) return ready;
             _retryAt = Time.realtimeSinceStartup + 5f;
             try
@@ -67,9 +71,15 @@ namespace Volken.Weather
                     if (splashShader != null && splashShader.isSupported)
                         _splashMaterial = new Material(splashShader) { hideFlags = HideFlags.HideAndDontSave };
                 }
-                Mod.Diag("RainCollision assets: compute={0} depthShader={1} splashShader={2} RFloat={3}",
+                if (_waterSplashMaterial == null)
+                {
+                    var waterShader = Mod.LoadVolkenAsset<Shader>(AssetRoot + "RainWaterSplashes.shader");
+                    if (waterShader != null && waterShader.isSupported)
+                        _waterSplashMaterial = new Material(waterShader) { hideFlags = HideFlags.HideAndDontSave };
+                }
+                Mod.Diag("RainCollision assets: compute={0} depthShader={1} splashShader={2} RFloat={3} waterShader={4}",
                     _compute != null, _depthShader != null && _depthShader.isSupported,
-                    _splashMaterial != null, SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat));
+                    _splashMaterial != null, SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat), _waterSplashMaterial != null);
                 return true;
             }
             catch (Exception ex)
@@ -93,6 +103,8 @@ namespace Volken.Weather
             _counters.SetData(new uint[2]);
             _args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, 4);
             _args.SetData(new uint[] { 6, SplashCapacity, 0, 0, 0 });
+            _waterArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, 4);
+            _waterArgs.SetData(new uint[] { 12, SplashCapacity, 0, 0, 0 });
             if (_mesh == null)
             {
                 _mesh = new Mesh { name = "RainSplashQuad" };
@@ -101,6 +113,19 @@ namespace Volken.Weather
                 _mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
                 _mesh.RecalculateBounds();
                 _mesh.UploadMeshData(true);
+            }
+            if (_waterMesh == null)
+            {
+                _waterMesh = new Mesh { name = "RainWaterSplashQuads" };
+                _waterMesh.vertices = new[]
+                {
+                    new Vector3(-1,-1,0), new Vector3(1,-1,0), new Vector3(1,1,0), new Vector3(-1,1,0),
+                    new Vector3(-1,-1,1), new Vector3(1,-1,1), new Vector3(1,1,1), new Vector3(-1,1,1)
+                };
+                _waterMesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up, Vector2.zero, Vector2.right, Vector2.one, Vector2.up };
+                _waterMesh.triangles = new[] { 0,1,2,0,2,3,4,5,6,4,6,7 };
+                _waterMesh.RecalculateBounds();
+                _waterMesh.UploadMeshData(true);
             }
             _reset = true;
         }
@@ -190,7 +215,7 @@ namespace Volken.Weather
             _compute.SetInt("_Capacity", positions.count);
             _compute.SetInt("_SplashCapacity", SplashCapacity);
             _compute.SetFloat("_DeltaTime", dt);
-            _compute.SetInt("_SplashesEnabled", RainParticles.SplashesEnabled && _splashMaterial != null ? 1 : 0);
+            _compute.SetInt("_SplashesEnabled", RainParticles.SplashesEnabled && (_splashMaterial != null || _waterSplashMaterial != null) ? 1 : 0);
             _compute.SetFloat("_SplashLifetime", Mathf.Clamp(RainParticles.SplashLifetime, 0.1f, 1f));
             Bind(_clear, positions);
             if (_reset)
@@ -236,22 +261,33 @@ namespace Volken.Weather
 
         internal void Resolve() => _compute.Dispatch(_resolve, Mathf.CeilToInt(_surfaces.count / 64f), 1, 1);
 
-        internal void Draw(Camera camera, float fade)
+        internal void Draw(Camera camera, float fade, RenderTexture sceneDepth = null)
         {
             _lastFade = fade;
-            if (!RainParticles.SplashesEnabled || _splashMaterial == null || _splashes == null) return;
-            _splashMaterial.SetBuffer("_SplashPositions", _splashes);
-            _splashMaterial.SetBuffer("_SplashNormals", _normals);
-            _splashMaterial.SetFloat("_Lifetime", Mathf.Clamp(RainParticles.SplashLifetime, 0.1f, 1f));
-            _splashMaterial.SetFloat("_Size", Mathf.Clamp(RainParticles.SplashSize, 0.03f, 0.5f));
-            _splashMaterial.SetFloat("_Fade", fade);
-            _splashMaterial.SetFloat("_MaxDistance", Mathf.Clamp(RainParticles.SplashDistance, 1f, 50f));
-            var parameters = new RenderParams(_splashMaterial)
+            if (!RainParticles.SplashesEnabled || _splashes == null || fade <= 0f) return;
+            if (_splashMaterial != null) DrawSplashes(camera, _splashMaterial, _mesh, _args, fade);
+            if (_waterSplashMaterial == null) return;
+            bool depthReady = sceneDepth != null && sceneDepth.IsCreated();
+            _waterSplashMaterial.SetFloat("_SplashSceneDepthReady", depthReady ? 1f : 0f);
+            _waterSplashMaterial.SetFloat("_ZTest", (float)(depthReady ? CompareFunction.Always : CompareFunction.LessEqual));
+            _waterSplashMaterial.SetTexture("_SplashSceneDepth", depthReady ? (Texture)sceneDepth : Texture2D.whiteTexture);
+            DrawSplashes(camera, _waterSplashMaterial, _waterMesh, _waterArgs, fade);
+        }
+
+        private void DrawSplashes(Camera camera, Material material, Mesh mesh, GraphicsBuffer args, float fade)
+        {
+            material.SetBuffer("_SplashPositions", _splashes);
+            material.SetBuffer("_SplashNormals", _normals);
+            material.SetFloat("_Lifetime", Mathf.Clamp(RainParticles.SplashLifetime, 0.1f, 1f));
+            material.SetFloat("_Size", Mathf.Clamp(RainParticles.SplashSize, 0.03f, 0.5f));
+            material.SetFloat("_Fade", fade);
+            material.SetFloat("_MaxDistance", Mathf.Clamp(RainParticles.SplashDistance, 1f, 50f));
+            var parameters = new RenderParams(material)
             {
                 camera = camera, layer = 0, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false,
                 worldBounds = new Bounds(camera.transform.position, Vector3.one * (RainParticles.SplashDistance * 2f + 4f))
             };
-            Graphics.RenderMeshIndirect(parameters, _mesh, _args);
+            Graphics.RenderMeshIndirect(parameters, mesh, args);
         }
 
         // Requested by the diagnostics button; no automatic or synchronous GPU readback.
@@ -305,6 +341,7 @@ namespace Volken.Weather
             _normals?.Release(); _normals = null;
             _counters?.Release(); _counters = null;
             _args?.Release(); _args = null;
+            _waterArgs?.Release(); _waterArgs = null;
         }
 
         public void Dispose()
@@ -313,7 +350,9 @@ namespace Volken.Weather
             if (_capture != null) Destroy(_capture.gameObject);
             if (_depth != null) { _depth.Release(); Destroy(_depth); }
             if (_mesh != null) Destroy(_mesh);
+            if (_waterMesh != null) Destroy(_waterMesh);
             if (_splashMaterial != null) Destroy(_splashMaterial);
+            if (_waterSplashMaterial != null) Destroy(_waterSplashMaterial);
             if (_compute != null) Destroy(_compute);
         }
 

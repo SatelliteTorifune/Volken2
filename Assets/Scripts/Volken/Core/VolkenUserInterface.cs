@@ -69,7 +69,8 @@ namespace Volken.Core
 
                 bool wantExtraClouds = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraClouds.Value;
                 bool wantExtraRain = ModSettings.Instance == null || ModSettings.Instance.ExtraCameraRain.Value;
-                if (!wantExtraClouds && !wantExtraRain)
+                bool wantExtraFog = ModSettings.Instance != null && ModSettings.Instance.ExtraCameraFog.Value;
+                if (!wantExtraClouds && !wantExtraRain && !wantExtraFog)
                 {
                     RainParticles.DestroyExtraInstances();   // 关掉了就顺手清掉已挂的(否则要等换场景才生效)
                     return;
@@ -83,7 +84,7 @@ namespace Volken.Core
                         (cam == gameCam.NearCamera || cam == gameCam.FarCamera)) continue;
                     if (!IsExtraWorldCamera(cam)) continue;
 
-                    if (wantExtraClouds && cam.GetComponent<CloudRenderer>() == null)
+                    if ((wantExtraClouds || wantExtraFog) && cam.GetComponent<CloudRenderer>() == null)
                     {
                         cam.gameObject.AddComponent<CloudRenderer>();
                     }
@@ -1008,19 +1009,6 @@ namespace Volken.Core
             CreateSlider(group, Locale.GetString("Volken.UI.OrbitResolutionScale"), () => cfg.orbitResolutionScale,
                 s => { cfg.orbitResolutionScale = s; VolkenClouds.Instance.ValueChanged(); }, 0.1f, 1f, 2);
 
-            // 调试分屏开关:仅在 debug 模式(ModSettings.DevMode)下显示,平时对用户隐藏
-            bool orbitDebugShown = false;
-            try { orbitDebugShown = ModSettings.Instance != null && ModSettings.Instance.DevMode; } catch { }
-            if (orbitDebugShown)
-            {
-                var debugToggle = new ToggleModel(Locale.GetString("Volken.UI.OrbitDebugMode"),
-                    () => cfg.orbitDebugMode > 0.5f, s =>
-                    {
-                        cfg.orbitDebugMode = s ? 1f : 0f;
-                        VolkenClouds.Instance.ValueChanged();
-                    });
-                group.Add(debugToggle);
-            }
         }
 
         private static void CreateSlider(GroupModel group, string label,

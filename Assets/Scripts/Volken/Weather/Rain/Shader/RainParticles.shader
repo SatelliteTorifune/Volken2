@@ -38,8 +38,8 @@ Shader "Volken/RainParticles"
         //   只在 HLSL 里声明的 uniform(_RotationMatrix/_Positions/_FadeAmount/_LinearSceneDepth)
         //   不在 Properties 表里,HasProperty 未必看得到,不能用来判版本。
         //   本 shader 语义每次改动就 +1(5 = 最小屏幕宽度守卫,6 = _RandomData 消毒:yzw 夹到 [0,1] + NaN 归零,
-        //                            7 = 水下剔除,8 = GPU 碰撞表面裁切)。
-        _ShaderVer ("Shader Build (部署探针)", Float) = 8
+        //                            7 = 水下剔除,8 = GPU 碰撞表面裁切,9 = 相机雾合成)。
+        _ShaderVer ("Shader Build (部署探针)", Float) = 9
         // 域边界淡出(SP2 把 _DomainPos/_DomainRadius 传给 material,唯一合理用途 = 隐藏球域边界/回收突现):
         //   _EdgeFade = 0 关;>0 时在 [1-_EdgeFade, 1]·R 区间把 alpha 渐隐到 0。
         _EdgeFade ("Domain Edge Fade", Range(0, 0.5)) = 0.2
@@ -58,6 +58,7 @@ Shader "Volken/RainParticles"
             #pragma target 5.0   // StructuredBuffer 需要 SM5
 
             #include "UnityCG.cginc"
+            #include "../../Fog/Shader/FogCommon.cginc"
 
             StructuredBuffer<float4> _Positions;   // 与 compute 里 _Positions 同一 buffer(xyz=帧空间位置)
             StructuredBuffer<float4> _RandomData;  // 同一 buffer 的读视图:yzw = 逐粒长/宽倍率与滚转
@@ -96,6 +97,7 @@ Shader "Volken/RainParticles"
                 float4 screenPos : TEXCOORD1;   // 深度采样用(ComputeScreenPos)
                 float eyeDepth : TEXCOORD2;     // 粒子自身线性眼空间深度(正米)
                 float edgeFade : TEXCOORD3;     // 域边界淡出系数(顶点算好插值;粒子级量,插值基本恒定)
+                float3 fogWorld : TEXCOORD4;
             };
 
             v2f vert(appdata v, uint instanceID : SV_InstanceID)
@@ -176,6 +178,7 @@ Shader "Volken/RainParticles"
                 float4 worldPos = float4(_Positions[instanceID].xyz + local, 1.0);
 
                 o.pos = UnityWorldToClipPos(worldPos);
+                o.fogWorld = worldPos.xyz;
                 o.uv = v.uv;      // 全 0..1,不平铺(uv.y 0=头(亮)→1=尾(淡))
                 o.screenPos = ComputeScreenPos(o.pos);
                 o.eyeDepth = -mul(UNITY_MATRIX_V, worldPos).z;   // 正米,与 combinedDepthTex 同约定
@@ -206,6 +209,8 @@ Shader "Volken/RainParticles"
                     float sceneDepth = tex2D(_LinearSceneDepth, i.screenPos.xy / i.screenPos.w).r;  // 米
                     col.a *= saturate((sceneDepth - i.eyeDepth) * _InvFade);
                 }
+                float4 fog = VolkenFogAtWorld(i.fogWorld);
+                col.rgb = col.rgb*fog.a+fog.rgb;
                 return col;
             }
             ENDCG

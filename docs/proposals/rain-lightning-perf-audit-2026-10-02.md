@@ -1,5 +1,7 @@
 # 雨 / 雷性能审计(2026-10-02)
 
+> 2026-10-08 复核:当前性能入口为 [帧率优化清单](frame-rate-optimization-audit-2026-10-08.md)。下文是早期审计口径:当前雨默认 10 万、上限 40 万,已增加碰撞 / 水花;自动日志与 GPU 回读已清理。分叉已共享独立材质,Renderer 数不等于实测 DrawCall;FillArgs 仍纯计数、没有真实剔除。旧微秒估算与“不能运行 Unity / HLSL”不代表当前证据;既有 GPU 功能验证不等于性能测试。
+
 > 状态:📋 **规划** —— C# 侧低风险项**已落地**(`dotnet build Volken.csproj` = 0 错误),GPU 侧(`FillArgs` 原子加归约、分叉合批)与阈值型改动**未排期**,且**全部未做真机 / 编辑器验收**。
 > 日期:2026-10-02
 > 关联:**雨**[雨计划](../archive/sp2-rain-particledomain-port-2026-09-28.md) §10(实施记录唯一事实源)/ **雷**[雷声真实化](../archive/thunder-realism-2026-09-28.md) / [雨雾复盘](../archive/weather-rain-fog-postmortem-2026-09-27.md)(跨界移植铁律)。

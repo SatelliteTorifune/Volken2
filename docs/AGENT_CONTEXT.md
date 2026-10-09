@@ -1,15 +1,17 @@
 # Volken2 项目会话上下文
 
 > 新会话的代码导航与约束摘要。主题状态、待办和维护规则见 [README](README.md);实施记录只写进主题文档。
-> 核对:2026-10-08;雨碰撞 / 水花修复获用户真机确认,135 项独立 GPU 验证通过,记录已归档。专项矩阵与性能测量不在本次确认范围内。
+> 核对:2026-10-09;两种雾及可操作 UI 已写入原工程,旧占位已清理,独立 GPU 验证完成;用户指定后续直接在原工程工作,本轮不负责打包。雨碰撞 / 水花已获真机确认并归档;135 项既有 GPU 验证不代表性能或雾验收。
 
 ## 0. 定位与当前状态
 
 - SimpleRockets 2 / Juno: New Origins 的 `Volken` 模组;Unity **2022.3.62f3**,内置渲染管线 **BIRP**。
-- 云包含 raymarch、时序超采样、自带云分布、轨道云、水面反射;天气已有**雨视觉、雨声、闪电、雷声**。雾只有配置和面板占位。
-- 本轮雨功能已收束并归档,见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机、整数 hash、透明度、碰撞与水花均已落地。后续工作未排期,不要按早期计划重复实现。
+- 云包含 raymarch、时序超采样、自带云分布、轨道云、水面反射;天气已有**雨视觉、雨声、闪电、雷声**。雾已有**径向薄雾、流动体积雾、三语面板和详细日志**;[雾记录](fog-implementation-plan-2026-10-09.md) §9 为实现状态,§10 为 UI 修复,§11 为薄雾查询纹理,§12 为游戏帧时间 / 调参解耦修正;两种雾资源运行正常,大幅掉帧主因仍未分离,游戏水面 / 原生透明 / 反射与性能待验收。§13 夜间光照已修正,161 项独立验证通过;`code=3 shader=3`,新增 `Fog lighting` 日志,待游戏昼夜验收。
+- 原雨实现已归档,见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机、整数 hash、透明度与碰撞已落地。2026-10-09 用户反馈水面无水花,后续 [水面溅射修复](rain-water-splash-fix-2026-10-09.md) 已接入独立 shader / 竖直飞溅 / 场景深度遮挡,53 项 GPU 回归通过,待打包与真机确认。
+- [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) 已移除天气 / 云诊断控件与状态文字,当前设置页保留开发日志 / Profiler 开关;§4 已按截图精简三语参数标签,只留名称和单位。效果参数、配置管理和后台日志保留,游戏视觉待验收。
 - 场景门控、预设下拉、雷电修复等记录已归档;**归档不代表真机验收通过**。待验证项目见 README §四之三。
 - 未排期方案在 [proposals/](proposals/)。天气母计划是历史底账,旧状态机、命令与路径不能当作当前接口。
+- 当前性能待办见 [帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md);按 `5e4bb88` 源码核对,未实施 / 未测耗时。雷光配置应用顺序缺陷已登记 README,不要把字段已赋值当作真实 Light 已更新。
 
 ## 1. 关键路径
 
@@ -32,7 +34,7 @@
 |---|---|
 | `Clouds/VolkenClouds.cs` | 云层、预设与行星生命周期;订阅 `SceneLoaded` / `PlayerChangedSoi`,广播 `PlanetChanged`;必须先于 `VolkenWeather` 初始化 |
 | `Clouds/PlanetEnvironment.cs` | 行星名、飞行状态、大气和水的环境快照 |
-| `Clouds/CloudRenderer.cs` | `[ImageEffectOpaque] OnRenderImage`:合并远近深度 → Clouds → DilateMV → Upscale → Composite;`LinearSceneDepth` 提供本相机线性深度 |
+| `Clouds/CloudRenderer.cs` | `[ImageEffectOpaque] OnRenderImage`:独立远近深度 → Clouds / TSS → 雾化背景 → 按云深度合成;`LinearSceneDepth` 提供本相机线性深度 |
 | `Clouds/CloudLayer.cs` / `CloudLayerView.cs` | 前者持有配置 / 材质 / 噪声 / 风累积,后者持有每相机每层的 RT 和时序历史;`EnvironmentSuppressed` 不能回写用户的 `config.enabled` |
 | `Clouds/CloudConfig.cs` | 云配置;高度带唯一实现 `TryGetBand`;活跃层由 `VolkenClouds.FillActiveLayers` 填入复用缓冲 |
 | `Clouds/Shader/Clouds.shader` | 体积云、轨道云、时序上采样与合成;密度 / 覆盖修改须同步两种云的 4 处消费点 |
@@ -44,6 +46,7 @@
 | `Weather/VolkenWeatherConfig.cs` | 当前文件名和类名均为 `VolkenWeatherConfig`;总体 / 雨 / 雾 / 雷配置、读写、迁移、限值 |
 | `Weather/WeatherPanel.cs` / `GamePause.cs` | 天气面板 / 排除游戏暂停的计时 |
 | `Weather/Rain/` | `RainParticles`、`RainAudio`、`Shader/`、6 条雨声;每相机独立实例 |
+| `Weather/Fog/` | `FogRenderer` 由每个 CloudRenderer 持有;薄雾 2D 光学厚度查询 / 体积列积分,每相机独立 RT;`ExtraCameraFog` 默认关 |
 | `Weather/Lightning/` | `LightningModule`、`LightningBolt`、`Shader/`、9 条雷声;落雷与按声速延迟的音频 |
 | `Water/ForceSetting.cs` / `PlanetRing/` / `HarmonyPatches/` | 水设置、星环和 Harmony 补丁;部分星环代码未启用 |
 
@@ -61,6 +64,7 @@
 - **坐标原点重置(浮动原点)**:离帧中心 >5000m、帧速 >1000m/s、时间加速或表面锁定切换可触发;订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)` 清云历史。[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §12。
 - **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)。
 - **资产**:按子系统放 `Shader/`;移动时带 `.meta`,同步 `LoadVolkenAsset` 路径与 `_otherAssets` GUID。新增资产不会自动入包,清单可解析不等于已部署。
+- **雾投影**:雾以纹理 UV 为输入,用 `GL.GetGPUProjectionMatrix(..., false)`;云光栅 clip / TSS 的 `true` 保持。两者已有 GPU 方向回归,不得一刀切统一。
 - **诊断**:量与症状相同空间的量,同时记当前值与内部状态,先排除暂停。GPU 同步回读不可常驻,shader 错误去重后统计;同一方向连续 3 轮无改善就换诊断。[复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) §5。
 
 ## 4. 游戏 API 关键入口
@@ -80,8 +84,9 @@
 
 ## 6. 调试与验证
 
-- `Mod.Log` 受 `ModSettings.DevMode` 控制;`Mod.Diag` 用于手动诊断与必要告警,始终输出;`Mod.LogThrottled` 保留异常节流。雨自检 / GPU 回读仅由面板日志按钮触发,不再自动心跳;云轨道诊断须同时开启开发日志和 `orbitDebugMode`。shader 编译错误另查 Unity `Editor.log`。
-- 当前仅注册 **`frs`、`brs`、`VolkenForceRefresh`**。归档中的 `volkenAssets` / `volkenBolt` / `volkenRainAxis*` 已删除;调参走面板,手动落雷走“立刻劈一道”。
+- `Mod.Log` 受 `ModSettings.DevMode` 控制;`Mod.Diag` 始终输出,`Mod.LogThrottled` 保留异常节流。雾默认每 5 秒摘要,开发配置 `fog.diagnostics` 可关闭;雨 / 雾 GPU 回读仅开发代码显式调用,游戏面板入口已移除。云轨道诊断须同时开启开发日志和 `orbitDebugMode`;开发设置保留 XML 兼容,当前设置页仍提供开关。见 [UI 清理](archive/user-ui-cleanup-2026-10-09.md) §2;shader 错误另查 Unity `Editor.log`。
+- 当前仅注册 **`frs`、`brs`、`VolkenForceRefresh`**。归档中的 `volkenAssets` / `volkenBolt` / `volkenRainAxis*` 已删除;调参走面板;手动落雷已移出用户 UI,仅保留开发 API。
+- `VolkenTests/Editor` 验证脚本与菜单已按用户要求删除;主题文档中的 GPU / 性能结果为历史证据,不代表工具入口仍存在。
 - 雨预览见 [开发工具说明](../Assets/Scripts/VolkenTests/README.md);场景、真实海拔、资源打包与音频仍需进游戏验证。
 - 改文档必跑 `powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-docs.ps1 -Root docs`;只改注释用 `strip-code-comments.ps1 -Old <快照> -New <改后>` 自证。
 - Mods 目录不要同时放 `Volken.sr2-mod` 和 `Volken-R.sr2-mod`;联机事件链历史冲突见 [NRE 记录](archive/jno-sceneloaded-nre-2026-08-27.md)。

@@ -7,11 +7,13 @@ using UnityEngine;
 namespace Volken.Weather
 {
     
-    /// <summary>天气面板,追加到 Volken 检查器里(不另开浮动窗口,否则两个面板会互相遮挡);分组 = 状态(只读)/ 总体(总开关、天气值、节奏)/ 配置管理(天气**自己的**预设,与云互不干扰)/ 雨 / 雾 / 雷,
+    /// <summary>天气面板,追加到 Volken 检查器里(不另开浮动窗口,否则两个面板会互相遮挡);分组 = 总体(天气总开关)/ 配置管理(天气**自己的**预设,与云互不干扰)/ 雨 / 雾 / 雷,
     /// 与 <see cref="VolkenWeatherConfig"/> 的 XML 节点一一对应。</summary>
     /// <remarks>面板直接改**清单里那条记录上的参数实例本身**(不是副本),点"保存当前配置"才落盘;滑块下一帧生效(<see cref="VolkenWeather.Tick"/> 每帧读 Config)。</remarks>
     public static class WeatherPanel
     {
+        internal static int FogEditCount { get; private set; }
+
         /// <summary>往检查器里追加天气分组(无参数:换配置不需要重建面板)。</summary>
         public static void Build(InspectorModel inspector)
         {
@@ -27,7 +29,6 @@ namespace Volken.Weather
                 return;
             }
 
-            BuildStatusGroup(root, weather);
             BuildOverallGroup(root, weather);
             BuildConfigManagementGroup(root, weather);
             BuildRainGroup(root, weather);
@@ -35,23 +36,6 @@ namespace Volken.Weather
             BuildLightningGroup(root, weather);
 
             inspector.AddGroup(root);
-        }
-
-        // 状态(只读)
-
-        private static void BuildStatusGroup(GroupModel parent, VolkenWeather weather)
-        {
-            parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherPlanet"),
-                () => string.IsNullOrEmpty(weather.CurrentPlanet) ? "—" : weather.CurrentPlanet));
-
-            parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherActive"),
-                () => weather.IsActive
-                    ? Locale.GetString("Volken.UI.WeatherActiveOn")
-                    : Locale.GetString("Volken.UI.WeatherActiveOff")));
-
-            parent.Add(new TextModel(Locale.GetString("Volken.UI.WeatherAltitude"),
-                () => $"{weather.CameraAltitudeAsl:F0} m ASL / {weather.CameraAltitudeAgl:F0} m AGL" +
-                      $"   solar {weather.LocalSolarHour:F1}h   cloudFade {weather.CameraCloudFade:F2}"));
         }
 
         // 总体(并入"天气"根组)
@@ -193,24 +177,6 @@ namespace Volken.Weather
                     RainParticles.SetEnabled(v ? 1 : 0);   // 内含 AttachToCurrentView
                 }));
 
-            group.Add(new TextModel(Locale.GetString("Volken.UI.RainStats"),
-                () => RainParticles.StatsLine()));
-
-            // 雨声状态(素材是否进包 / 淡变包络 / 小雨↔暴雨混音)
-            group.Add(new TextModel(Locale.GetString("Volken.UI.RainAudioStats"),
-                () => RainAudio.StatsLine()));
-
-            // 立即开关(调试用:不用等天气值到阈值)
-            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainToggleNow"), _ =>
-            {
-                bool now = !(VolkenWeather.Instance?.Config?.rain?.enabled ?? false);
-                Set(c => c.rain.enabled = now);
-                RainParticles.ApplyConfig(VolkenWeather.Instance?.Config?.rain);
-                RainParticles.SetEnabled(now ? 1 : 0);
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                    Locale.GetString(now ? "Volken.UI.RainOnMsg" : "Volken.UI.RainOffMsg"));
-            }));
-
             // 密度(粒子数):SP2 出厂 100000@R50 = 0.191/m³,EVE 参考 0.139/m³
             AddSlider(group, "Volken.UI.RainAmount",
                 () => weather.Config?.rain?.amount ?? 20000f,
@@ -328,20 +294,6 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.adaptiveDomain ?? true,
                 v => ApplyRain(c => c.rain.adaptiveDomain = v)));
 
-            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.RainDumpLog"), _ =>
-            {
-                RainParticles.DiagStatus();   // 完整状态写进 Player.log(方便发日志排查)
-                RainAudio.DiagStatus();       // 雨声状态
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.RainDumped"));
-            }));
-
-            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRowTest"),
-                () => RainParticles.TestRow, v =>
-                {
-                    RainParticles.TestRow = v;
-                    Mod.Diag("RainParticles: testRow = {0} (阶段2.3 等距排自检:相机前 30m 一排 3m 间距,应见 6~7 根竖条)", v);
-                }));
-
             parent.Add(group);
         }
 
@@ -353,38 +305,86 @@ namespace Volken.Weather
             RainParticles.ApplyConfig(cfg.rain);
         }
 
-        // 雾(占位)
-
-        /// <summary>雾的参数组 —— **整组禁用**(雾未落地)。</summary>
+        // 雾:薄雾与体积密度可以独立启用,参数沿用天气预设的保存路径。
         private static void BuildFogGroup(GroupModel parent, VolkenWeather weather)
         {
             var group = new GroupModel(Locale.GetString("Volken.UI.WeatherFog"));
-
-            group.Add(new TextModel(Locale.GetString("Volken.UI.WeatherFogRemoved"), () => "—"));
-
-            AddDisabledToggle(group, "Volken.UI.FogEnabled",
-                () => weather.Config?.fog?.enabled ?? false);
-            AddDisabledToggle(group, "Volken.UI.FogDawnFog",
-                () => weather.Config?.fog?.dawnFog ?? false);
-            AddDisabledSlider(group, "Volken.UI.FogBaseHeight", -500f, 20000f, 0,
-                () => weather.Config?.fog?.baseHeight ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogHeight", 1f, 20000f, 0,
-                () => weather.Config?.fog?.height ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogDensity", 0f, 0.1f, 5,
-                () => weather.Config?.fog?.density ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogHeightFalloff", 0.001f, 5f, 3,
-                () => weather.Config?.fog?.heightFalloff ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogMaxOpacity", 0f, 1f, 2,
-                () => weather.Config?.fog?.maxOpacity ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogStartDistance", 0f, 20000f, 0,
-                () => weather.Config?.fog?.startDistance ?? 0f);
-            AddDisabledSlider(group, "Volken.UI.FogColorBlend", 0f, 1f, 2,
-                () => weather.Config?.fog?.colorBlend ?? 0f);
-
+            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.FogPresetThin"), _ => FogPreset(weather, true, false)));
+            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.FogPresetVolume"), _ => FogPreset(weather, false, true)));
+            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.FogPresetBoth"), _ => FogPreset(weather, true, true)));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.FogEnabled"),
+                () => weather.Config?.fog?.enabled ?? false, v => ApplyFog(f => f.enabled = v)));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.FogHeightEnabled"),
+                () => weather.Config?.fog?.heightEnabled ?? false, v => ApplyFog(f => f.heightEnabled = v)));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.FogVolumeEnabled"),
+                () => weather.Config?.fog?.volumetricEnabled ?? false, v => ApplyFog(f => f.volumetricEnabled = v)));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.FogDawnFog"),
+                () => weather.Config?.fog?.dawnFog ?? false, v => ApplyFog(f => f.dawnFog = v)));
+            AddFogSlider(group, weather, "FogDensity", f => f.density, (f,v) => f.density=v, 0, 0.01f, 5);
+            AddFogSlider(group, weather, "FogVolumeDensity", f => f.volumeDensity, (f,v) => f.volumeDensity=v, 0, 0.02f, 5);
+            AddFogSlider(group, weather, "FogBaseHeight", f => f.baseHeight, (f,v) => f.baseHeight=v, -500, 20000, 0);
+            AddFogSlider(group, weather, "FogHeight", f => f.height, (f,v) => f.height=v, 1, 10000, 0);
+            AddFogSlider(group, weather, "FogHeightFalloff", f => f.heightFalloff, (f,v) => f.heightFalloff=v, 0.01f, 5, 2);
+            AddFogSlider(group, weather, "FogMaxOpacity", f => f.maxOpacity, (f,v) => f.maxOpacity=v, 0, 1, 2);
+            AddFogSlider(group, weather, "FogStartDistance", f => f.startDistance, (f,v) => f.startDistance=v, 0, 20000, 0);
+            AddFogSlider(group, weather, "FogMaxDistance", f => f.maxDistance, (f,v) => f.maxDistance=v, 100, 100000, 0);
+            var quality = new SliderModel(Locale.GetString("Volken.UI.FogQuality"),
+                () => weather.Config?.fog?.quality ?? 0, v => ApplyFog(f => f.quality = (int)v), 0, 2, true);
+            quality.ValueFormatter = value => Locale.GetString(value < 1 ? "Volken.UI.QualityLow"
+                : value < 2 ? "Volken.UI.QualityMedium" : "Volken.UI.QualityHigh");
+            group.Add(quality);
+            AddFogSlider(group, weather, "FogNoiseScale", f => f.noiseScale, (f,v) => f.noiseScale=v, 20, 5000, 0);
+            AddFogSlider(group, weather, "FogCoverage", f => f.coverage, (f,v) => f.coverage=v, 0.01f, 1, 2);
+            AddFogSlider(group, weather, "FogContrast", f => f.contrast, (f,v) => f.contrast=v, 0.2f, 5, 2);
+            AddFogSlider(group, weather, "FogWindSpeed", f => f.windSpeed, (f,v) => f.windSpeed=v, 0, 100, 1);
+            AddFogSlider(group, weather, "FogWindDirection", f => f.windDirection, (f,v) => f.windDirection=v, 0, 360, 0);
+            AddFogSlider(group, weather, "FogAnisotropy", f => f.anisotropy, (f,v) => f.anisotropy=v, -0.8f, 0.8f, 2);
+            AddFogSlider(group, weather, "FogColorBlend", f => f.colorBlend, (f,v) => f.colorBlend=v, 0, 1, 2);
+            AddFogSlider(group, weather, "FogColorR", f => f.colorR, (f,v) => f.colorR=v, 0, 1, 2);
+            AddFogSlider(group, weather, "FogColorG", f => f.colorG, (f,v) => f.colorG=v, 0, 1, 2);
+            AddFogSlider(group, weather, "FogColorB", f => f.colorB, (f,v) => f.colorB=v, 0, 1, 2);
             parent.Add(group);
+            Mod.Diag("Fog UI ready: build=3 controls=enabled diagnostics=hidden presets=height/volume/both configReady={0} weatherActive={1}",
+                weather.Config?.fog != null, weather.IsActive);
         }
 
-        // 雷(唯一可调)
+        private static void ApplyFog(Action<VolkenWeatherConfig.FogSection> mutate)
+        {
+            var weather = VolkenWeather.Instance;
+            if (weather?.Config?.fog == null) return;
+            mutate(weather.Config.fog);
+            weather.Config.ClampAll();
+            FogEditCount++;
+            // FogRenderer consumes this configuration on the next render; rain/thunder state is independent.
+        }
+
+        private static void AddFogSlider(GroupModel group, VolkenWeather weather, string key,
+            Func<VolkenWeatherConfig.FogSection,float> getter, Action<VolkenWeatherConfig.FogSection,float> setter,
+            float min, float max, int decimals, bool integer = false)
+        {
+            AddSlider(group, "Volken.UI."+key, () => weather.Config?.fog != null ? getter(weather.Config.fog) : 0,
+                v => ApplyFog(f => setter(f,v)), min, max, decimals, integer);
+        }
+
+        private static void FogPreset(VolkenWeather weather, bool thin, bool volume)
+        {
+            if (weather.Config?.fog == null) return;
+            weather.Config.overall.enabled = true;
+            ApplyFog(f =>
+            {
+                f.enabled=true; f.heightEnabled=thin; f.volumetricEnabled=volume;
+                f.baseHeight=0; f.height=250; f.heightFalloff=1; f.density=0.0003f; f.volumeDensity=0.0015f;
+                f.startDistance=0; f.maxDistance=30000; f.maxOpacity=0.95f; f.quality=1;
+                f.noiseScale=800; f.coverage=0.65f; f.contrast=1.5f; f.windSpeed=5; f.windDirection=45;
+                f.colorR=0.72f; f.colorG=0.78f; f.colorB=0.85f; f.colorBlend=0.5f;
+                f.anisotropy=0.35f; f.dawnFog=false; f.diagnostics=true; f.debugMode=0;
+            });
+            weather.RefreshActiveState();
+            Mod.Diag("Fog preset: height={0} volume={1} weatherEnabled={2} planet='{3}'",thin,volume,weather.IsActive,weather.CurrentPlanet);
+            Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.FogPresetApplied"));
+        }
+
+        // 雷
 
         private static void BuildLightningGroup(GroupModel parent, VolkenWeather weather)
         {
@@ -396,22 +396,6 @@ namespace Volken.Weather
                     if (weather.Config?.lightning == null) return;
                     weather.Config.lightning.enabled = v;
                     weather.RefreshActiveState();
-                }));
-
-            // 立即劈一道(唯一有副作用的按钮;省得等 6~45 秒的随机间隔)
-            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.LightningTriggerNow"), _ =>
-            {
-                bool struck = VolkenWeather.Instance?.TriggerLightning() ?? false;
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString(
-                    struck ? "Volken.UI.LightningTriggered" : "Volken.UI.LightningTriggerBlocked"));
-            }));
-
-            group.Add(new TextModel(Locale.GetString("Volken.UI.LightningStats"),
-                () =>
-                {
-                    var lm = weather.Lightning;
-                    if (lm == null) return Locale.GetString("Volken.UI.LightningInactive");
-                    return $"bolts {lm.BoltCount}   next {lm.TimeToNextStrike:F1}s";
                 }));
 
             AddSlider(group, "Volken.UI.LightningMinDelay",
@@ -493,23 +477,5 @@ namespace Volken.Weather
             group.Add(model);
         }
 
-        private static void AddDisabledSlider(GroupModel group, string localeKey,
-            float min, float max, int decimals, Func<float> getter)
-        {
-            var model = new SliderModel(Locale.GetString(localeKey), getter, _ => { }, min, max, false)
-            {
-                Enabled = false,
-            };
-            model.ValueFormatter = f => f.ToString("n" + Mathf.Max(0, decimals));
-            group.Add(model);
-        }
-
-        private static void AddDisabledToggle(GroupModel group, string localeKey, Func<bool> getter)
-        {
-            group.Add(new ToggleModel(Locale.GetString(localeKey), getter, _ => { })
-            {
-                Enabled = false,
-            });
-        }
     }
 }

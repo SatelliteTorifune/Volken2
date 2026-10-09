@@ -148,6 +148,7 @@ namespace Volken.Clouds
                 layer.SetStaticShaderProperties(mat);   // 与主材质同步(clone 可能落后于配置变更)
 
                 mat.SetFloat("_ReflectionMode", 1f);     // 跳过 DepthTex 遮挡 + 用显式相机位置
+                mat.SetFloat("_VolkenFogComposite", 0f);
                 mat.SetTexture("DepthTex", _cloudTex);   // 反射分支不会采样,绑上避免空采样
                 mat.SetVector("_CamPos", camPos);
                 mat.SetVector("_CamFwd", fwd);

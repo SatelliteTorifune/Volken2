@@ -22,7 +22,7 @@
 | `RainPreview.cs` | **编辑器内雨预览台**：自由飞相机 + 参数面板即时生效 + 地面/参照物；跑的是同一份 compute/shader/驱动代码 | Unity 里 Add Component「Volken Rain Preview」→ Play（可勾「下次 Play 自动启动」写 PlayerPrefs，仅编辑器生效） |
 | `NoiseVisualizer.cs` | 体积云噪声可视化（`[ExecuteInEditMode]`） | 场景里挂组件 |
 | `RaymarchDebug.cs` | 体积云 raymarch 步进调试 | 场景里挂组件 |
-| `Profiler/` | 性能剖析覆盖层（帧耗时/面板） | 由 `TestsBootstrap` 自动创建；可见性以 `ModSettings.ShowProfiler` 为准 |
+| `Profiler/` | 性能剖析覆盖层（帧耗时/面板） | 由 `TestsBootstrap` 自动创建；读取开发配置 `ShowProfiler`,设置页入口保留 |
 | `TestsBootstrap.cs` | 上述工具的自发创建入口 | 自动（`RuntimeInitializeOnLoadMethod`） |
 
 ## 校验"零引用"（改完正式代码后可自查）
@@ -38,6 +38,8 @@ Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
 
 ## 历史
 
+- 2026-10-09 [用户 UI 清理](../../../docs/archive/user-ui-cleanup-2026-10-09.md):游戏雨 / 雾日志按钮和诊断视图移除,当时保留编辑器雨预览及 GPU 探针;GPU 探针已在后续清理中删除;旧记录的游戏按钮入口已失效。`ShowProfiler` 仍读取已有 XML,默认 false;当前源码保留设置页入口。
+
 - 2026-10-08 日志清理:雨 / 雨声不再自动心跳,雨粒子与水花 GPU 回读由“把状态写入 Console”按钮触发,最小间隔 10 秒;游戏天气面板的日志按钮行为一致。GPU 数量与重生数显示最近一次手动采样,−1 表示尚未采样。
 
 - 2026-09-29 建立：原先散落在 `Assets/Scripts/Volken/Debug/`、`Assets/Scripts/Volken/Weather/RainAxisProbe.cs`、
@@ -48,3 +50,9 @@ Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
 - 2026-10-03 清理死代码：删 `RainAxisProbe.cs`（构轴结论已定案，删命令后无人调用）、
   `RainAudio.SetEnabled/SetVolume`、剖析器的 CSV 录制链（`ProfilerSession.BeginCapture/FinishCapture/
   CaptureActive/CaptureLimit/FrameSample`，唯一入口是被删掉的 `VolkenProfiler.Capture` 命令）。
+
+## 已移除的编辑器验证工具
+
+【决策:2026-10-09】按用户要求删除 `Editor/` 整个目录:雾 GPU、性能、昼夜光照与水面水花四个验证脚本及对应 `.meta`,同时删除目录的 `.meta`。Unity 菜单与命令行执行入口随脚本移除。
+
+历史验证结果保留在[雾记录 §9、§11、§13](../../../docs/fog-implementation-plan-2026-10-09.md)与[水面修复 §3](../../../docs/rain-water-splash-fix-2026-10-09.md#3-验证)。这些是删除前的测试证据,不再提供当前可执行的编辑器工具入口。

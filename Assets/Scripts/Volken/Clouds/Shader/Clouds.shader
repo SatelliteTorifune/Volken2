@@ -23,6 +23,7 @@ Shader "Hidden/Clouds"
         UpscaledCloudTex("UpscaledCloudTex", 2D) = "" {}
         OrbitCloudTex("OrbitCloudTex", 2D) = "" {}
         SceneDepthTex("SceneDepthTex", 2D) = "" {}
+        FogCloudDepthTex("Fog cloud depth", 2D) = "" {}
         StockCloudCube("Stock Cloud Cube", Cube) = "" {}
     }
         SubShader
@@ -1338,10 +1339,12 @@ Shader "Hidden/Clouds"
         {
             Name "Composite"
             CGPROGRAM
+            #pragma target 3.0
             #pragma vertex vert
             #pragma fragment frag
         
             #include "UnityCG.cginc"
+            #include "../../Weather/Fog/Shader/FogCommon.cginc"
         
             struct appdata
             {
@@ -1373,6 +1376,8 @@ Shader "Hidden/Clouds"
             SamplerState samplerOrbitCloudTex;
             Texture2D<float> SceneDepthTex;
             SamplerState samplerSceneDepthTex;
+            sampler2D FogCloudDepthTex;
+            float _VolkenFogComposite, _FogOrbitAltitude;
             sampler2D _MainTex;
             
             float3 sphereCenter;
@@ -1392,6 +1397,38 @@ Shader "Hidden/Clouds"
                     clouds = (i.uv.x < 0.5) ? volClouds : orbitClouds;
                 float4 source = tex2D(_MainTex, i.uv);
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
+
+                if (_VolkenFogComposite > 0.5 && _VolkenFogEnabled > 0.5)
+                {
+                    float3 ray = VolkenFogRay(i.uv);
+                    float volDistance = tex2D(FogCloudDepthTex,i.uv).r;
+                    float r = _VolkenFogUpRadius.w, h = _VolkenFogOrigin.w;
+                    float b = (r+h)*dot(_VolkenFogUpRadius.xyz,ray);
+                    float c = (h-_FogOrbitAltitude)*(2*r+h+_FogOrbitAltitude);
+                    float disc = b*b-c;
+                    float orbitDistance = _VolkenFogRange.y;
+                    if (disc>=0)
+                    {
+                        float root = sqrt(disc);
+                        float q = -b-(b>=0 ? root : -root);
+                        float other = abs(q)>1e-5 ? c/q : -b-root;
+                        float entry = min(q,other), exit = max(q,other);
+                        orbitDistance = entry>0 ? entry : max(0,exit);
+                    }
+                    float blend = _OrbitDebugMode>0.5 ? (i.uv.x<0.5 ? 0 : 1) : _OrbitFade;
+                    float4 vf = float4(0,0,0,1), of = float4(0,0,0,1);
+                    if (blend<1) vf = VolkenFogAtRay(i.uv,volDistance>0 ? volDistance : _VolkenFogRange.y,ray);
+                    if (blend>0) of = VolkenFogAtRay(i.uv,orbitDistance,ray);
+                    if (_CompositeMode<0.5)
+                        return float4(source.rgb+lerp(volClouds.rgb*vf.a,orbitClouds.rgb*of.a,blend),source.a);
+                    bool near = sceneDepth>0 && sceneDepth<_NearThreshold;
+                    float factor = near ? lerp(0.2,1,smoothstep(0,_NearThreshold,sceneDepth)) : saturate(sceneDepth/5000);
+                    float vt = lerp(near ? 0.8 : 1,volClouds.a,factor);
+                    float ot = lerp(near ? 0.8 : 1,orbitClouds.a,factor);
+                    float3 vc = vf.a*volClouds.rgb*factor+(1-vt)*vf.rgb;
+                    float3 oc = of.a*orbitClouds.rgb*factor+(1-ot)*of.rgb;
+                    return float4(source.rgb*lerp(vt,ot,blend)+lerp(vc,oc,blend),source.a);
+                }
 
                 // === Additive Mode (零视觉干扰) ===
                 // 直接将云光加到场景上，不改变场景透过率

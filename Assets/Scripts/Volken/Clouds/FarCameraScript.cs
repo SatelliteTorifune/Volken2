@@ -16,7 +16,7 @@ namespace Volken.Clouds
         public RenderTexture farDepthTex;
 
         private Camera _cam;
-        // 独立材质实例:它的 "clipPlanes" 必须始终是远相机的裁剪面,而共享的云材质每帧会被近相机的裁剪面覆盖
+        // 独立深度材质,不随云的启停或主相机的云材质参数变化。
         private Material _depthMat;
         private CommandBuffer _commandBuffer;
         private const CameraEvent CaptureEvent = CameraEvent.AfterForwardOpaque;
@@ -27,7 +27,7 @@ namespace Volken.Clouds
         {
             _cam = GetComponent<Camera>();
             _cam.depthTextureMode |= DepthTextureMode.Depth;
-            _depthMat = new Material(Volken.Clouds.VolkenClouds.Instance.MainLayer?.material?.shader);
+            _depthMat = SceneDepth.CreateMaterial();
         }
 
         private void OnEnable()
@@ -42,6 +42,8 @@ namespace Volken.Clouds
 
         private void OnPreRender()
         {
+            if (_depthMat == null) _depthMat = SceneDepth.CreateMaterial();
+            if (_depthMat == null) return;
             maxFarDepth = _cam.farClipPlane;
 
             if (farDepthTex == null || !farDepthTex.IsCreated() ||   // 分辨率变化时重建
@@ -50,7 +52,7 @@ namespace Volken.Clouds
                 RebuildResources();
             }
 
-            _depthMat.SetVector("clipPlanes", new Vector2(_cam.nearClipPlane, _cam.farClipPlane));
+            _depthMat.SetFloat("_DepthFarClip", _cam.farClipPlane);
         }
 
         private void RebuildResources()
@@ -65,12 +67,14 @@ namespace Volken.Clouds
             if (farDepthTex != null)
             {
                 farDepthTex.Release();
+                Destroy(farDepthTex);
             }
 
             farDepthTex = new RenderTexture(_cam.pixelWidth, _cam.pixelHeight, 0, RenderTextureFormat.RFloat);
             farDepthTex.Create();
 
             _commandBuffer = new CommandBuffer { name = "Volken Far Depth Capture" };
+            _depthMat.SetFloat("_DepthFarClip", _cam.farClipPlane);
             _commandBuffer.Blit(BuiltinRenderTextureType.None, farDepthTex, _depthMat, _depthMat.FindPass("FarDepth"));
             _commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);   // 恢复相机自身的渲染目标
             _cam.AddCommandBuffer(CaptureEvent, _commandBuffer);
@@ -92,10 +96,12 @@ namespace Volken.Clouds
         private void OnDestroy()
         {
             RemoveCommandBuffer();
+            if (_depthMat != null) Destroy(_depthMat);
 
             if (farDepthTex != null)
             {
                 farDepthTex.Release();
+                Destroy(farDepthTex);
                 farDepthTex = null;
             }
         }

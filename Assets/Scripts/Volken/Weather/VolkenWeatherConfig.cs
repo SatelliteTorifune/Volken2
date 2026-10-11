@@ -19,6 +19,7 @@ namespace Volken.Weather
     [Serializable]
     public class VolkenWeatherConfig
     {
+        /// <summary>兼容旧 XML 的总体字段;enabled 不再控制天气运行。</summary>
         [Serializable]
         public class OverallSection
         {

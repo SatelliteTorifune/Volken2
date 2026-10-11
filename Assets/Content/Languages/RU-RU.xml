@@ -21,9 +21,6 @@
 
     <s id="Volken.UI.Weather">Погода</s>
     <s id="Volken.UI.WeatherUnavailable">Погода недоступна. Перезагрузите сцену полёта.</s>
-    <s id="Volken.UI.WeatherEnabled">Включить погоду</s>
-    <s id="Volken.UI.WeatherEnabledOn">Погода для этой планеты включена.</s>
-    <s id="Volken.UI.WeatherEnabledOff">Погода для этой планеты выключена.</s>
     <s id="Volken.UI.WeatherConfigSaved">Конфигурация погоды сохранена.</s>
     <s id="Volken.UI.WeatherResetToDefault">Настройки сброшены. Сохраните конфигурацию.</s>
 

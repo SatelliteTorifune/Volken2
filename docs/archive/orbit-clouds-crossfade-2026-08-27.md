@@ -4,6 +4,10 @@
 > 日期:2026-08-27
 > 依据:KSA 源码(`<KSA_REF>Atmosphere/Rendering/`)实读 + Volken 现行代码
 > 关联文档:[ksa-temporal-upscale-port-2026-08-24.md](ksa-temporal-upscale-port-2026-08-24.md)、[../proposals/cloud-optimization-roadmap-2026-08-28.md](../proposals/cloud-optimization-roadmap-2026-08-28.md)(#2 距离淡出/LOD、#8 层壳相交排序)
+> 后续修复(2026-10-11):TSS 切换 / 深度重建时纯轨道路径漏绑定深度,已改为每次显式绑定当前场景深度,见[云可见性诊断](../cloud-visibility-diagnosis-2026-10-10.md) §7;待游戏验收。
+> 同日自查:轨道噪声声明修正为 3D,alpha 统一为透射率,逐层材质与生命周期缺口已修,见上述文档 §8;旧合成说明以该节为准。
+> 后续视觉回归:真实 3D 周期切片导致远景重复,已补像素足迹 mip 过滤与小瓦片平均退场,见上述文档 §9;壳面单点采样不能保证与体积积分形状完全一致,待游戏验收。
+> KSA 安装 shader 复核(2026-10-11):地球两种云共用全球覆盖且 2D 配套法线;体积噪声有三采样反平铺,过渡权重不互补。§3-B 的一致性保证过强,新的证据与提案见 [参考复核](../proposals/ksa-orbit-cloud-reference-audit-2026-10-11.md)。
 
 ## 0. 结论速览
 

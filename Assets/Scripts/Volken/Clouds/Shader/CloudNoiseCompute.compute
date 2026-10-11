@@ -3,6 +3,7 @@
 int resolution;
 int numCells;
 float weight;
+int accumulate;
 
 RWStructuredBuffer<float3> points;
 RWTexture3D<float> result;
@@ -36,5 +37,5 @@ void Whorley (uint3 id : SV_DispatchThreadID)
         }
     }
     
-    result[id] += weight * max(0.0, 1.0 - sqrt(dist) / cellSize);
+    result[id] = (accumulate != 0 ? result[id] : 0.0) + weight * max(0.0, 1.0 - sqrt(dist) / cellSize);
 }

@@ -21,9 +21,6 @@
 
     <s id="Volken.UI.Weather">天气</s>
     <s id="Volken.UI.WeatherUnavailable">天气系统未初始化，请重新进入飞行场景。</s>
-    <s id="Volken.UI.WeatherEnabled">启用天气</s>
-    <s id="Volken.UI.WeatherEnabledOn">本行星天气已启用。</s>
-    <s id="Volken.UI.WeatherEnabledOff">本行星天气已关闭。</s>
     <s id="Volken.UI.WeatherConfigSaved">天气配置已保存。</s>
     <s id="Volken.UI.WeatherResetToDefault">已重置为默认，请保存配置。</s>
 

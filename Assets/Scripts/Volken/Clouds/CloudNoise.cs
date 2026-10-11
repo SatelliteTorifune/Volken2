@@ -37,9 +37,12 @@ namespace Volken.Clouds
                 dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
                 volumeDepth = resolution,
                 wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Trilinear,
                 enableRandomWrite = true,
-                useMipMap = false
+                useMipMap = true,
+                autoGenerateMips = false
             };
+            tex.Create();
 
             float norm = (1.0f - gain) / (1.0f - Mathf.Pow(gain, octaves));
 
@@ -52,13 +55,15 @@ namespace Volken.Clouds
                     break;
                 }
 
-                WriteWhorley(ref tex, norm * weight, resolution, numCells);
+                WriteWhorley(ref tex, norm * weight, resolution, numCells, i > 0);
             }
 
+            tex.GenerateMips();
+            tex.name = "VolkenWorleyFBM";
             return tex;
         }
 
-        private void WriteWhorley(ref RenderTexture tex, float weight, int res, int numCells)
+        private void WriteWhorley(ref RenderTexture tex, float weight, int res, int numCells, bool accumulate)
         {
             System.Random rand = new System.Random(_seed);
             Vector3[] cellPoints = new Vector3[numCells * numCells * numCells];
@@ -81,6 +86,7 @@ namespace Volken.Clouds
             _noiseCompute.SetInt("resolution", res);
             _noiseCompute.SetInt("numCells", numCells);
             _noiseCompute.SetFloat("weight", weight);
+            _noiseCompute.SetInt("accumulate", accumulate ? 1 : 0);
             _noiseCompute.SetBuffer(handle, "points", buffer);
             _noiseCompute.SetTexture(handle, "result", tex);
 

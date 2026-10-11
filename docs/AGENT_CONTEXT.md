@@ -5,12 +5,15 @@
 
 ## 0. 定位与当前状态
 
+- [雨滴方向修复](archive/rain-direction-diagnosis-2026-10-11.md) §6~§8:世界 Y 速度绝对值反射已去除;用户反馈与 `build=2` 游戏日志确认本次场景通过,34 组预期角差最大 0.17°。已按用户要求移除本次诊断代码 / 周期回读及专用临时日志并归档;旧 `RainDirection` 字段仅是历史证据。移动参考帧补偿及非零变体缩放缺口仍存在。
+- [云可见性与噪声修复](cloud-visibility-diagnosis-2026-10-10.md) §5~§12:可见性 / 生命周期与镜头依赖已修;用户否定 §11 的画质后,§12 撤回试验主噪声与固定粗化,恢复旧体积 Worley / mip 0,轨道轮廓改由现有宏观分布决定。177 项 Unity / GPU 回归通过;最新 `build=8 shader=7`,正常 `shapeNoise=VolkenWorleyFBM noiseMips=8/8`,轨道深度仍为 scene。Worley 为正常生成器;旧 169 / 170 项不能当当前画质验收,待游戏复核,未打包。
 - SimpleRockets 2 / Juno: New Origins 的 `Volken` 模组;Unity **2022.3.62f3**,内置渲染管线 **BIRP**。
 - 云包含 raymarch、时序超采样、自带云分布、轨道云、水面反射;天气已有**雨视觉、雨声、闪电、雷声**。雾已有**径向薄雾、流动体积雾、三语面板和详细日志**;[雾记录](fog-implementation-plan-2026-10-09.md) §9 为实现状态,§10 为 UI 修复,§11 为薄雾查询纹理,§12 为游戏帧时间 / 调参解耦修正;两种雾资源运行正常,大幅掉帧主因仍未分离,游戏水面 / 原生透明 / 反射与性能待验收。§13 夜间光照已修正,161 项独立验证通过;`code=3 shader=3`,新增 `Fog lighting` 日志,待游戏昼夜验收。
 - 原雨实现已归档,见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机、整数 hash、透明度与碰撞已落地。2026-10-09 用户反馈水面无水花,后续 [水面溅射修复](rain-water-splash-fix-2026-10-09.md) 已接入独立 shader / 竖直飞溅 / 场景深度遮挡,53 项 GPU 回归通过,待打包与真机确认。
-- [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) 已移除天气 / 云诊断控件与状态文字,当前设置页保留开发日志 / Profiler 开关;§4 已按截图精简三语参数标签,只留名称和单位。效果参数、配置管理和后台日志保留,游戏视觉待验收。
+- [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) 已移除天气 / 云诊断控件与状态文字,当前设置页保留开发日志 / Profiler 开关;§4 已按截图精简三语参数标签,只留名称和单位。§6 已移除天气总开关和配置管理子组,配置操作直接并入天气根组;各效果独立启停,旧 Overall 字段仅作 XML 兼容。后台日志保留,游戏视觉待验收。
 - 场景门控、预设下拉、雷电修复等记录已归档;**归档不代表真机验收通过**。待验证项目见 README §四之三。
 - 未排期方案在 [proposals/](proposals/)。天气母计划是历史底账,旧状态机、命令与路径不能当作当前接口。
+- [过渡曲线与反平铺提案](proposals/orbit-transition-antitiling-plan-2026-10-11.md):用户确定先改 2D–3D 过渡、后引入共用反平铺;适配不同类型行星,全球贴图相关配置暂缓。曲线候选保持互补权重,反平铺同步体积密度 / 反射 / 可选轨道 albedo;宏观覆盖继续读现有分布,尚未实施。[KSA 复核](proposals/ksa-orbit-cloud-reference-audit-2026-10-11.md) 保留源码证据,原全球贴图优先建议已被接管;同源单切片不保证体积积分形状一致。
 - 当前性能待办见 [帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md);按 `5e4bb88` 源码核对,未实施 / 未测耗时。雷光配置应用顺序缺陷已登记 README,不要把字段已赋值当作真实 Light 已更新。
 
 ## 1. 关键路径
@@ -37,7 +40,7 @@
 | `Clouds/CloudRenderer.cs` | `[ImageEffectOpaque] OnRenderImage`:独立远近深度 → Clouds / TSS → 雾化背景 → 按云深度合成;`LinearSceneDepth` 提供本相机线性深度 |
 | `Clouds/CloudLayer.cs` / `CloudLayerView.cs` | 前者持有配置 / 材质 / 噪声 / 风累积,后者持有每相机每层的 RT 和时序历史;`EnvironmentSuppressed` 不能回写用户的 `config.enabled` |
 | `Clouds/CloudConfig.cs` | 云配置;高度带唯一实现 `TryGetBand`;活跃层由 `VolkenClouds.FillActiveLayers` 填入复用缓冲 |
-| `Clouds/Shader/Clouds.shader` | 体积云、轨道云、时序上采样与合成;密度 / 覆盖修改须同步两种云的 4 处消费点 |
+| `Clouds/Shader/Clouds.shader` | 体积云、轨道云、时序上采样与合成;体积密度 / 光照 / 云影 / 反射须一致,轨道宏观覆盖与可选 albedo 按各自表示核对 |
 | `Clouds/CloudNoise.cs` / `StockCloudMap.cs` / `UpscalingPixelSequence.cs` | 噪声、自带云 cubemap 缓存、时序采样序列 |
 | `Clouds/FarCameraScript.cs` / `CloudReflectionRenderer.cs` | 远相机 CommandBuffer 深度 / 水面反射云;`DepthCapture.cs` 的未接入问题见场景门控记录 |
 | `Core/PlanetConfig.cs` | `PlanetConfigList.xml` 的行星到云 / 天气预设映射及旧格式迁移;两类预设各自独立 |
@@ -63,6 +66,8 @@
 - **预设下拉**:列表变化须重建面板并保留可见性;切换前检查文件存在,避免隐式新建默认预设。[下拉修复](archive/weather-preset-dropdown-stale-2026-10-04.md) §1。
 - **坐标原点重置(浮动原点)**:离帧中心 >5000m、帧速 >1000m/s、时间加速或表面锁定切换可触发;订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)` 清云历史。[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §12。
 - **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)。
+- **云状态契约**:每层合成用本层材质;所有云颜色 alpha 为透射率,无云为 1;轨道 shape / detail 为 3D。主材质静态参数同步递增修订,每相机 `PrepareFrame` 按修订与绘制连续性清自己的历史。见[云自查](cloud-visibility-diagnosis-2026-10-10.md) §8。
+- **云噪声与镜头稳定性**:shape / detail 已恢复旧 Worley;体积密度 / 光照 / 云影 / 反射与 stock 固定 mip 0。轨道轮廓使用现有 StockCloudCube / PlanetMap,以两张噪声最后 mip 的均值作恒定标定;可选局部 albedo 用固定世界 LOD,浮雕步长固定在世界尺度。禁止按 FOV / 朝向在阈值前改变密度或动态退到均值。当前每帧采固定低清格点,TSS 使用统一运动自适应混合;无实际子像素偏移,不能轮换新鲜格权重冒充空间超采样。见[修复](cloud-visibility-diagnosis-2026-10-10.md) §12;两种表示不等价,新过渡曲线与真正反平铺尚未实施。
 - **资产**:按子系统放 `Shader/`;移动时带 `.meta`,同步 `LoadVolkenAsset` 路径与 `_otherAssets` GUID。新增资产不会自动入包,清单可解析不等于已部署。
 - **雾投影**:雾以纹理 UV 为输入,用 `GL.GetGPUProjectionMatrix(..., false)`;云光栅 clip / TSS 的 `true` 保持。两者已有 GPU 方向回归,不得一刀切统一。
 - **诊断**:量与症状相同空间的量,同时记当前值与内部状态,先排除暂停。GPU 同步回读不可常驻,shader 错误去重后统计;同一方向连续 3 轮无改善就换诊断。[复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) §5。
@@ -79,7 +84,7 @@
 1. 先读目标代码和主题最新结论;早期方案与旧行号仅作历史证据。文档与注释规则以 [README](README.md) §五为准。
 2. 正式代码不得引用 `VolkenTests` 类型;工具可整体删除,测试命名空间用 `Volken.Tests`。
 3. 新配置同步 `Clone/CopyFrom/ClampAll` 等对应路径与旧 XML 兼容;新功能默认关闭或恒等。文案同步三语,键前缀 `Volken.UI.*`。
-4. 云密度 / 覆盖修改同步体积 / 轨道消费点,用 `orbitDebugMode=1` 对照;每帧渲染避免 LINQ 和临时集合。
+4. 云密度修改核对体积 / 光照 / 云影 / 反射,轨道宏观覆盖另查分布 / 阈值与过渡;用 `orbitDebugMode=1` 对照,不要重新把短周期切片接回轨道轮廓。每帧渲染避免 LINQ 和临时集合。
 5. 命令中的路径用 ASCII 或枚举得到的 `.FullName`;读取失败立即停止,不能拿空内容覆盖文件。
 
 ## 6. 调试与验证

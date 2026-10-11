@@ -23,6 +23,7 @@ namespace Volken.Clouds
 
         // 材质 (独立实例，同一 Clouds.shader)
         public Material material;
+        public int ShaderRevision { get; private set; }
 
         // 噪声纹理 (完全独立，不同种子)
         public CloudNoise noise;
@@ -68,6 +69,7 @@ namespace Volken.Clouds
         {
             Material mat = target != null ? target : material;
             if (config == null || mat == null) return;
+            if (target == null) ShaderRevision++;
 
             mat.SetFloat("cloudDensity", config.density);
             mat.SetFloat("cloudAbsorption", config.absorption);

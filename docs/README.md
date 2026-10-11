@@ -5,6 +5,8 @@
 
 ## 一、当前推进
 
+TSS 云、镜头稳定性与画质回退修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§12。§12 恢复旧体积 Worley / mip 0,轨道覆盖改由现有宏观分布决定,保留统一时序权重;177 项 Unity / GPU 回归通过,最新 `build=8 shader=7`,待更新代码 / shader / compute 后游戏验收。
+
 | 文档 | 状态 / 下一步 |
 |---|---|
 | [雨滴水面溅射修复](rain-water-splash-fix-2026-10-09.md) | 🚧 水面专用涟漪 / 竖直飞溅 / 场景深度遮挡已接入;53 项独立 GPU 回归通过,待用户打包与游戏水面验收 |
@@ -14,6 +16,8 @@
 
 | 文档 | 状态 / 范围 |
 |---|---|
+| [2D–3D 过渡与反平铺](proposals/orbit-transition-antitiling-plan-2026-10-11.md) | 📋 用户确定先过渡曲线、后共用反平铺采样;适配不同类型行星,暂缓全球贴图相关配置;未实施 |
+| [KSA 轨道云参考复核](proposals/ksa-orbit-cloud-reference-audit-2026-10-11.md) | 📋 安装包 GLSL / 资产与 C# 已对照,保留参考证据;当前推进顺序由过渡 / 反平铺新提案接管,未移植 |
 | [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) | 📋 当前入口:云 / 雨碰撞 / 雷击 / 多相机,按当前源码排序;未实施、未测耗时 |
 | [云带区间步进](proposals/cloud-band-interval-raymarch-2026-10-03.md) | 📋 评估中:区间求交集中 raymarch 预算,未动手 |
 | [云优化路线图](proposals/cloud-optimization-roadmap-2026-08-28.md) | 📋 规划:部分已被 TSS / 轨道云覆盖,剩余项未排期 |
@@ -27,7 +31,8 @@
 
 | 文档 | 已落地结论 / 保留价值 |
 |---|---|
-| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;保留正常调参与后台日志,游戏视觉待验收 |
+| [雨滴方向修复与诊断](archive/rain-direction-diagnosis-2026-10-11.md) | 方向修复已获用户视觉反馈与游戏日志确认,34 组预期角差最大 0.17°;本次诊断 / 周期回读及临时日志已清理,修复保留;移动参考帧 / 非零变体边界仍待处理 |
+| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;§6 移除天气总开关、合并配置条目到天气根组;游戏视觉待验收 |
 | [雨重做](archive/sp2-rain-particledomain-port-2026-09-28.md) | 雨视觉 / 雨声 / 透明度 / GPU 碰撞与水花已落地;无标签 shader 捕获修复获用户真机确认,135 项 GPU 验证通过;性能和专项矩阵未排期 |
 | [天气与云解耦](archive/weather-cloud-decoupling-2026-10-01.md) | 生命周期与高度带去重已落地;A2 / D 未排期,回归待验证 |
 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) | 常驻停表、相机扫描与渲染集合优化已落地;待回归 |
@@ -44,7 +49,7 @@
 | [方案 B:云分布](archive/stock-cloud-distribution-2026-08-23.md) | 自带 cubemap 提供全球分布 |
 | [方案 C:TSS](archive/ksa-temporal-upscale-port-2026-08-24.md) | 时序上采样、运动自适应、浮动原点清历史 |
 | [覆盖分解](archive/coverage-decomposition-2026-08-27.md) | coverage 乘 biome / 旋转分布 / tiled detail 因子 |
-| [轨道云](archive/orbit-clouds-crossfade-2026-08-27.md) | 2D 云与体积云按海拔交叉淡入 |
+| [轨道云](archive/orbit-clouds-crossfade-2026-08-27.md) | 2D 云与体积云按海拔交叉淡入;TSS 切换后的深度漏绑定修复见当前诊断 §7 |
 | [重投影割裂线](archive/seamline-reprojection-2026-08-25.md) | GPU 投影 Y 约定修复 |
 | [水面反射](archive/reflection-adaptation-2026-09-02.md) | 水面反射云已落地;机体探头适配未做 |
 | [联机场景事件 NRE](archive/jno-sceneloaded-nre-2026-08-27.md) | 第三方事件处理器异常中断初始化链的证据 |
@@ -74,6 +79,7 @@
 | 5 | 自适应雨域变大但粒子数固定,密度变稀;`RainParticles.OnPreCull` | 已知代价;不恢复渲染回调内自动重建 GPU buffer |
 | 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[帧率清单](proposals/frame-rate-optimization-audit-2026-10-08.md) §4 L1 | 源码已确认,尚未修复;未做运行时复验 |
 | 7 | 夜间雾偏亮:环境光强制下限、颜色空间处理与太阳状态消费缺口;[雾记录](fog-implementation-plan-2026-10-09.md) §13 | ✅ 源码已修正,161 项独立验证通过;待游戏昼夜画面 / 光照日志验收 |
+| 8 | TSS 丢云、轨道深度 / 资源 / 历史 / 合成、镜头抖动与云形回退;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§12 | ✅ 源码已修复,177 项 Unity / GPU 回归通过;旧体积采样已恢复,轨道使用现有宏观分布,最新 build=8 / shader=7,待游戏验收;新过渡曲线与真正反平铺未实施 |
 
 ## 四之三、待办清单(backlog)
 
@@ -86,6 +92,7 @@
 | 范围 | 要验证的行为 | 判据 |
 |---|---|---|
 | 雨与配置 | 复杂材质与场景矩阵 / 透明度边界 / 软粒子 / 海拔 / 水下 / 重定位 / XML 往返 / 切场景 | [雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.5、§10.7、§10.8、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §2、§4 |
+| 雨方向剩余边界 | 移动参考帧速度补偿 / 非零随机长宽变体的轴线缩放 / 重定位与多相机 | [方向修复](archive/rain-direction-diagnosis-2026-10-11.md) §6、§7;本次通过限于表面锁定、变体关闭的游戏场景 |
 | Inspector / 设置 | 列表完整、缺失文件不新建、另存为可见;诊断控件消失、三语 / 参数 / 预设功能正常 | [下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §2、[UI 清理](archive/user-ui-cleanup-2026-10-09.md) §3 |
 | PIP | 相机有雨,主视图雨声不被覆盖,参数同步 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §4 |
 | 场景 / 解耦 | 非飞行停表、离场收雨雷、环境抑制不改用户开关 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §4、[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §6 |

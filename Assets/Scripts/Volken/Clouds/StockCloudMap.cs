@@ -62,6 +62,7 @@ namespace Volken.Clouds
                         }
 
                         Current = cube;
+                        cube.filterMode = FilterMode.Trilinear;
                         LayerValid = valid;
                         Mod.Log($"Volken:StockCloudMap loaded {data.Name} clouds cubemap @ {size}, layer validity R/G/B/A = {valid.x}/{valid.y}/{valid.z}/{valid.w}");
                         break;

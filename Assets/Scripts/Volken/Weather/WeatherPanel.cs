@@ -7,9 +7,8 @@ using UnityEngine;
 namespace Volken.Weather
 {
     
-    /// <summary>天气面板,追加到 Volken 检查器里(不另开浮动窗口,否则两个面板会互相遮挡);分组 = 总体(天气总开关)/ 配置管理(天气**自己的**预设,与云互不干扰)/ 雨 / 雾 / 雷,
-    /// 与 <see cref="VolkenWeatherConfig"/> 的 XML 节点一一对应。</summary>
-    /// <remarks>面板直接改**清单里那条记录上的参数实例本身**(不是副本),点"保存当前配置"才落盘;滑块下一帧生效(<see cref="VolkenWeather.Tick"/> 每帧读 Config)。</remarks>
+    /// <summary>天气根组直接提供预设管理,下设雨 / 雾 / 雷参数组。</summary>
+    /// <remarks>面板修改当前天气配置实例;保存才落盘,效果参数由各子系统独立消费。</remarks>
     public static class WeatherPanel
     {
         internal static int FogEditCount { get; private set; }
@@ -29,8 +28,7 @@ namespace Volken.Weather
                 return;
             }
 
-            BuildOverallGroup(root, weather);
-            BuildConfigManagementGroup(root, weather);
+            BuildConfigControls(root, weather);
             BuildRainGroup(root, weather);
             BuildFogGroup(root, weather);
             BuildLightningGroup(root, weather);
@@ -38,28 +36,9 @@ namespace Volken.Weather
             inspector.AddGroup(root);
         }
 
-        // 总体(并入"天气"根组)
-
-        private static void BuildOverallGroup(GroupModel parent, VolkenWeather weather)
+        /// <summary>把当前配置、保存、另存为、加载与重置直接加入天气根组。</summary>
+        private static void BuildConfigControls(GroupModel group, VolkenWeather weather)
         {
-            parent.Add(new ToggleModel(Locale.GetString("Volken.UI.WeatherEnabled"),
-                () => weather.Config?.overall?.enabled ?? false, v =>
-                {
-                    if (weather.Config?.overall == null) return;
-                    weather.Config.overall.enabled = v;
-                    weather.RefreshActiveState();
-                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                        Locale.GetString(v ? "Volken.UI.WeatherEnabledOn" : "Volken.UI.WeatherEnabledOff"));
-                }));
-        }
-
-        // 配置管理(布局与云层配置管理一致)
-
-        /// <summary>天气的"配置管理":当前配置(只读) → 保存 → 另存为新配置 → 加载配置(下拉) → 重置;用的是天气**自己**的预设名与目录,与云的预设列表互不干扰。</summary>
-        private static void BuildConfigManagementGroup(GroupModel parent, VolkenWeather weather)
-        {
-            var group = new GroupModel(Locale.GetString("Volken.UI.ConfigManagement"));
-
             group.Add(new TextModel(Locale.GetString("Volken.UI.CurrentConfig"),
                 () => string.IsNullOrEmpty(weather.CurrentConfigName) ? "—" : weather.CurrentConfigName));
 
@@ -160,7 +139,6 @@ namespace Volken.Weather
                     Locale.GetString("Volken.UI.WeatherResetToDefault"));
             }));
 
-            parent.Add(group);
         }
         // 雨(实时控制)
 
@@ -369,7 +347,6 @@ namespace Volken.Weather
         private static void FogPreset(VolkenWeather weather, bool thin, bool volume)
         {
             if (weather.Config?.fog == null) return;
-            weather.Config.overall.enabled = true;
             ApplyFog(f =>
             {
                 f.enabled=true; f.heightEnabled=thin; f.volumetricEnabled=volume;
@@ -379,8 +356,7 @@ namespace Volken.Weather
                 f.colorR=0.72f; f.colorG=0.78f; f.colorB=0.85f; f.colorBlend=0.5f;
                 f.anisotropy=0.35f; f.dawnFog=false; f.diagnostics=true; f.debugMode=0;
             });
-            weather.RefreshActiveState();
-            Mod.Diag("Fog preset: height={0} volume={1} weatherEnabled={2} planet='{3}'",thin,volume,weather.IsActive,weather.CurrentPlanet);
+            Mod.Diag("Fog preset: height={0} volume={1} weatherActive={2} planet='{3}'",thin,volume,weather.IsActive,weather.CurrentPlanet);
             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.FogPresetApplied"));
         }
 

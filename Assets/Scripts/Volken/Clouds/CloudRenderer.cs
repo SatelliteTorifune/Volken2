@@ -24,6 +24,7 @@ namespace Volken.Clouds
         private Material _sceneDepthMaterial;
         private Volken.Weather.FogRenderer _fog;
         private float _nextFogDepthLog;
+        private readonly CloudVisibilityDiagnostics _visibilityDiagnostics = new CloudVisibilityDiagnostics();
         private static Mesh _fullscreenTriangle; // 全屏三角形(一次构建,所有相机复用)
 
         // 本相机的远相机深度源(主视角 = 游戏 FarCamera;PIP = 与克隆主相机共享 targetTexture 的更低 depth 相机)
@@ -44,7 +45,7 @@ namespace Volken.Clouds
         // 全球风/自转推进去重:同一帧只推进一次(所有相机共享同一全局云状态;推进两次 = 云速翻倍)
         private static int _lastGlobalAdvanceFrame = -1;
 
-        private const float kTssFreshBlend = 0.5f;  // 非新鲜格的本帧混合权重 lerp(历史, 本帧, 该值);越大越追运动、降噪越弱
+        private const float kTssFreshBlend = 0.5f;  // 静止时本帧权重;运动时 shader 增大该权重。
 
         public CloudRenderer()
         {
@@ -78,6 +79,8 @@ namespace Volken.Clouds
         private void OnPostRender() => Volken.Weather.FogRenderer.ClearGlobals();
         private void OnDisable()
         {
+            _visibilityDiagnostics.Cancel();
+            foreach (var view in _views.Values) view.ClearHistory();
             Volken.Weather.FogRenderer.ClearGlobals();
             _fog?.Dispose();
             _fog = null;
@@ -85,11 +88,11 @@ namespace Volken.Clouds
 
         private void OnPlanetChanged(PlanetEnvironment env)
         {
+            _visibilityDiagnostics.Cancel();
             // 不要回写 layer.config.enabled 做大气门控(会污染玩家预设);环境抑制由 VolkenClouds 统一置位
             foreach (var view in _views.Values)
             {
-                view.frameNumber = 0;
-                view.prevCloudAngle = float.NaN; // 云转角相位作废,首帧回退世界空间重投影
+                view.ClearHistory();
             }
         }
 
@@ -98,6 +101,7 @@ namespace Volken.Clouds
         {
             try
             {
+                _visibilityDiagnostics.RecordRecenter(positionDelta.magnitude, velocityDelta.magnitude);
                 Mod.Log("Volken:CloudRenderer frame recentered Δ=" + positionDelta.magnitude.ToString("F1") + "m — TSS history cleared");
                 foreach (var view in _views.Values)
                 {
@@ -120,7 +124,7 @@ namespace Volken.Clouds
             {
                 if (kv.Key != null && kv.Key.config != null)
                 {
-                    kv.Value.currentResolutionScale = kv.Key.config.resolutionScale;
+                    kv.Value.ClearHistory();
                 }
             }
         }
@@ -180,6 +184,7 @@ namespace Volken.Clouds
         private void EnsureLowResDepthTex(Vector2Int targetSize)
         {
             if (lowResDepthTex != null &&
+                lowResDepthTex.IsCreated() &&
                 lowResDepthTex.width == targetSize.x &&
                 lowResDepthTex.height == targetSize.y)
                 return;
@@ -327,7 +332,7 @@ namespace Volken.Clouds
 
             var mat = layer.material;
             mat.SetFloat("currentRotation", layer.accumulatedRotation);
-            mat.SetFloat("maxDepth", 0.9f * (farDepthSource != null ? farDepthSource.maxFarDepth : cam.farClipPlane));
+            mat.SetFloat("maxDepth", 0.9f * Mathf.Max(cam.farClipPlane, farDepthSource != null ? farDepthSource.maxFarDepth : 0f));
             mat.SetVector("sphereCenter", planetCenter);
             mat.SetVector("lightDir", sun.transform.forward);
             mat.SetVector("cloudOffset", layer.runningOffset);
@@ -378,35 +383,9 @@ namespace Volken.Clouds
 
             // 每像素每帧都有本帧 raymarch 数据(不依赖滞后的上一帧),故不需要运动门控
             var tcfg = layer.config;
-            int upX = Mathf.Max(1, tcfg.upscaleX);
-            int upY = Mathf.Max(1, tcfg.upscaleY);
-            int totalCells = upX * upY;
-
             mat.SetFloat("_TssBlend", kTssFreshBlend);
             mat.SetFloat("historyBlend", tcfg.historyBlend);
-
-            if (tcfg.useTemporalUpscale)
-            {
-                if (view.temporalSequence == null || view.temporalSequence.Length != totalCells)
-                {
-                    view.temporalSequence = UpscalingPixelSequence.FindOptimalSamplingSequence(upX, upY);
-                    view.frameNumber = 0;   // 格网变化 → 历史相位作废 → 冷启动
-                }
-                int cell = view.temporalSequence[view.frameNumber % totalCells];
-                mat.SetVector("_SampleCell", new Vector2(cell % upX, cell / upX));
-                mat.SetVector("_Upscale", new Vector2(upX, upY));
-                mat.SetFloat("_UseTemporal", 1f);
-                view.frameNumber++;
-            }
-            else
-            {
-                mat.SetVector("_SampleCell", Vector2.zero);
-                mat.SetVector("_Upscale", new Vector2(upX, upY));
-                mat.SetFloat("_UseTemporal", 0f);
-            }
-            mat.SetVector("_LowResSize", new Vector2(
-                view.cloudTex != null ? view.cloudTex.width : 1f,
-                view.cloudTex != null ? view.cloudTex.height : 1f));
+            mat.SetFloat("_UseTemporal", tcfg.useTemporalUpscale ? 1f : 0f);
 
             //  必须用 GL.GetGPUProjectionMatrix(cam.projectionMatrix, true),不能用逻辑投影:Clouds 顶点着色器
             // 用光栅化 clip 重建射线,D3D 下 GPU clip 与逻辑投影 Y 约定相反 → 历史采错行 → 云带边缘镜像鬼影(割裂线)。
@@ -676,12 +655,15 @@ namespace Volken.Clouds
         [ImageEffectOpaque]
         private void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
+            RenderTexture result = null, compositeTemp = null;
+            RenderTexture previousTarget = RenderTexture.active;
             try
             {
                 if (cam == null) cam = GetComponent<Camera>();
                 if (_fog == null) _fog = new Volken.Weather.FogRenderer(cam);
                 TryResolveFarDepthSource();
                 RenderTexture farDepthTex = farDepthSource != null ? farDepthSource.farDepthTex : null;
+                if (farDepthTex != null && !farDepthTex.IsCreated()) farDepthTex = null;
 
                 // 本帧渲染层走复用缓冲(判据仍是 VolkenClouds 那一份,不在这里另写一遍)
                 Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
@@ -698,7 +680,7 @@ namespace Volken.Clouds
                 bool fogActive = _fog.Prepare(source.width,source.height);
                 EnsureDepthTextures(source.width,source.height);
                 _sceneDepthMaterial.SetFloat("_HasFarDepth",farDepthTex != null ? 1 : 0);
-                _sceneDepthMaterial.SetFloat("_DepthFarClip",farDepthSource != null ? farDepthSource.maxFarDepth : cam.farClipPlane);
+                _sceneDepthMaterial.SetFloat("_DepthFarClip",Mathf.Max(cam.farClipPlane,farDepthSource != null ? farDepthSource.maxFarDepth : 0f));
                 Graphics.Blit(farDepthTex != null ? (Texture)farDepthTex : Texture2D.whiteTexture,combinedDepthTex,_sceneDepthMaterial,1);
                 if (fogActive && Volken.Weather.VolkenWeather.Instance.Config.fog.diagnostics && Time.realtimeSinceStartup >= _nextFogDepthLog)
                 {
@@ -709,6 +691,9 @@ namespace Volken.Clouds
                 }
                 if (activeLayers.Count == 0)
                 {
+                    _activeViews.Clear();
+                    if (cam == gameCamera?.NearCamera)
+                        _visibilityDiagnostics.Tick(cam, _activeViews, combinedDepthTex, farDepthSource, ComputeCameraAltitude(), fogActive);
                     _fog.Render(source,destination,combinedDepthTex);
                     return;
                 }
@@ -738,6 +723,7 @@ namespace Volken.Clouds
                         view.currentResolutionScale = layer.config.resolutionScale;
                         view.CreateRenderTextures(renderW, renderH);
                     }
+                    view.PrepareFrame(Time.frameCount);
                 }
 
                 int maxLowW = 1, maxLowH = 1;
@@ -763,7 +749,8 @@ namespace Volken.Clouds
                 {
                     var view = GetView(layer);
                     if (view == null) continue;
-                    view.orbitFade = ComputeOrbitFade(layer.config, camAlt);
+                    float fade = orbitPass >= 0 ? ComputeOrbitFade(layer.config, camAlt) : 0f;
+                    view.orbitFade = fade <= 0.001f ? 0f : fade >= 0.999f ? 1f : fade;
                     bool orbitOnly = view.orbitFade >= 0.999f;
                     if (orbitOnly && !view.orbitOnlyLastFrame)   // 进入纯 2D 的瞬间清历史,防切回体积云时残影
                         view.ClearHistory();
@@ -801,7 +788,7 @@ namespace Volken.Clouds
                 {
                     var view = GetView(layer);
                     if (view == null) continue;
-                    // reprojMat / _CamPos / _SampleCell 等每相机每层各自设置(风/自转已全局推进一次)
+                    // 重投影与相机参数按每相机每层设置,风 / 自转已全局推进一次。
                     SetLayerDynamicProperties(layer, view, renderW, renderH);
                     if (view.orbitFade >= 0.999f) continue;   // 高空纯 2D:跳过体积 raymarch(性能大头)
 
@@ -816,13 +803,20 @@ namespace Volken.Clouds
                     int dilatePass = layer.material.FindPass("DilateMV");
                     if (dilatePass >= 0)
                     {
-                        var mvTmp1 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
-                        var mvTmp2 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
-                        Graphics.Blit(view.cloudMVTex, mvTmp1, layer.material, dilatePass);
-                        Graphics.Blit(mvTmp1, mvTmp2, layer.material, dilatePass);
-                        Graphics.Blit(mvTmp2, view.cloudMVDilatedTex, layer.material, dilatePass);
-                        RenderTexture.ReleaseTemporary(mvTmp1);
-                        RenderTexture.ReleaseTemporary(mvTmp2);
+                        RenderTexture mvTmp1 = null, mvTmp2 = null;
+                        try
+                        {
+                            mvTmp1 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
+                            mvTmp2 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
+                            Graphics.Blit(view.cloudMVTex, mvTmp1, layer.material, dilatePass);
+                            Graphics.Blit(mvTmp1, mvTmp2, layer.material, dilatePass);
+                            Graphics.Blit(mvTmp2, view.cloudMVDilatedTex, layer.material, dilatePass);
+                        }
+                        finally
+                        {
+                            if (mvTmp1 != null) RenderTexture.ReleaseTemporary(mvTmp1);
+                            if (mvTmp2 != null) RenderTexture.ReleaseTemporary(mvTmp2);
+                        }
                     }
                 }
 
@@ -834,8 +828,10 @@ namespace Volken.Clouds
                         var view = GetView(layer);
                         if (view == null) continue;
                         if (view.orbitFade <= 0.001f) continue;
+                        // 纯轨道云跳过体积绘制,TSS 重建后必须独立绑定本帧深度。
+                        layer.material.SetTexture("DepthTex", combinedDepthTex);
                         // Blit 的 source 不被 OrbitClouds pass 采样(纯壳着色),仅作为合法非空输入
-                        Graphics.Blit(lowResDepthTex, view.orbitCloudTex, layer.material, orbitPass);
+                        Graphics.Blit(combinedDepthTex, view.orbitCloudTex, layer.material, orbitPass);
                     }
                 }
 
@@ -864,29 +860,31 @@ namespace Volken.Clouds
 
                 // 逐层链式合成,每层按其 compositeMode 混合
                 int compositePass = matRef.FindPass("Composite");
-                RenderTexture result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
+                result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
                 _fog.Render(source, result, combinedDepthTex);
 
                 foreach (var layer in activeLayers)
                 {
                     var view = GetView(layer);
                     if (view == null) continue;
-                    matRef.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
-                    matRef.SetTexture("OrbitCloudTex", view.orbitCloudTex);
-                    matRef.SetTexture("SceneDepthTex", combinedDepthTex);
-                    matRef.SetTexture("FogCloudDepthTex", view.cloudDepthTex);
-                    matRef.SetFloat("_VolkenFogComposite", fogActive ? 1 : 0);
+                    var compositeMat = layer.material;
+                    compositeMat.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
+                    compositeMat.SetTexture("OrbitCloudTex", view.orbitCloudTex);
+                    compositeMat.SetTexture("SceneDepthTex", combinedDepthTex);
+                    compositeMat.SetTexture("FogCloudDepthTex", view.cloudDepthTex);
+                    compositeMat.SetFloat("_VolkenFogComposite", fogActive ? 1 : 0);
                     float fogBottom, fogTop;
-                    matRef.SetFloat("_FogOrbitAltitude",layer.config.TryGetBand(out fogBottom,out fogTop) ? (fogBottom+fogTop)*0.5f : layer.config.maxCloudHeight);
-                    matRef.SetFloat("_CompositeMode",
+                    compositeMat.SetFloat("_FogOrbitAltitude",layer.config.TryGetBand(out fogBottom,out fogTop) ? (fogBottom+fogTop)*0.5f : layer.config.maxCloudHeight);
+                    compositeMat.SetFloat("_CompositeMode",
                         layer.config.compositeMode == CompositeMode.Standard ? 1.0f : 0.0f);
                     // 交叉淡入因子:orbit pass 不可用 → 强制 0(纯体积云,等同未开启本特性)
-                    matRef.SetFloat("_OrbitFade", orbitPass >= 0 ? view.orbitFade : 0f);
+                    compositeMat.SetFloat("_OrbitFade", view.orbitFade);
 
-                    var temp = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
-                    Graphics.Blit(result, temp, matRef, compositePass);
+                    compositeTemp = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
+                    Graphics.Blit(result, compositeTemp, compositeMat, compositePass);
                     RenderTexture.ReleaseTemporary(result);
-                    result = temp;
+                    result = compositeTemp;
+                    compositeTemp = null;
                 }
 
                 // 覆盖探针(仅 DevMode + orbitDebugMode>0 时生效):量 2D/体积云的屏幕范围差
@@ -902,8 +900,9 @@ namespace Volken.Clouds
                 }
                 catch { }
 
+                if (cam == gameCamera?.NearCamera)
+                    _visibilityDiagnostics.Tick(cam, _activeViews, combinedDepthTex, farDepthSource, camAlt, fogActive);
                 Graphics.Blit(result, destination);
-                RenderTexture.ReleaseTemporary(result);
             }
             catch (Exception e)
             {
@@ -911,10 +910,17 @@ namespace Volken.Clouds
                 Volken.Weather.FogRenderer.ClearGlobals();
                 try { Graphics.Blit(source, destination); } catch { }
             }
+            finally
+            {
+                if (compositeTemp != null) RenderTexture.ReleaseTemporary(compositeTemp);
+                if (result != null) RenderTexture.ReleaseTemporary(result);
+                RenderTexture.active = previousTarget;
+            }
         }
 
         private void OnDestroy()
         {
+            _visibilityDiagnostics.Cancel();
             _fog?.Dispose();
             _fog = null;
             if (_sceneDepthMaterial != null) Destroy(_sceneDepthMaterial);

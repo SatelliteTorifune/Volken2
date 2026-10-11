@@ -34,7 +34,7 @@ namespace Volken.Weather
         /// <summary>当前内存里的天气参数(<c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> 的独立实例)。面板改的是它,点"保存"才落盘。</summary>
         public VolkenWeatherConfig Config { get; private set; } = VolkenWeatherConfig.CreateDefault();
 
-        /// <summary>天气系统当前是否实际在跑(有配置 + 启用 + 在飞行场景 + 有大气)。</summary>
+        /// <summary>当前环境是否允许天气运行;雨 / 雾 / 雷电另由各自开关控制。</summary>
         public bool IsActive { get; private set; }
 
         /// <summary>相机海拔(ASL,米)。每帧刷新,雨/雾的高度判定共用。</summary>
@@ -195,11 +195,10 @@ namespace Volken.Weather
             }
             Config = cfg;
 
-            // 预设里的 overall.enabled 开才真的跑
-            SetActive(cfg.overall.enabled);
+            SetActive(CanRunWeather());
 
-            Mod.Log($"VolkenWeather: planet={planetName} preset={configName} cfgEnabled={cfg.overall.enabled} " +
-                    $"active={IsActive}");
+            Mod.Log($"VolkenWeather: planet={planetName} preset={configName} active={IsActive} " +
+                    $"rain={cfg.rain.enabled} fog={cfg.fog.enabled} lightning={cfg.lightning.enabled}");
 
             try { PlanetConfigLoaded?.Invoke(planetName); }
             catch (Exception ex) { Mod.Log("VolkenWeather: PlanetConfigLoaded handler threw: " + ex.Message); }
@@ -292,17 +291,17 @@ namespace Volken.Weather
         public void ResetCurrentConfigToDefault()
         {
             Config?.CopyFrom(VolkenWeatherConfig.CreateDefault());
-            SetActive(Config?.overall?.enabled ?? false);
+            SetActive(CanRunWeather());
             UpdateLightning();
         }
 
         // 【不做联动】天气不修改云的任何参数。要做的话见 docs/archive/weather-cloud-decoupling-2026-10-01.md §3.6。
 
-        /// <summary>按当前配置/行星起停雷电(只管总开关 + 行星启停;雷暴节奏由 <see cref="LightningModule"/> 自己管)。</summary>
+        /// <summary>按雷电开关与当前环境起停雷电;雷暴节奏由 <see cref="LightningModule"/> 自己管。</summary>
         private void UpdateLightning()
         {
             var cfg = Config;
-            bool want = IsActive && cfg != null && cfg.overall.enabled && cfg.lightning.enabled;
+            bool want = IsActive && cfg != null && cfg.lightning.enabled;
 
             if (!want)
             {
@@ -356,7 +355,7 @@ namespace Volken.Weather
             if (_lightning == null)
             {
                 Mod.Log("VolkenWeather: TriggerLightning ignored — lightning module not active " +
-                        "(need enabled planet config + lightning.enabled)");
+                        "(need active planet environment + lightning.enabled)");
                 return false;
             }
             return _lightning.CastRandomBolt();
@@ -372,14 +371,15 @@ namespace Volken.Weather
             UpdateLightning();
         }
 
-        /// <summary>玩家在面板上拨动"启用天气 / 启用雷电"时调用,重算激活态并同步雷电启停。</summary>
+        private bool CanRunWeather() => Config != null && !string.IsNullOrEmpty(CurrentPlanet) &&
+            Game.InFlightScene && VolkenClouds.Instance?.CurrentPlanet.SupportsAtmosphereEffects == true;
+
+        /// <summary>重算环境激活态并按独立开关同步雷电启停。</summary>
         public void RefreshActiveState()
         {
-            var cfg = Config;
-            bool want = cfg != null && cfg.overall.enabled;
-            SetActive(want);
+            SetActive(CanRunWeather());
             UpdateLightning();
-            Mod.Log($"VolkenWeather: enabled toggled → active={IsActive}");
+            Mod.Log($"VolkenWeather: state refreshed → active={IsActive}");
         }
 
         /// <summary>由 <c>WeatherTicker</c> 每帧驱动。独立于任何渲染器:相机被销毁/替换后天气仍继续跑。</summary>
@@ -394,7 +394,7 @@ namespace Volken.Weather
             if (!IsActive) return;
 
             var cfg = Config;
-            if (cfg == null || !cfg.overall.enabled)
+            if (cfg == null)
             {
                 SetActive(false);
             }

@@ -1174,7 +1174,7 @@ namespace Volken.Weather
                 // **世界系构轴**:不要用屏幕平面投影(会"贴相机",垂直看糊成横块) ——
                 //   朝向 = 相对速度方向(下落 − 飞行器速度;StreamMode=0 时 = 径向"下"),拉伸烘焙进矩阵列1 → 转镜头/暂停/缩放都不改变朝向。
                 Vector3 streakDir = StreamMode
-                    ? down * FallSpeed - new Vector3(axisVel.x, Mathf.Abs(axisVel.y), axisVel.z)  // SP2 对 y 取绝对值(俯冲时雨丝不翻转)
+                    ? down * FallSpeed - axisVel
                     : down;
                 if (streakDir.sqrMagnitude < 1e-6f) streakDir = down;
                 _mat.SetMatrix("_RotationMatrix", BuildStreakMatrix(streakDir, out float stretch));

@@ -32,6 +32,8 @@ namespace Volken.Clouds
         public int currentH = -1;
         public float currentResolutionScale = -1f;
         public float currentOrbitRes = -1f;         // 轨道云当前分辨率缩放(签名,变化触发 RT 重建)
+        public int currentShaderRevision = -1;
+        private int _lastRenderFrame = -1;
 
         public Matrix4x4 prevViewProjMat;
         public float prevCloudAngle = float.NaN;    // 上一帧的云转角相位;NaN = 尚无历史,回退纯世界空间重投影
@@ -44,7 +46,25 @@ namespace Volken.Clouds
             this.layer = layer;
         }
 
-        public bool IsCreated => cloudTex != null && cloudTex.IsCreated();
+        public bool IsCreated => Ready(cloudTex) && Ready(cloudDepthTex) && Ready(cloudMVTex) &&
+            Ready(cloudMVDilatedTex) && Ready(upscaledCloudTex) && Ready(historyTex) &&
+            Ready(historyDepthTex) && Ready(historyCloudDepthTex) && Ready(orbitCloudTex);
+
+        private static bool Ready(RenderTexture rt) => rt != null && rt.IsCreated();
+
+        public void SynchronizeShaderRevision()
+        {
+            if (currentShaderRevision == layer.ShaderRevision) return;
+            ClearHistory();
+            currentShaderRevision = layer.ShaderRevision;
+        }
+
+        public void PrepareFrame(int frame)
+        {
+            if (_lastRenderFrame < 0 || frame > _lastRenderFrame + 1) ClearHistory();
+            _lastRenderFrame = frame;
+            SynchronizeShaderRevision();
+        }
 
         /// <summary>
         /// 按【本相机输出尺寸】(renderW×renderH)创建全部 RT。
@@ -55,6 +75,7 @@ namespace Volken.Clouds
             if (layer?.config == null) return;
 
             frameNumber = 0;              // RT 重建 → 历史失效 → 冷启动全步进
+            _lastRenderFrame = -1;
             temporalSequence = null;
             prevCloudAngle = float.NaN;   // 相位随重建作废,首帧回退纯世界空间重投影
 
@@ -90,6 +111,7 @@ namespace Volken.Clouds
             currentTemporal = tss ? 1 : 0;
             currentW = renderW;
             currentH = renderH;
+            ClearHistory();
         }
 
         public void ReleaseRenderTextures()
@@ -108,6 +130,8 @@ namespace Volken.Clouds
         // 清空时序历史(颜色/场景深度/云面距离)→ Upscale 的 validHist 全 0 → 全走本帧新鲜 raymarch
         public void ClearHistory()
         {
+            frameNumber = 0;
+            prevCloudAngle = float.NaN;
             var prevActive = RenderTexture.active;
             ClearRT(historyTex);
             ClearRT(historyDepthTex);
@@ -130,7 +154,12 @@ namespace Volken.Clouds
 
         private static void ReleaseRT(ref RenderTexture rt)
         {
-            if (rt != null && rt.IsCreated()) rt.Release();
+            if (rt != null)
+            {
+                rt.Release();
+                if (Application.isPlaying) UnityEngine.Object.Destroy(rt);
+                else UnityEngine.Object.DestroyImmediate(rt);
+            }
             rt = null;
         }
     }

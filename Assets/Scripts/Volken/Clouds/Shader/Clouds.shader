@@ -4,6 +4,7 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 7
 
         // 关键修复:所有通过 material.SetTexture 在运行时绑定的纹理都必须在此声明。
         // 只在 CGPROGRAM 里声明(Texture2D/Texture3D/TextureCube)不会被注册为材质纹理属性,
@@ -302,11 +303,6 @@ Shader "Hidden/Clouds"
             float historyBlend;
             matrix reprojMat;
             float currentRotation;
-            // === 方案 C: 时序超采样 ===
-            float _UseTemporal;      // 0 = 现状路径(每格都步进);1 = 时序子集步进
-            float2 _SampleCell;      // 本帧要步进的格 (cellX, cellY)
-            float2 _Upscale;         // 格网尺寸 (upscaleX, upscaleY)
-            float2 _LowResSize;      // 低清步进 RT 的像素尺寸(uv -> 格坐标换算用)
                     
             // magic functions for better lighting
             float HenyeyGreenstein(float a, float g)
@@ -378,8 +374,13 @@ Shader "Hidden/Clouds"
                 return StockCloudCube.SampleLevel(samplerStockCloudCube, sd, 0);
             }
 
-            //those 2 functions made me wanna kill myself tbh
-            float SampleDensity(float3 worldPos, float detailFalloff) 
+            float2 StableNoiseLod()
+            {
+                // 原预设的世界场;FOV、相机旋转和 TSS 不改变密度与光照采样。
+                return float2(0.0, 0.0);
+            }
+
+            float SampleDensity(float3 worldPos, float detailFalloff, float2 noiseLod)
             {
                 float3 offset = worldPos - sphereCenter;
                 float r = length(offset);
@@ -401,8 +402,8 @@ Shader "Hidden/Clouds"
                 float3 warpedUv = rotatedOffset + warpOffset;
             
                 // Keep shape relatively cheap; target the smallest-scale repetition in detail.
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
             
                 float3 dir = normalize(rotatedOffset);
@@ -469,7 +470,7 @@ Shader "Hidden/Clouds"
                 return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
             }
 
-            float SampleDensityCheap(float3 worldPos) 
+            float SampleDensityCheap(float3 worldPos, float2 noiseLod)
             {
                 float3 offset = worldPos - sphereCenter;
                 float r = length(offset);
@@ -490,8 +491,8 @@ Shader "Hidden/Clouds"
                 ) * 0.15;
                 float3 warpedUv = rotatedOffset + warpOffset;
             
-                  float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
+                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
+                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
                 shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
             
                 float3 dir = normalize(rotatedOffset);
@@ -555,7 +556,7 @@ Shader "Hidden/Clouds"
             }
 
             // approximate the light that reaches the given point
-            float2 SampleLightRay(float3 pos) {
+            float2 SampleLightRay(float3 pos, float2 noiseLod) {
                 float3 rayPos = pos;
                 float3 rayDir = -lightDir;
 
@@ -573,7 +574,7 @@ Shader "Hidden/Clouds"
                 [loop]
                 for (int i = 0; i < lightSamples; i++) {
                     rayPos += step * rayDir;
-                    d += step * max(0.0, SampleDensityCheap(rayPos));
+                    d += step * max(0.0, SampleDensityCheap(rayPos, noiseLod));
                 }
 
                 return float2(d, intersect.y - max(0.0, intersect.x));
@@ -583,7 +584,7 @@ Shader "Hidden/Clouds"
             {
                 float4 col : SV_Target0;
                 float cloudDepth : SV_Target1;
-                float2 motionVector : SV_Target2;   // 运动矢量 = reprojUV−i.uv(仅新鲜格写真实值,其余 0)
+                float2 motionVector : SV_Target2;   // UV 位移;相机位置命中或未命中为 0。
             };
 
             CloudOut frag(vert2Frag i)
@@ -593,11 +594,10 @@ Shader "Hidden/Clouds"
                 float viewLength = length(i.viewDir);
                 float3 viewDir = i.viewDir / viewLength;
 
-                // (KSA 结构:本 pass 每帧全量 raymarch,isFresh 格网判断移到 Upscale pass)
+                float2 noiseLod = StableNoiseLod();
 
                 float2 intersect = RaySphereIntersect(camPos, viewDir, surfaceRadius + maxCloudHeight);
 
-                float firstCloudDepth = maxDepth;  // Track first cloud intersection depth
                 bool foundCloud = false;
                 
                 // no intersection in front of the camera
@@ -636,9 +636,8 @@ Shader "Hidden/Clouds"
                     return o;
                 }
 
-                // (KSA 结构:isFresh 格网 + 时序混合已移到 Upscale pass;本 pass 每帧全量 raymarch)
                 float blueNoise = BlueNoiseTex.SampleLevel(samplerBlueNoiseTex, blueNoiseScale * i.uv + blueNoiseOffset, 0).r;
-                float rayDist = startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5;
+                float rayDist = max(startRayDist, startRayDist + blueNoiseStrength * stepSize * (blueNoise - 0.5) * 1.5);
 
                 float phaseValue = CloudPhase(dot(viewDir, -lightDir), multiScatterBlend);
 
@@ -669,22 +668,25 @@ Shader "Hidden/Clouds"
                 while(rayDist < maxRayDist && iter < 350) {
                     rayPos = camPos + rayDist * viewDir;
                     // get full or partial density sample at the current ray position and interpolate at the transition
-                    density = (stepSizeMultiplier == 1.0 && rayDist < detailCutoffDist) ? SampleDensity(rayPos, saturate(1e-4 * (detailCutoffDist - rayDist))) : SampleDensityCheap(rayPos);
+                    density = (stepSizeMultiplier == 1.0 && rayDist < detailCutoffDist)
+                        ? SampleDensity(rayPos, saturate(1e-4 * (detailCutoffDist - rayDist)), noiseLod)
+                        : SampleDensityCheap(rayPos, noiseLod);
                     
                     if (density > 0.0) {
-                        cloudSurfaceDist = min(cloudSurfaceDist, rayDist);
-
                         // switch to normal step size when a cloud surface is hit and backtrack the overshot distance
                         if(stepSizeMultiplier == 2.0) {
-                            rayDist -= localStepSize * stepSizeMultiplier;
+                            rayDist = max(startRayDist, rayDist - localStepSize * stepSizeMultiplier);
                             stepSizeMultiplier = 1.0;
                             emptySamples = 0;
                             continue;
                         }
 
+                        foundCloud = true;
+                        cloudSurfaceDist = min(cloudSurfaceDist, rayDist);
+
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
-                        float2 lightSample = SampleLightRay(rayPos);
+                        float2 lightSample = SampleLightRay(rayPos, noiseLod);
                         
                         lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * scatterCoeff);
 
@@ -714,7 +716,8 @@ Shader "Hidden/Clouds"
                 // 反射路径没有地表/场景遮蔽,跳过地表阴影(否则反射云会被整体压暗 50%)。
                 if ((surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
                     // offset sample point to avoid precision artifacts
-                    shadowTransmittance = 0.5 + 0.5 * Beer(SampleLightRay(camPos + (maxRayDist - 50.0) * viewDir).x, ambientLight);
+                    shadowTransmittance = 0.5 + 0.5 * Beer(SampleLightRay(camPos + (maxRayDist - 50.0) * viewDir,
+                        noiseLod).x, ambientLight);
                 }
                 transmittance *= shadowTransmittance;
 
@@ -723,13 +726,23 @@ Shader "Hidden/Clouds"
 
                 // 运动矢量(云空间重投影):云面点 本帧屏幕位置 → 上一帧屏幕位置。
                 // KSA 结构:本 pass 纯 raymarch(每帧全量,低清),时序混合/重投影移到 Upscale pass。
-                float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
-                float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
-                reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
-
                 o.col = raymarchOutput;
-                o.cloudDepth = (cloudSurfaceDist < maxRayDist) ? cloudSurfaceDist : 0.0;
-                o.motionVector = (cloudSurfaceDist < maxRayDist) ? (reprojUV - i.uv) : float2(0.0, 0.0);
+                // 0 = 未命中;1mm 为相机位置命中的编码下限,Upscale 对该距离使用当前帧。
+                o.cloudDepth = foundCloud ? max(cloudSurfaceDist, 0.001) : 0.0;
+                o.motionVector = float2(0.0, 0.0);
+                if (foundCloud && cloudSurfaceDist > 0.001)
+                {
+                    o.motionVector = float2(2.0, 2.0);
+                    float4 reproj = mul(reprojMat, float4(camPos + cloudSurfaceDist * viewDir, 1));
+                    if (reproj.w > 1e-5 && all(abs(reproj) < 1e20))
+                    {
+                        float2 reprojUV = 0.5 * (reproj.xy / reproj.w) + 0.5;
+                        reprojUV.y = _ProjectionParams.x < 0.0 ? 1.0 - reprojUV.y : reprojUV.y;
+                        float2 mv = reprojUV - i.uv;
+                        // 限制在 Half 可表示范围,同时保留出界方向以拒绝历史。
+                        o.motionVector = clamp(mv, -2.0, 2.0);
+                    }
+                }
                 return o;
 
             }
@@ -770,7 +783,7 @@ Shader "Hidden/Clouds"
             SamplerState sampler_MainTex;
 
             // 运动矢量膨胀:3×3 邻域对【非零 MV】做反距离加权平均,把新鲜格的 MV 平滑传遍全屏,
-            // 让 !isFresh 路径任意像素都有可用的重投影位移。不用"模长最大"的原因是:
+            // 让历史混合路径任意像素都有可用的重投影位移。不用"模长最大"的原因是:
             // 缩放/推进(相机沿视轴移动)的 MV 场是径向的(中心 0、边缘最大),取最大会把外侧
             // 大 MV 扩散进内侧 → 重投影过冲 → 缩放拖影;反距离加权在径向场下平滑插值不过冲,
             // 在均匀场(平移)下仍得到均匀值。重复多次可覆盖整个 3×3 采样格网(每帧连跑 3 次)。
@@ -798,13 +811,8 @@ Shader "Hidden/Clouds"
         {
             Name "Upscale"
 
-            // === KSA 完整结构:本 pass 是全清时序上采样核心 ===
-            // 每帧低清 raymarch(Clouds pass)已含全部像素的【本帧】数据 + 运动矢量;
-            // 这里对每个全清像素:
-            //   TSS 开:新鲜格(格网 1/N)取本帧 raymarch 写入历史;非新鲜格 lerp(重投影历史, 本帧)
-            //           → 本帧分量始终在场 → 运动/缩放也不拖影(不再依赖滞后的上一帧数据)。
-            //   TSS 关:运动残影 = lerp(本帧, 重投影历史, historyBlend)。
-            // 历史接受判据(割裂线修复的软过渡)从 Clouds pass 移到这里。
+            // 固定低清格点的时序上采样:按运动量混合有效历史与本帧。
+            // 无云 / 相机内命中 / 无效历史必须保留本帧;alpha 始终为透射率。
 
             CGPROGRAM
             #pragma vertex vert
@@ -847,13 +855,10 @@ Shader "Hidden/Clouds"
             Texture2D<float> HistoryCloudDepthTex;  // 上一帧全清云面距离
             SamplerState samplerHistoryCloudDepthTex;
 
-            float _UseTemporal;       // 0=TSS关(运动残影),1=TSS开(KSA时序)
-            float _TssBlend;          // TSS 非新鲜格的本帧混合权重(本帧分量越大越追运动)
+            float _UseTemporal;       // 0=使用用户残影权重,1=按运动量混合
+            float _TssBlend;          // 静止时本帧混合权重
             float historyBlend;       // TSS关:历史权重(运动残影,如 0.90)
             float historyDepthThreshold;
-            float2 _SampleCell;
-            float2 _Upscale;
-            float2 _LowResSize;
 
             // 单目标输出:颜色走 Graphics.Blit(自动绑 _MainTex,已由 Dilate/深度 pass 验证可靠)。
             // 云面距离历史由 CloudRenderer 直接 Blit 低清 cloudDepthTex → 全清 historyCloudDepthTex。
@@ -863,8 +868,10 @@ Shader "Hidden/Clouds"
                 float4 fresh = _MainTex.Sample(sampler_MainTex, i.uv);
                 float freshDepth = CloudDepthTex.Sample(samplerCloudDepthTex, i.uv);
                 // 本帧 raymarch 在此像素是否找到云:看云面距离(>0 有云)。
-                // 注意不能用 fresh.a:无云时 raymarchOutput.a≈1(不透明黑),a 无法区分云/无云。
+                // alpha 是透射率;无云为 1,地表阴影也会降低它,不能用它判断云命中。
                 bool hasFreshCloud = freshDepth > 0.0;
+                // 相机位置命中缺少稳定的重投影锚点,保留本帧而不复用历史。
+                if (hasFreshCloud && freshDepth <= 0.001) return fresh;
                 float2 mv = CloudMVDilatedTex.Sample(samplerCloudMVDilatedTex, i.uv).xy;
                 float2 reprojUV = i.uv + mv;
                 bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
@@ -875,7 +882,7 @@ Shader "Hidden/Clouds"
                 float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
                 float depthWeight = 1.0 - smoothstep(historyDepthThreshold * 0.5, historyDepthThreshold, depthDiff);
                 float prevCloudDepth = HistoryCloudDepthTex.Sample(samplerHistoryCloudDepthTex, reprojUV);
-                float cloudGate = prevCloudDepth > 0.0 ? 1.0 : 0.0;
+                float cloudGate = prevCloudDepth > 0.001 ? 1.0 : 0.0;
                 float validHist = (inBounds ? 1.0 : 0.0) * depthWeight * cloudGate;
 
                 float4 history = HistoryTex.Sample(samplerHistoryTex, reprojUV);
@@ -889,25 +896,17 @@ Shader "Hidden/Clouds"
                 }
                 else
                 {
-                    // === TSS 开:KSA 时序 ===
-                    // 运动自适应混合:快速拖动(|MV| 大)时非新鲜格加大本帧分量 → 边缘不拖影;
+                    // 运动自适应混合:快速拖动(|MV| 大)时加大本帧分量 → 边缘不拖影;
                     // 静止时回到 _TssBlend 时序降噪。MV 单位是低清 UV(0..1):
                     // ~0.005 UV(网格2 时约 7 屏像素/帧)即视为快移 → 纯本帧。
                     float mvLen = length(mv);
                     float motionW = saturate(mvLen * 200.0);
                     float tssBlend = lerp(_TssBlend, 1.0, motionW);
 
-                    float2 cellCoord = floor(i.uv * _LowResSize);
-                    float2 inCell = fmod(cellCoord, _Upscale);
-                    bool isFresh = all(inCell == _SampleCell);
-
-                    if (isFresh && hasFreshCloud)
+                    // Raymarch 每帧覆盖固定低清格点;轮换写入权重不能产生额外空间样本。
+                    if (hasFreshCloud && validHist > 0.5)
                     {
-                        result = fresh;                 // 新鲜格:本帧 raymarch 直接写历史
-                    }
-                    else if (hasFreshCloud && validHist > 0.5)
-                    {
-                        // 非新鲜格:lerp(重投影历史, 本帧) → 历史降噪,本帧追运动;快移 → 纯本帧
+                        // 历史降噪,本帧追运动;快移 → 纯本帧。
                         result = lerp(history, fresh, tssBlend);
                     }
                     else if (hasFreshCloud)
@@ -923,7 +922,7 @@ Shader "Hidden/Clouds"
                     }
                     else
                     {
-                        result = float4(0.0, 0.0, 0.0, 0.0);
+                        result = fresh;
                     }
                 }
 
@@ -936,15 +935,11 @@ Shader "Hidden/Clouds"
         {
             Name "OrbitClouds"
 
-            // === 轨道云(2D 壳着色,2026-08-27) ===
-            // 高空(轨道)视角用廉价"云壳球面着色"替代体积 raymarch:
-            // 每像素 1 次外壳求交 → 在代表性云层高度处做 1 次【同源】密度采样(SampleDensityCheap,
-            // 与 Clouds pass 完全相同的一套 shape/distribution/falloff)→ 简单光照(Lambertian + phase)。
-            // 无 raymarch、无光步进、无时序 → 近免费;覆盖/形状与体积云同源 → 过渡带云形一致。
-            // 注意:不能在外壳顶(r=surface+maxCloudHeight)采样——那里高度 falloff≈0 恒黑;
-            // 必须在云带内取点(orbitSampleAltitude=0 时取"层强度加权层高",见 OrbitSampleAltitude)。
+            // 轨道云:壳面宏观分布决定覆盖,分布差分提供浮雕,不做体积 / 光照步进。
+            // 共享分布、风与旋转;单层覆盖不等于体积积分轮廓。
 
             CGPROGRAM
+            #pragma target 4.0
             #pragma vertex vert
             #pragma fragment frag
 
@@ -980,16 +975,16 @@ Shader "Hidden/Clouds"
             float forwardScatteringBias;
             float silverLiningIntensity;
             // 轨道云参数(静态)
-            float orbitSampleAltitude;   // 2D 着色锚点高度(0 = 自动:光学厚度最大处)
+            float orbitSampleAltitude;   // 壳面锚点高度,0 = maxCloudHeight。
             float orbitDensityBoost;     // 光学厚度乘数(与体积云 Beer 积累对齐;1=中性)
             float orbitBrightness;       // 亮度缩放(与体积云 Additive 强度对齐)
             float orbitReliefStrength;   // 密度梯度法线浮雕强度(KSA normal-map 等效,0=关)
             float orbitDetailStrength;   // detail 噪声作为云内"纹理"明暗变化强度(0=关)
             float _OrbitDebugMode;       // 调试:>0.5 输出 红=着色后不透明度,绿=原始光学厚度足迹
 
-            Texture2D<float> CloudShapeTex;
+            Texture3D<float> CloudShapeTex;
             SamplerState samplerCloudShapeTex;
-            Texture2D<float> CloudDetailTex;
+            Texture3D<float> CloudDetailTex;
             SamplerState samplerCloudDetailTex;
             Texture2D<float2> PlanetMapTex;
             SamplerState samplerPlanetMapTex;
@@ -1005,8 +1000,8 @@ Shader "Hidden/Clouds"
             float stockDensityScale;       // 方案 A:区域内密度缩放 0..1(1=恒等)
             float4x4 planetToBody;
 
-            // 场景深度(低清线性眼深;Blit uv 约定,与 Composite 采样 SceneDepthTex 一致,
-            // 由 CloudRenderer 在每层 material 上设 DepthTex=lowResDepthTex)
+            // 本相机当前场景线性眼深,每次轨道绘制前独立绑定 combinedDepthTex。
+            // 使用 Blit UV 约定,与 Composite 的 SceneDepthTex 一致。
             Texture2D<float> DepthTex;
             SamplerState samplerDepthTex;
 
@@ -1079,84 +1074,8 @@ Shader "Hidden/Clouds"
                 return StockCloudCube.SampleLevel(samplerStockCloudCube, sd, 0);
             }
 
-            // 与 Clouds pass 的 SampleDensityCheap 完全同源(同一套密度/分布/falloff 函数)。
-            float SampleDensityCheap(float3 worldPos)
-            {
-                float3 offset = worldPos - sphereCenter;
-                float r = length(offset);
-
-                float cosAngle = cos(currentRotation);
-                float sinAngle = sin(currentRotation);
-                float3 rotatedOffset = float3(
-                    offset.x * cosAngle - offset.z * sinAngle,
-                    offset.y,
-                    offset.x * sinAngle + offset.z * cosAngle
-                );
-
-                // Domain warping: small sinusoidal perturbation to break up visible tiling
-                float3 warpOffset = float3(
-                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
-                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
-                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
-                ) * 0.15;
-                float3 warpedUv = rotatedOffset + warpOffset;
-
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
-                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
-
-                float3 dir = normalize(rotatedOffset);
-                float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
-
-                spherical.x += cloudOffset.x;
-                float latFactor = sin(spherical.y * 3.14159265);
-                spherical.y += cloudOffset.z * 0.25 * latFactor;
-
-                float2 planetMap = PlanetMapTex.SampleLevel(samplerPlanetMapTex, spherical, 0);
-
-                float4 stock = 0.0;
-                if (useStockCloudMap > 0.5)
-                {
-                    stock = SampleStockDistribution(dir, cloudOffset.x * 6.28318530718);
-                }
-                float stockEff = useStockCloudMap * stockMapStrength;
-                float selValid = lerp(lerp(stockLayerValid.x, stockLayerValid.y, step(0.5, stockMapLayer)), stockLayerValid.z, step(1.5, stockMapLayer));
-                float4 valid = lerp(selValid.xxxx, float4(stockLayerValid.x, stockLayerValid.y, stockLayerValid.z, stockLayerValid.x), step(2.5, stockMapLayer));
-                float stockMaskValid = stockLayerValid.w;
-                float stockMask = lerp(1.0, stock.a, stockMaskInfluence * stockEff * stockMaskValid);
-                float selChannel = lerp(lerp(stock.r, stock.g, step(0.5, stockMapLayer)), stock.b, step(1.5, stockMapLayer));
-                float4 stockBandRaw = lerp(selChannel.xxxx, float4(stock.r, stock.g, stock.b, stock.r), step(2.5, stockMapLayer));
-                float4 stockBand = stockBandRaw * stockMask;
-
-                // 方案 A:区域内密度缩放(默认 1 → 恒等 → 现状逐字节一致;0 仍 0 → 足迹边缘保留)
-                float4 stockCov = stockBand * stockDensityScale;
-
-                float4 mapVal = lerp(float4(planetMap.r, planetMap.g, planetMap.r, planetMap.r), stockCov, stockEff * valid);
-                float4 layers;
-                layers.x = cloudLayerStrengths.x * mapVal.x;
-                layers.y = cloudLayerStrengths.y * mapVal.y;
-                layers.z = cloudLayerStrengths.z * mapVal.z;
-                layers.w = cloudLayerStrengths.w * mapVal.w;
-
-                float4 falloffExponent = ((r - surfaceRadius) - cloudLayerHeights) / cloudLayerSpreads;
-                float4 falloff = exp(-falloffExponent * falloffExponent);
-
-                float4 active = step(0.0001, cloudLayerStrengths);
-                // 与 Clouds pass 的 SampleDensity(全量,轨道视角下体积云实际用的版本)一致:
-                // dist 门乘 valid —— 该层在游戏自带云中不存在(valid=0)时 shape 门不压死,回退 planetMap。
-                float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff * valid);
-                float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
-                                   + layers.x * falloff.x + layers.y * falloff.y
-                                   + layers.z * falloff.z + layers.w * falloff.w;
-
-                return (totalDensity + cloudCoverage - 1.0) * cloudDensity;
-            }
-
-            // 覆盖掩膜(游戏本体 2D 云模型,参考 KSA 2DCloudsPipeline):
-            // 2D 云 = 烘焙分布在【壳面的一次采样】—— 不做光学厚度积分、不含高度衰减 falloff,
-            // 范围只由分布本身决定并延伸到云壳轮廓,与体积云最外层环(层分布延伸到带顶)同源。
-            // 旋转/扭曲/stock 门与 SampleDensityCheap 逐项一致 → 角速度/形状与体积云天然同步。
-            float SampleCoverageCheap(float3 worldPos)
+            // 与体积共享宏观分布、旋转和风;shape 是固定平均基准,覆盖不读周期切片。
+            float SampleMacroCoverage(float3 worldPos, float shape)
             {
                 float3 offset = worldPos - sphereCenter;
 
@@ -1167,17 +1086,6 @@ Shader "Hidden/Clouds"
                     offset.y,
                     offset.x * sinAngle + offset.z * cosAngle
                 );
-
-                float3 warpOffset = float3(
-                    sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
-                    cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
-                    sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
-                ) * 0.15;
-                float3 warpedUv = rotatedOffset + warpOffset;
-
-                float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, 0);
-                float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, 0);
-                shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
 
                 float3 dir = normalize(rotatedOffset);
                 float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
@@ -1222,9 +1130,8 @@ Shader "Hidden/Clouds"
                 return max(0.0, mask);
             }
 
-            // 与 SampleDensityCheap 相同的旋转+扭曲帧,但只采 detail 噪声作为逐像素"纹理"
-            // (KSA 颜色贴图等效:云内有明暗颗粒,而不是一整块平白)。
-            float SampleDetailAlbedo(float3 worldPos)
+            // 沿用体积廉价密度的旋转与扭曲帧,局部 detail 只调制明暗,不改变宏观覆盖。
+            float SampleDetailAlbedo(float3 worldPos, float noiseLod)
             {
                 float3 offset = worldPos - sphereCenter;
                 float cosAngle = cos(currentRotation);
@@ -1241,7 +1148,7 @@ Shader "Hidden/Clouds"
                 ) * 0.15;
                 float3 warpedUv = rotatedOffset + warpOffset;
                 // 比密度采样更细的尺度(×5)→ 云内细颗粒
-                return CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * (detailScale * 5.0), 0);
+                return CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * (detailScale * 5.0), noiseLod);
             }
 
             float4 frag(v2f i) : SV_Target
@@ -1255,24 +1162,21 @@ Shader "Hidden/Clouds"
                 float cosTheta = max(dot(viewDir, _CamFwd), 1e-3);
                 float sceneDepth = DepthTex.SampleLevel(samplerDepthTex, i.uv, 0) / cosTheta;
 
-                // --- 2D 云 = 壳面单点采样共享覆盖分布(游戏本体 2D 云模型) ---
-                // 参照 KSA 2DCloudsPipeline:EVE/游戏本体的 2D 云都是"烘焙分布在壳面的一次采样",
-                // 不做光学厚度积分、不做高度衰减 —— 范围由分布决定并延伸到云壳轮廓,
-                // 与体积云最外层环(层 1 分布延伸到带顶的微弱环)同源 → 大圈问题在此消除。
-                // 旧实现用 20 步光学厚度积分+能量增益去"凑"体积云足迹 —— 方向错误,已废弃。
+                // 壳面采样现有宏观分布;覆盖近似不包含体积列积分,不保证两种表示轮廓相同。
                 float sampleAlt = clamp(orbitSampleAltitude, 0.0, maxCloudHeight);
                 if (sampleAlt < 1.0) sampleAlt = maxCloudHeight;   // 自动 = 云壳顶(体积云外边界)
                 float2 shellHit = RaySphereIntersect(camPos, viewDir, surfaceRadius + sampleAlt);
+                float tS = max(shellHit.x, 0.0);
+                float3 pShell = camPos + viewDir * tS;
                 // 射线没碰到采样球面 → 无云
                 if (shellHit.y < 0.0)
-                    return float4(0.0, 0.0, 0.0, 0.0);
-                float tS = max(shellHit.x, 0.0);
+                    return float4(0.0, 0.0, 0.0, 1.0);
 
                 // 渲染顺序修正:craft/地形在壳点之前 → 2D 云被场景遮挡。
                 // 与体积云 raymarch 的 depth 截断(`maxRayDist=min(maxRayDist,depth)`,
                 // `maxRayDist<=startRayDist → 透明`)行为一致;否则 2D 云画在 craft 前。
                 if (sceneDepth <= tS)
-                    return float4(0.0, 0.0, 0.0, 0.0);
+                    return float4(0.0, 0.0, 0.0, 1.0);
 
                 // 壳点可见性:远交点 / 地面遮挡 / 场景深度 —— 采样点必须落在可见段内
                 float2 groundI = RaySphereIntersect(camPos, viewDir, surfaceRadius);
@@ -1281,13 +1185,15 @@ Shader "Hidden/Clouds"
                     tEnd = groundI.x;
                 tEnd = min(tEnd, sceneDepth);
                 if (tS > tEnd)
-                    return float4(0.0, 0.0, 0.0, 0.0);
+                    return float4(0.0, 0.0, 0.0, 1.0);
 
-                float3 pShell = camPos + viewDir * tS;
                 float3 up = normalize(pShell - sphereCenter);
 
-                // --- 覆盖:壳面覆盖掩膜单点采样(与体积云同一分布场;orbitDensityBoost=唯一范围增益) ---
-                float cov = SampleCoverageCheap(pShell);
+                // 宏观覆盖取现有分布;平均噪声只校准原预设,不把周期切片当全球云轮廓。
+                float shapeMean = CloudShapeTex.SampleLevel(samplerCloudShapeTex, float3(0.5, 0.5, 0.5), 16);
+                float detailMean = CloudDetailTex.SampleLevel(samplerCloudDetailTex, float3(0.5, 0.5, 0.5), 16);
+                float macroShape = shapeMean - (1.0 - shapeMean) * (1.0 - shapeMean) * detailStrength * detailMean;
+                float cov = SampleMacroCoverage(pShell, macroShape);
                 float coverage = saturate(cov * orbitDensityBoost);
 
                 // --- KSA 式法线浮雕:壳点处水平覆盖梯度(程序化 normal-map,同源) ---
@@ -1301,13 +1207,20 @@ Shader "Hidden/Clouds"
                 float arc = clamp(0.06 / max(cloudScale, 1e-6), 150.0, 2500.0);
                 float3 pEast = pShell + tangent * arc;
                 float3 pNorth = pShell + bitangent * arc;
-                float cEast = SampleCoverageCheap(pEast);
-                float cNorth = SampleCoverageCheap(pNorth);
+                float cEast = SampleMacroCoverage(pEast, macroShape);
+                float cNorth = SampleMacroCoverage(pNorth, macroShape);
                 float2 grad = float2(cEast - cov, cNorth - cov) * orbitReliefStrength;
                 float3 N = normalize(up - tangent * grad.x - bitangent * grad.y);
 
                 // --- 细节噪声作为云内"纹理"(逐像素明暗变化) ---
-                float albedo = 1.0 + orbitDetailStrength * (SampleDetailAlbedo(pShell) - 0.5);
+                float albedo = 1.0;
+                if (orbitDetailStrength > 0.0)
+                {
+                    uint detailW, detailH, detailD;
+                    CloudDetailTex.GetDimensions(detailW, detailH, detailD);
+                    float albedoLod = log2(max(1.0, detailW * 5.0 / 64.0));
+                    albedo += orbitDetailStrength * (SampleDetailAlbedo(pShell, albedoLod) - 0.5);
+                }
 
                 // --- 光照:Lambertian(浮雕法线)+ phase 银边 ---
                 float ndl = saturate(dot(N, -lightDir));
@@ -1330,7 +1243,8 @@ Shader "Hidden/Clouds"
                 col += cloudColor.rgb * phaseValue * coverage
                      * pow(saturate(1.0 - ndl), 3.0) * dayFactor * 0.5 * orbitBrightness;
 
-                return float4(col, coverage);
+                // 与体积云和 Composite 一致:alpha 表示透射率。
+                return float4(col, 1.0 - coverage);
             }
             ENDCG
         }
@@ -1423,8 +1337,8 @@ Shader "Hidden/Clouds"
                         return float4(source.rgb+lerp(volClouds.rgb*vf.a,orbitClouds.rgb*of.a,blend),source.a);
                     bool near = sceneDepth>0 && sceneDepth<_NearThreshold;
                     float factor = near ? lerp(0.2,1,smoothstep(0,_NearThreshold,sceneDepth)) : saturate(sceneDepth/5000);
-                    float vt = lerp(near ? 0.8 : 1,volClouds.a,factor);
-                    float ot = lerp(near ? 0.8 : 1,orbitClouds.a,factor);
+                    float vt = lerp(1,volClouds.a,factor);
+                    float ot = lerp(1,orbitClouds.a,factor);
                     float3 vc = vf.a*volClouds.rgb*factor+(1-vt)*vf.rgb;
                     float3 oc = of.a*orbitClouds.rgb*factor+(1-ot)*of.rgb;
                     return float4(source.rgb*lerp(vt,ot,blend)+lerp(vc,oc,blend),source.a);
@@ -1445,7 +1359,7 @@ Shader "Hidden/Clouds"
                     nearFactor = lerp(0.2, 1.0, nearFactor);
                     
                     float3 finalCloudColor = clouds.rgb * nearFactor;
-                    float finalTransmittance = lerp(0.8, clouds.a, nearFactor);
+                    float finalTransmittance = lerp(1.0, clouds.a, nearFactor);
                     return float4(source.rgb * finalTransmittance + finalCloudColor, source.a);
                 }
                 else

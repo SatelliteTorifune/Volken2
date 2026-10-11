@@ -21,9 +21,6 @@
 
     <s id="Volken.UI.Weather">Weather</s>
     <s id="Volken.UI.WeatherUnavailable">Weather system unavailable. Reload the flight scene.</s>
-    <s id="Volken.UI.WeatherEnabled">Enable weather</s>
-    <s id="Volken.UI.WeatherEnabledOn">Weather enabled for this planet.</s>
-    <s id="Volken.UI.WeatherEnabledOff">Weather disabled for this planet.</s>
     <s id="Volken.UI.WeatherConfigSaved">Weather configuration saved.</s>
     <s id="Volken.UI.WeatherResetToDefault">Defaults restored. Save the configuration to keep them.</s>
 

@@ -324,6 +324,8 @@ namespace Volken.Clouds
                 var planetNode = ResolvePlanetNode();
                 if (planetNode != null) StockCloudMap.LoadFor(planetNode);
 
+                foreach (var layer in layers) layer?.SetStaticShaderProperties();
+
                 EnsureRenderers();
 
                 VolkenUserInterface.Instance?.RebuildInspectorPanel();

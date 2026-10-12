@@ -99,7 +99,7 @@ namespace VolkenProfiler
         {
             try
             {
-                var volken = Volken.Clouds.VolkenClouds.Instance;
+                var volken = Volken.Clouds.VolumetricClouds.Instance;
                 if (volken == null)
                 {
                     return null;

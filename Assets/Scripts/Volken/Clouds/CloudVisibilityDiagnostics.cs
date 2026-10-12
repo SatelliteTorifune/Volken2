@@ -55,7 +55,7 @@ namespace Volken.Clouds
             try
             {
                 string context = string.Format(
-                    "build=8 frame={0} camera='{1}' altitude={2:F1}m fov={3:F1} clip={4:F2}/{5:F0} fog={6} layers={7} farReady={8} farMax={9:G6} recenterCount={10} lastDelta={11:G6}/{12:G6}m,m/s",
+                    "build=9 frame={0} camera='{1}' altitude={2:F1}m fov={3:F1} clip={4:F2}/{5:F0} fog={6} layers={7} farReady={8} farMax={9:G6} recenterCount={10} lastDelta={11:G6}/{12:G6}m,m/s",
                     Time.frameCount, camera.name, altitude, camera.fieldOfView, camera.nearClipPlane,
                     camera.farClipPlane, fogActive, views.Count, far != null && Ready(far.farDepthTex),
                     far != null ? far.maxFarDepth : 0f, _recenterCount, _lastPositionDelta, _lastVelocityDelta);

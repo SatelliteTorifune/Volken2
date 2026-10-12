@@ -1,6 +1,6 @@
 namespace Volken.Clouds
 {
-    /// <summary>当前行星环境的一次性快照(纯值对象);由 <see cref="VolkenClouds"/> 解析行星后经 <see cref="VolkenClouds.PlanetChanged"/> 广播。</summary>
+    /// <summary>当前行星环境的一次性快照(纯值对象);由 <see cref="VolumetricClouds"/> 解析行星后经 <see cref="VolumetricClouds.PlanetChanged"/> 广播。</summary>
     public struct PlanetEnvironment
     {
         public string PlanetName;   // 当前 SOI 行星名(不在飞行场景 / 无 SOI 时为空)

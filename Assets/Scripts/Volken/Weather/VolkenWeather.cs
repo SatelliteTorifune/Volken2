@@ -12,7 +12,7 @@ namespace Volken.Weather
     /// 天气系统:按行星装载天气预设并驱动雨 / 雷电;雾由每相机 CloudRenderer 按本配置显式绘制。
     ///
     /// 与云的关系:**直接读对方 config,不造接口层**;但**读 ≠ 联动** —— 天气不修改云的任何参数。
-    /// 行星切换订阅 <see cref="VolkenClouds.PlanetChanged"/>,不自己监听场景事件。
+    /// 行星切换订阅 <see cref="VolumetricClouds.PlanetChanged"/>,不自己监听场景事件。
     /// </summary>
     public class VolkenWeather
     {
@@ -67,7 +67,7 @@ namespace Volken.Weather
         /// <summary>相机速度(米/秒,平滑后)。雨丝拉伸方向需要 "玩家速度 − 相机速度"。</summary>
         public Vector3 CameraVelocity { get; private set; }
 
-        /// <summary>初始化单例(幂等)。由 <c>Mod.OnModLoaded</c> 调用,必须在 <see cref="VolkenClouds.Initialize"/> 之后。</summary>
+        /// <summary>初始化单例(幂等)。由 <c>Mod.OnModLoaded</c> 调用,必须在 <see cref="VolumetricClouds.Initialize"/> 之后。</summary>
         public static void Initialize()
         {
             if (Instance != null) return;
@@ -95,21 +95,21 @@ namespace Volken.Weather
                 Mod.Log("VolkenWeather: host creation failed: " + ex.Message);
             }
 
-            if (VolkenClouds.Instance != null)
+            if (Clouds.VolumetricClouds.Instance != null)
             {
-                VolkenClouds.Instance.PlanetChanged += OnPlanetChanged;
+                Clouds.VolumetricClouds.Instance.PlanetChanged += OnPlanetChanged;
             }
             else
             {
-                Mod.Log("VolkenWeather: VolkenClouds 未初始化 —— 天气不会跟随行星切换(初始化顺序错误)");
+                Mod.Log("VolkenWeather: Clouds 未初始化 —— 天气不会跟随行星切换(初始化顺序错误)");
             }
 
             Mod.Log("VolkenWeather initialized");
         }
 
-        // 行星切换(唯一入口:VolkenClouds 的事件)
+        // 行星切换(唯一入口:Clouds 的事件)
 
-        /// <summary>行星环境变化(由 <see cref="VolkenClouds.PlanetChanged"/> 广播)。</summary>
+        /// <summary>行星环境变化(由 <see cref="VolumetricClouds.PlanetChanged"/> 广播)。</summary>
         private void OnPlanetChanged(PlanetEnvironment env)
         {
             try
@@ -156,7 +156,7 @@ namespace Volken.Weather
         {
             try
             {
-                var list = VolkenClouds.Instance?.planetConfigList;
+                var list = Clouds.VolumetricClouds.Instance?.planetConfigList;
                 var name = list?.GetWeatherConfigName(planetName);
                 return string.IsNullOrEmpty(name) ? VolkenWeatherConfig.DefaultConfigName : name;
             }
@@ -263,7 +263,7 @@ namespace Volken.Weather
         {
             try
             {
-                var list = VolkenClouds.Instance?.planetConfigList;
+                var list = Clouds.VolumetricClouds.Instance?.planetConfigList;
                 if (list == null || string.IsNullOrEmpty(CurrentPlanet)) return;
                 if (list.GetWeatherConfigName(CurrentPlanet) == CurrentConfigName) return;
                 list.SetWeatherConfig(CurrentPlanet, CurrentConfigName);
@@ -372,7 +372,7 @@ namespace Volken.Weather
         }
 
         private bool CanRunWeather() => Config != null && !string.IsNullOrEmpty(CurrentPlanet) &&
-            Game.InFlightScene && VolkenClouds.Instance?.CurrentPlanet.SupportsAtmosphereEffects == true;
+            Game.InFlightScene && Clouds.VolumetricClouds.Instance?.CurrentPlanet.SupportsAtmosphereEffects == true;
 
         /// <summary>重算环境激活态并按独立开关同步雷电启停。</summary>
         public void RefreshActiveState()
@@ -495,7 +495,7 @@ namespace Volken.Weather
         {
             try
             {
-                var cloudCfg = VolkenClouds.Instance?.MainLayer?.config;
+                var cloudCfg = Clouds.VolumetricClouds.Instance?.MainLayer?.config;
                 if (cloudCfg == null || !cloudCfg.enabled) return 1f;
 
                 float bottom, top;

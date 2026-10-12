@@ -5,7 +5,7 @@
 
 ## 一、当前推进
 
-TSS 云、镜头稳定性与画质回退修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§12。§12 恢复旧体积 Worley / mip 0,轨道覆盖改由现有宏观分布决定,保留统一时序权重;177 项 Unity / GPU 回归通过,最新 `build=8 shader=7`,待更新代码 / shader / compute 后游戏验收。
+TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§13。旧体积密度与轨道宏观覆盖保持,§13 修正单段云光积分并在输出端重建远景颜色 / 透射率;185 项 Unity / GPU 回归通过,最新 `build=9 shader=8`,待代码 / shader 的游戏画质与性能验收。
 
 | 文档 | 状态 / 下一步 |
 |---|---|
@@ -79,7 +79,7 @@ TSS 云、镜头稳定性与画质回退修复:见 [诊断与修复](cloud-visib
 | 5 | 自适应雨域变大但粒子数固定,密度变稀;`RainParticles.OnPreCull` | 已知代价;不恢复渲染回调内自动重建 GPU buffer |
 | 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[帧率清单](proposals/frame-rate-optimization-audit-2026-10-08.md) §4 L1 | 源码已确认,尚未修复;未做运行时复验 |
 | 7 | 夜间雾偏亮:环境光强制下限、颜色空间处理与太阳状态消费缺口;[雾记录](fog-implementation-plan-2026-10-09.md) §13 | ✅ 源码已修正,161 项独立验证通过;待游戏昼夜画面 / 光照日志验收 |
-| 8 | TSS 丢云、轨道深度 / 资源 / 历史 / 合成、镜头抖动与云形回退;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§12 | ✅ 源码已修复,177 项 Unity / GPU 回归通过;旧体积采样已恢复,轨道使用现有宏观分布,最新 build=8 / shader=7,待游戏验收;新过渡曲线与真正反平铺未实施 |
+| 8 | TSS 丢云、轨道深度 / 生命周期 / 合成、镜头抖动与颗粒;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§13 | ✅ 源码修复及 185 项 Unity / GPU 回归通过;最新 build=9 / shader=8 补单段积分与远景输出重建,待游戏画质 / 性能验收;底层周期仍在,新曲线与反平铺未实施 |
 
 ## 四之三、待办清单(backlog)
 

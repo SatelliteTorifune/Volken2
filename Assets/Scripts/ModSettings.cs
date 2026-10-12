@@ -34,8 +34,6 @@ namespace Assets.Scripts
 
         protected override void InitializeSettings()
         {
-            // xmlName 是 XML 序列化的稳定存储 key,必须显式给定:不指定会从显示名派生,而显示名是本地化引用,
-            // 切语言 → key 变 → 玩家已保存的设置被重置。这里沿用旧代码的派生键,改掉同样会丢设置。
             NoiseMapIndex = CreateNumeric<int>("{Volken.ModSettings.NoiseMapIndex}", 1, 5, 1, "noiseMap")
                 .SetDescription("{Volken.ModSettings.NoiseMapIndexDesc}")
                 .SetDisplayFormatter(x => x.ToString("F0"))

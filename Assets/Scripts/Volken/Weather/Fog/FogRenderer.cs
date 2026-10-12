@@ -80,7 +80,7 @@ namespace Volken.Weather
                 var weather = VolkenWeather.Instance;
                 var cfg = weather?.Config?.fog;
                 if (cfg == null || !cfg.enabled) { ReleaseVolume(); ReleaseLookup(); return State("disabled", main); }
-                if (!weather.IsActive || !VolkenClouds.Instance.CurrentPlanet.SupportsAtmosphereEffects)
+                if (!weather.IsActive || !Clouds.VolumetricClouds.Instance.CurrentPlanet.SupportsAtmosphereEffects)
                     return State("weather-or-atmosphere-disabled", main);
                 if (!main && !ModSettings.Instance.ExtraCameraFog.Value) { ReleaseVolume(); ReleaseLookup(); return State("extra-camera-disabled", false); }
                 if (_camera.orthographic) return State("orthographic-camera-unsupported", main);

@@ -53,9 +53,9 @@ namespace Volken.Clouds
             CloudRenderManualRefresh();
 
             // 切天体 → 本相机历史作废。只订阅唯一的行星事件源:自己监听 PlayerChangedSoi 会漏退订(销毁后实例仍被事件链引用)
-            if (VolkenClouds.Instance != null)
+            if (VolumetricClouds.Instance != null)
             {
-                VolkenClouds.Instance.PlanetChanged += OnPlanetChanged;
+                VolumetricClouds.Instance.PlanetChanged += OnPlanetChanged;
             }
 
             try
@@ -89,7 +89,7 @@ namespace Volken.Clouds
         private void OnPlanetChanged(PlanetEnvironment env)
         {
             _visibilityDiagnostics.Cancel();
-            // 不要回写 layer.config.enabled 做大气门控(会污染玩家预设);环境抑制由 VolkenClouds 统一置位
+            // 不要回写 layer.config.enabled 做大气门控(会污染玩家预设);环境抑制由 Clouds 统一置位
             foreach (var view in _views.Values)
             {
                 view.ClearHistory();
@@ -131,7 +131,7 @@ namespace Volken.Clouds
 
         private void BuildViews()
         {
-            var clouds = Volken.Clouds.VolkenClouds.Instance;
+            var clouds = Volken.Clouds.VolumetricClouds.Instance;
             if (clouds == null) return;
 
             // 先收集再删,避免边遍历 _views.Keys 边 Remove(不用 LINQ:本方法每帧被调)
@@ -224,7 +224,7 @@ namespace Volken.Clouds
         {
             try
             {
-                foreach (var layer in Volken.Clouds.VolkenClouds.Instance.layers)
+                foreach (var layer in Volken.Clouds.VolumetricClouds.Instance.layers)
                 {
                     if (layer?.config == null || layer.material == null) continue;
 
@@ -282,8 +282,8 @@ namespace Volken.Clouds
                     return;
                 }
                 var mainCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera;
-                if (cam == mainCamera && Volken.Clouds.VolkenClouds.Instance?.farCam != null)
-                    farDepthSource = Volken.Clouds.VolkenClouds.Instance.farCam;
+                if (cam == mainCamera && Volken.Clouds.VolumetricClouds.Instance?.farCam != null)
+                    farDepthSource = Volken.Clouds.VolumetricClouds.Instance.farCam;
             }
             catch (Exception ex)
             {
@@ -297,12 +297,12 @@ namespace Volken.Clouds
             if (_lastGlobalAdvanceFrame == Time.frameCount) return;
             _lastGlobalAdvanceFrame = Time.frameCount;
 
-            if (Volken.Clouds.VolkenClouds.Instance == null) return;
+            if (Volken.Clouds.VolumetricClouds.Instance == null) return;
             var craftNode = Game.Instance?.FlightScene?.CraftNode;
             if (craftNode == null || craftNode.ReferenceFrame == null || craftNode.CraftScript == null) return;
             float deltaTime = (float)Game.Instance.FlightScene.TimeManager.DeltaTime;
 
-            foreach (var layer in Volken.Clouds.VolkenClouds.Instance.layers)
+            foreach (var layer in Volken.Clouds.VolumetricClouds.Instance.layers)
             {
                 if (layer?.config == null) continue;
 
@@ -665,8 +665,8 @@ namespace Volken.Clouds
                 RenderTexture farDepthTex = farDepthSource != null ? farDepthSource.farDepthTex : null;
                 if (farDepthTex != null && !farDepthTex.IsCreated()) farDepthTex = null;
 
-                // 本帧渲染层走复用缓冲(判据仍是 VolkenClouds 那一份,不在这里另写一遍)
-                Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
+                // 本帧渲染层走复用缓冲(判据仍是 Clouds 那一份,不在这里另写一遍)
+                Volken.Clouds.VolumetricClouds.Instance.FillActiveLayers(_activeLayers);
                 var activeLayers = _activeLayers;
                 var gameCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera;
                 if (cam != gameCamera?.NearCamera && !ModSettings.Instance.ExtraCameraClouds.Value) activeLayers.Clear();
@@ -931,9 +931,9 @@ namespace Volken.Clouds
             catch { }
 
             // 退订行星事件(必须成对退订,否则销毁后实例仍被事件链引用)
-            if (VolkenClouds.Instance != null)
+            if (VolumetricClouds.Instance != null)
             {
-                VolkenClouds.Instance.PlanetChanged -= OnPlanetChanged;
+                VolumetricClouds.Instance.PlanetChanged -= OnPlanetChanged;
             }
 
             ReleaseAllRenderTextures();

@@ -4,7 +4,7 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 7
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 8
 
         // 关键修复:所有通过 material.SetTexture 在运行时绑定的纹理都必须在此声明。
         // 只在 CGPROGRAM 里声明(Texture2D/Texture3D/TextureCube)不会被注册为材质纹理属性,
@@ -340,6 +340,16 @@ Shader "Hidden/Clouds"
             float BeersPowder(float d, float amb)
             {
                 return amb + 2.0 * exp(-d * cloudAbsorption) * (1.0 - exp(-2.0 * d * cloudAbsorption)) * (1.0 - amb);
+            }
+
+            // 对本段的 Beer 衰减作解析积分;密度×步长的显式累加会放大厚样本亮点。
+            float SegmentScatteringWeight(float densityStep, float amb)
+            {
+                float opticalDepth = max(0.0, densityStep * cloudAbsorption);
+                float attenuationIntegral = opticalDepth > 1e-3
+                    ? (1.0 - exp(-opticalDepth)) / opticalDepth
+                    : 1.0 - 0.5 * opticalDepth + opticalDepth * opticalDepth / 6.0;
+                return lerp(attenuationIntegral, 1.0, amb);
             }
 
             // returns the distances of the intersections from the given point
@@ -690,7 +700,9 @@ Shader "Hidden/Clouds"
                         
                         lightTransmittance = BeersPowder(lightSample.x, amb) * exp(-lightSample.y * scatterCoeff);
 
-                        lightEnergy += density * localStepSize * transmittance * lightTransmittance * phaseValue;
+                        float densityStep = density * localStepSize;
+                        lightEnergy += densityStep * SegmentScatteringWeight(densityStep, amb)
+                            * transmittance * lightTransmittance * phaseValue;
                         transmittance *= Beer(density * localStepSize, amb);
                         
                         // break when visibility reaches threshold to avoid unnecessary samples
@@ -860,6 +872,44 @@ Shader "Hidden/Clouds"
             float historyBlend;       // TSS关:历史权重(运动残影,如 0.90)
             float historyDepthThreshold;
 
+            Texture3D<float> CloudShapeTex;
+            float4 _MainTex_TexelSize;
+            float _TanHalfFovV, _Aspect, cloudScale;
+
+            // 在密度积分之后重建颜色和透射率,不按屏幕足迹改变世界密度或命中距离。
+            float4 ReconstructCurrentCloud(float2 uv, float4 center, float cloudDistance, float sceneEyeDepth)
+            {
+                float2 ndc = uv * 2.0 - 1.0;
+                float2 rayPlane = float2(ndc.x * _Aspect, ndc.y) * _TanHalfFovV;
+                float sceneRayDepth = sceneEyeDepth * sqrt(1.0 + dot(rayPlane, rayPlane));
+                if (cloudDistance <= 0.001 || cloudDistance > sceneRayDepth || cloudScale <= 0.0)
+                    return center;
+
+                uint noiseWidth, noiseHeight, noiseDepth;
+                CloudShapeTex.GetDimensions(noiseWidth, noiseHeight, noiseDepth);
+                float2 texel = abs(_MainTex_TexelSize.xy);
+                float worldPixel = cloudDistance * 2.0 * _TanHalfFovV * texel.y;
+                float noiseVoxel = 1.0 / max(noiseWidth * cloudScale, 1e-6);
+                float blend = smoothstep(1.0, 4.0, worldPixel / max(noiseVoxel, 0.001));
+                if (blend <= 0.0) return center;
+
+                float4 sum = center * 4.0;
+                float weightSum = 4.0;
+                [unroll] for (int y = -1; y <= 1; y++)
+                [unroll] for (int x = -1; x <= 1; x++)
+                {
+                    if (x == 0 && y == 0) continue;
+                    float2 sampleUv = uv + float2(x, y) * texel;
+                    if (any(sampleUv < 0.0) || any(sampleUv > 1.0)) continue;
+                    float neighborDepth = CloudDepthTex.SampleLevel(samplerCloudDepthTex, sampleUv, 0);
+                    if (neighborDepth > sceneRayDepth) continue;
+                    float weight = (x == 0 ? 2.0 : 1.0) * (y == 0 ? 2.0 : 1.0);
+                    sum += _MainTex.SampleLevel(sampler_MainTex, sampleUv, 0) * weight;
+                    weightSum += weight;
+                }
+                return lerp(center, sum / weightSum, blend);
+            }
+
             // 单目标输出:颜色走 Graphics.Blit(自动绑 _MainTex,已由 Dilate/深度 pass 验证可靠)。
             // 云面距离历史由 CloudRenderer 直接 Blit 低清 cloudDepthTex → 全清 historyCloudDepthTex。
             float4 frag(v2f i) : SV_Target
@@ -867,6 +917,8 @@ Shader "Hidden/Clouds"
                 // 本帧低清 raymarch(双线性上采样到全清)+ 本帧膨胀 MV
                 float4 fresh = _MainTex.Sample(sampler_MainTex, i.uv);
                 float freshDepth = CloudDepthTex.Sample(samplerCloudDepthTex, i.uv);
+                float currentDepth = CombinedDepthTex.Sample(samplerCombinedDepthTex, i.uv);
+                fresh = ReconstructCurrentCloud(i.uv, fresh, freshDepth, currentDepth);
                 // 本帧 raymarch 在此像素是否找到云:看云面距离(>0 有云)。
                 // alpha 是透射率;无云为 1,地表阴影也会降低它,不能用它判断云命中。
                 bool hasFreshCloud = freshDepth > 0.0;
@@ -877,7 +929,6 @@ Shader "Hidden/Clouds"
                 bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
 
                 // 历史接受判据:深度软过渡 + 历史处有云(割裂线修复,从 Clouds pass 移入)
-                float currentDepth = CombinedDepthTex.Sample(samplerCombinedDepthTex, i.uv);
                 float historySceneDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV);
                 float depthDiff = abs(currentDepth - historySceneDepth) / max(currentDepth, 0.001);
                 float depthWeight = 1.0 - smoothstep(historyDepthThreshold * 0.5, historyDepthThreshold, depthDiff);

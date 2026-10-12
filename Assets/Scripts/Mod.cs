@@ -14,9 +14,9 @@ namespace Assets.Scripts
     using UnityEngine;
 
     /// <summary>本 mod 的 GameMod 单例。</summary>
-    public partial class Mod : ModApi.Mods.GameMod
+    public class Mod : ModApi.Mods.GameMod
     {
-        /// <summary>私有构造:禁止外部 new。</summary>
+        
         private Mod() : base()
         {
         }
@@ -47,9 +47,9 @@ namespace Assets.Scripts
             SetUpGo<VolkenUserInterface>(ref VolkenUI,"VolkenUI");
             SetUpGo<ForceSetting>(ref ForceSettingScriptLoadGameObject,"ForceSettingObject");
             
-            // 初始化顺序是硬要求:VolkenClouds 负责解析行星环境并广播 PlanetChanged,
+            // 初始化顺序是硬要求:Clouds 负责解析行星环境并广播 PlanetChanged,
             // 必须先于 VolkenWeather(后者订阅它)。
-            VolkenClouds.Initialize();
+            VolumetricClouds.Initialize();
             VolkenWeather.Initialize();
             // 注:性能剖析器(VolkenProfiler)不再由正式代码启动 —— 见 VolkenTests/TestsBootstrap.cs 自发注册
             RegisterCommands();
@@ -85,11 +85,11 @@ namespace Assets.Scripts
         {
             if (!Game.InFlightScene) return;
 
-            VolkenClouds.Initialize();
+            VolumetricClouds.Initialize();
             VolkenWeather.Initialize();
 
-            VolkenClouds.Instance?.OnFlightSceneLoaded();
-            Log("VolkenForceRefresh: 已让 VolkenClouds 重新解析行星环境");;
+            VolumetricClouds.Instance?.OnFlightSceneLoaded();
+            Log("VolkenForceRefresh: 已让 Clouds 重新解析行星环境");;
         }
         #region LOG
         public static void Log(string format, params object[] args)

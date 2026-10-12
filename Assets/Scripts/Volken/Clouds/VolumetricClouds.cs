@@ -15,9 +15,11 @@ namespace Volken.Clouds
     /// 云系统:持有全部云层、按行星装载云预设、装配云渲染器,并且是全工程唯一解析"当前行星环境"的地方。
     /// 与天气的关系:直接读对方 config,不要造接口层。Mod.OnModLoaded 里本类必须先于 VolkenWeather 初始化。
     /// </summary>
-    public class VolkenClouds
+    public class VolumetricClouds
     {
-        public static VolkenClouds Instance { get; private set; }
+        
+        
+        public static VolumetricClouds Instance { get; private set; }
 
         /// <summary>全部云层(Layer 0 = Main,Layer 1..n = Extra)。</summary>
         public List<CloudLayer> layers = new List<CloudLayer>();
@@ -84,21 +86,21 @@ namespace Volken.Clouds
         public static void Initialize()
         {
             if (Instance != null) return;
-            Instance = new VolkenClouds();
+            Instance = new VolumetricClouds();
         }
 
-        private VolkenClouds()
+        private VolumetricClouds()
         {
             try
             {
                 _cloudShader = Mod.Instance.ResourceLoader.LoadAsset<Shader>("Assets/Scripts/Volken/Clouds/Shader/Clouds.shader");
             }
-            catch (Exception ex) { Mod.Log("VolkenClouds: Cloud shader load error: " + ex); }
+            catch (Exception ex) { Mod.Log("Clouds: Cloud shader load error: " + ex); }
 
             if (_cloudShader == null)
             {
                 try { _cloudShader = Shader.Find("Hidden/Clouds"); }
-                catch (Exception ex) { Mod.Log("VolkenClouds: Shader.Find fallback error: " + ex); }
+                catch (Exception ex) { Mod.Log("Clouds: Shader.Find fallback error: " + ex); }
             }
 
             InitializeLayers();
@@ -110,11 +112,11 @@ namespace Volken.Clouds
             }
             catch (Exception ex)
             {
-                Mod.Log("VolkenClouds: SceneLoaded subscribe failed: " + ex.Message);
+                Mod.Log("Clouds: SceneLoaded subscribe failed: " + ex.Message);
             }
 
             TrySubscribeSoi();
-            Mod.Log("VolkenClouds initialized");
+            Mod.Log("Clouds initialized");
         }
 
         private void InitializeLayers()
@@ -259,7 +261,7 @@ namespace Volken.Clouds
             }
             catch (Exception ex)
             {
-                Mod.Log("VolkenClouds: resolve planet failed: " + ex.Message);
+                Mod.Log("Clouds: resolve planet failed: " + ex.Message);
             }
 
             return env;
@@ -273,7 +275,7 @@ namespace Volken.Clouds
             ApplyPlanetToClouds(env);       // 云自己先装配完
 
             try { PlanetChanged?.Invoke(env); }   // 再广播给天气等订阅者
-            catch (Exception ex) { Mod.Log("VolkenClouds: PlanetChanged handler threw: " + ex); }
+            catch (Exception ex) { Mod.Log("Clouds: PlanetChanged handler threw: " + ex); }
         }
 
         // 按"该行星有没有水"切水体强制设置。刻意放在这里而不是云装配里:它是行星级判断,与云/天气都无关。
@@ -285,7 +287,7 @@ namespace Volken.Clouds
             }
             catch (Exception ex)
             {
-                Mod.Log("VolkenClouds: water setting toggle failed: " + ex.Message);
+                Mod.Log("Clouds: water setting toggle failed: " + ex.Message);
             }
         }
 
@@ -314,7 +316,7 @@ namespace Volken.Clouds
                     }
 
                     VolkenUserInterface.Instance?.RebuildInspectorPanel();
-                    Mod.Log($"VolkenClouds: 无云环境({env}) → 全部云层已关闭");
+                    Mod.Log($"Clouds: 无云环境({env}) → 全部云层已关闭");
                     return;
                 }
 
@@ -329,12 +331,12 @@ namespace Volken.Clouds
                 EnsureRenderers();
 
                 VolkenUserInterface.Instance?.RebuildInspectorPanel();
-                Mod.Log($"VolkenClouds: 已装配云 planet={env.PlanetName} preset={MainLayer?.currentConfigName} " +
+                Mod.Log($"Clouds: 已装配云 planet={env.PlanetName} preset={MainLayer?.currentConfigName} " +
                         $"layers={layers.Count} renderer={(cloudRenderer != null)}");
             }
             catch (Exception ex)
             {
-                Mod.Log("VolkenClouds.ApplyPlanetToClouds ERROR: " + ex);
+                Mod.Log("Clouds.ApplyPlanetToClouds ERROR: " + ex);
             }
         }
 
@@ -389,7 +391,7 @@ namespace Volken.Clouds
                         extra.config.CopyFrom(loaded);
                         extra.currentConfigName = extraCfgName;
                     }
-                    catch (Exception ex) { Mod.Log("VolkenClouds: Error loading extra config: " + ex); }
+                    catch (Exception ex) { Mod.Log("Clouds: Error loading extra config: " + ex); }
                 }
             }
         }
@@ -449,7 +451,7 @@ namespace Volken.Clouds
             }
             catch (Exception ex)
             {
-                Mod.Log("VolkenClouds: Error refreshing config list: " + ex);
+                Mod.Log("Clouds: Error refreshing config list: " + ex);
                 _availableConfigs = new List<string> { "Default" };
             }
         }
@@ -457,7 +459,7 @@ namespace Volken.Clouds
         public void AddConfig(string cfg)
         {
             _availableConfigs.Add(cfg);
-            Mod.Log($"VolkenClouds: Added config {cfg}, now has {_availableConfigs.Count} configs");
+            Mod.Log($"Clouds: Added config {cfg}, now has {_availableConfigs.Count} configs");
         }
 
         /// <summary>面板改动云参数后调用:把新参数推给 shader。</summary>

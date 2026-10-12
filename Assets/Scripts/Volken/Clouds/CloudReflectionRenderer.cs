@@ -62,14 +62,14 @@ namespace Volken.Clouds
             {
                 _diagnosed = true;
                 int layerCount = -1;
-                try { layerCount = Volken.Clouds.VolkenClouds.Instance != null ? Volken.Clouds.VolkenClouds.Instance.ActiveLayers.Count() : -1; } catch { }
+                try { layerCount = Volken.Clouds.VolumetricClouds.Instance != null ? Volken.Clouds.VolumetricClouds.Instance.ActiveLayers.Count() : -1; } catch { }
                 Mod.Log("Volken:CloudReflectionRenderer diag: InFlight=" + Game.InFlightScene +
                     " targetTexture=" + (cam != null && cam.targetTexture != null ? cam.targetTexture.width + "x" + cam.targetTexture.height : "null") +
                     " layers=" + layerCount);
             }
 
             if (!Game.InFlightScene) return;
-            if (Volken.Clouds.VolkenClouds.Instance == null) return;
+            if (Volken.Clouds.VolumetricClouds.Instance == null) return;
             if (!ModSettings.Instance.WaterReflection) return;   // 水面反射云开关(ModSettings > Water Reflection,默认关)
 
             var craftNode = Game.Instance.FlightScene?.CraftNode;
@@ -79,7 +79,7 @@ namespace Volken.Clouds
             if (rt == null || rt.width <= 0 || rt.height <= 0) return;
 
             // 复用缓冲:本方法每次水面反射都调,不用 LINQ + 临时 List
-            Volken.Clouds.VolkenClouds.Instance.FillActiveLayers(_activeLayers);
+            Volken.Clouds.VolumetricClouds.Instance.FillActiveLayers(_activeLayers);
             var activeLayers = _activeLayers;
             if (activeLayers.Count == 0) return;
 

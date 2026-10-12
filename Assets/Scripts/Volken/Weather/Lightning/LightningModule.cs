@@ -655,7 +655,7 @@ namespace Volken.Weather
             bottom = 0f;
             top = 0f;
 
-            var cloudCfg = VolkenClouds.Instance?.MainLayer?.config;
+            var cloudCfg = Clouds.VolumetricClouds.Instance?.MainLayer?.config;
             if (cloudCfg == null || !cloudCfg.enabled) return false;
 
             return cloudCfg.TryGetBand(out bottom, out top);

@@ -4,6 +4,7 @@ using System.IO;
 using System.Xml.Serialization;
 using Assets.Scripts;
 using UnityEngine;
+using Volken.Clouds;
 
 namespace Volken.Core
 {
@@ -60,7 +61,7 @@ namespace Volken.Core
         /// <summary>配置文件夹(相对 persistentDataPath)。云预设与天气共用这一份清单。</summary>
         public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
 
-        /// <summary>清单文件名(不带扩展名)。持有与读写它的是 <see cref="Volken.Clouds.VolkenClouds"/>。</summary>
+        /// <summary>清单文件名(不带扩展名)。持有与读写它的是 <see cref="VolumetricClouds"/>。</summary>
         public const string DefaultListName = "PlanetConfigList";
 
         [XmlArray("Configs")]

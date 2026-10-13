@@ -25,7 +25,7 @@
 
 - 云 / 雨 / 雾 / 雷电正常参数,碰撞与水花控制,薄雾 / 体积 / 同开快捷预设均保留。当前配置名称、保存 / 另存为 / 加载 / 重置以及系统未初始化提示仍显示。
 - `Mod.Diag`、异常日志和雾默认每 5 秒摘要继续保留。新的面板加载标识为 `Fog UI ready: build=3 controls=enabled diagnostics=hidden`;UI 清理当时渲染代码 / shader 为 2,后续 [夜间雾修正](../fog-implementation-plan-2026-10-09.md) §13 已升为 3。
-- `RainParticles.DiagStatus()`、`RainAudio.DiagStatus()`、`FogRenderer.DiagnoseAll()` 保留供开发代码显式调用;移除游戏按钮后不会自动发起 GPU 回读。编辑器雨预览保留;GPU 验证入口已在后续清理中删除,见 §5。
+- `RainParticles.DiagStatus()`、`RainAudio.DiagStatus()`、`FogRenderer.DiagnoseAll()` 保留供开发代码显式调用;移除游戏按钮后不会自动发起 GPU 回读。历史雨预览脚本当前已移除,工具状态见[开发工具说明](../../Assets/Scripts/VolkenTests/README.md);GPU 验证入口已删除,见 §5。
 - `ShowDevLog`、`ShowProfiler` 的 XML 键、默认 false 和读写行为保持兼容。当前设置页保留这两项开关;显式启用过的 Profiler 仍按保存值显示,可通过设置页或开发配置关闭。普通默认配置不出现覆盖层。
 - 雾 `debugMode / diagnostics` 与云 `orbitDebugMode` 保留为开发配置字段。正常效果使用 `debugMode=0 / orbitDebugMode=0`;旧预设不会因打开面板被改写。雾快捷预设会恢复正常视图;开发配置可单独设置诊断字段,排查结束恢复为 0。
 

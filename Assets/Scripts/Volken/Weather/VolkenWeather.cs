@@ -37,7 +37,7 @@ namespace Volken.Weather
         /// <summary>当前环境是否允许天气运行;雨 / 雾 / 雷电另由各自开关控制。</summary>
         public bool IsActive { get; private set; }
 
-        /// <summary>相机海拔(ASL,米)。每帧刷新,雨/雾的高度判定共用。</summary>
+        /// <summary>相机海拔(ASL,米),供雷电限高、起点计算及雾诊断读取。</summary>
         public float CameraAltitudeAsl { get; private set; }
 
         /// <summary>相机海拔(AGL,米)。取不到地形高度时退化为 ASL。</summary>
@@ -45,10 +45,7 @@ namespace Volken.Weather
 
         public bool CameraSubmerged { get; private set; }
 
-        /// <summary>遗留太阳角度指标,当前公式不是完整地方时;雾直接使用太阳仰角,不消费此字段。</summary>
-        public float LocalSolarHour { get; private set; } = 12f;
-
-        /// <summary>相机正在云层中/云层高度附近的淡化因子(0=云外, 1=云内)。</summary>
+        /// <summary>遗留云层高度因子:云底以下为 1,云顶附近为 0;当前无外部消费者。</summary>
         public float CameraCloudFade { get; private set; }
 
         private bool _initialized;
@@ -58,14 +55,6 @@ namespace Volken.Weather
         private LightningModule _lightning;
         private Shader _boltShader;
         private bool _boltShaderTried;
-
-        // 上一帧相机位置,用于推算玩家/相机速度(雨丝对齐需要)
-        private Vector3 _lastCamPos;
-        private float _lastCamTime = -1f;
-        private Vector3 _smoothedCamVelocity;
-
-        /// <summary>相机速度(米/秒,平滑后)。雨丝拉伸方向需要 "玩家速度 − 相机速度"。</summary>
-        public Vector3 CameraVelocity { get; private set; }
 
         /// <summary>初始化单例(幂等)。由 <c>Mod.OnModLoaded</c> 调用,必须在 <see cref="VolumetricClouds.Initialize"/> 之后。</summary>
         public static void Initialize()
@@ -349,7 +338,7 @@ namespace Volken.Weather
             return _boltShader;
         }
 
-        /// <summary>手动劈一道雷(dev 命令 / UI)。要求配置启用。返回 false = 没落雷(模块未激活 / 海拔闸门拦下)。</summary>
+        /// <summary>开发接口:手动落雷,要求配置启用;模块未激活或海拔闸门拦下时返回 false。</summary>
         public bool TriggerLightning()
         {
             if (_lightning == null)
@@ -361,7 +350,7 @@ namespace Volken.Weather
             return _lightning.CastRandomBolt();
         }
 
-        /// <summary>雷电模块(诊断/UI 用,可能为 null)。</summary>
+        /// <summary>供开发代码检查的雷电模块,可能为 null。</summary>
         public LightningModule Lightning => _lightning;
 
         private void SetActive(bool active)
@@ -436,20 +425,6 @@ namespace Volken.Weather
                 try { hasWater = planetNode.PlanetData.HasWater; } catch { }
                 CameraSubmerged = hasWater && asl < 0f;
 
-                // 相机速度(平滑):雨丝拉伸方向需要 "玩家速度 − 相机速度"
-                float now = Time.realtimeSinceStartup;
-                if (_lastCamTime > 0f)
-                {
-                    float dt = Mathf.Max(1e-3f, now - _lastCamTime);
-                    Vector3 inst = (camPos - _lastCamPos) / dt;
-                    _smoothedCamVelocity = Vector3.Lerp(_smoothedCamVelocity, inst, 0.25f);
-                }
-                _lastCamPos = camPos;
-                _lastCamTime = now;
-                CameraVelocity = _smoothedCamVelocity;
-
-                LocalSolarHour = ComputeLocalSolarHour(camPos, planetCenter);
-
                 // 云内淡化:直接读云的 config 取高度带。
                 CameraCloudFade = ComputeCameraCloudFade(asl);
             }
@@ -461,36 +436,7 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>
-        /// 由太阳方向与地表法线夹角产生遗留诊断值(0~12),只用于状态面板。
-        /// 不能区分晨昏,雾系统不依赖此值。
-        /// </summary>
-        private float ComputeLocalSolarHour(Vector3 camPos, Vector3 planetCenter)
-        {
-            try
-            {
-                var sun = Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight;
-                if (sun == null) return LocalSolarHour;
-
-                Vector3 toSun = -sun.transform.forward;
-                Vector3 up = camPos - planetCenter;
-                if (up.sqrMagnitude < 1e-6f) return LocalSolarHour;
-                up.Normalize();
-
-                float cosAngle = Mathf.Clamp(Vector3.Dot(up, toSun), -1f, 1f);
-                // 遗留角度映射:dot=+1 → 0,dot=-1 → 12;不代表真实钟点。
-                float hour = Mathf.Acos(cosAngle) * Mathf.Rad2Deg / 15f;
-                if (hour > 12f) hour = 24f - hour;
-
-                return Mathf.Repeat(hour, 24f);
-            }
-            catch
-            {
-                return LocalSolarHour;
-            }
-        }
-
-        /// <summary>相机在云层内的淡化因子(云底以下 = 1,云顶附近 = 0)。没有云 → 1。仅供状态显示与闪电起点。</summary>
+        /// <summary>按高度带计算遗留因子;无有效云层时返回 1。</summary>
         private float ComputeCameraCloudFade(float asl)
         {
             try

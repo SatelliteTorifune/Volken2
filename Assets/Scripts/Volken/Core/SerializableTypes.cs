@@ -5,24 +5,6 @@ namespace Volken.Core
 {
 
     [Serializable]
-    public struct SerializableVector2
-    {
-        public float x;
-        public float y;
-
-        public SerializableVector2(Vector2 v)
-        {
-            x = v.x;
-            y = v.y;
-        }
-
-        public Vector2 ToVector2()
-        {
-            return new Vector2(x, y);
-        }
-    }
-
-    [Serializable]
     public struct SerializableVector3
     {
         public float x;

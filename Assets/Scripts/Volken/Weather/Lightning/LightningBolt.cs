@@ -6,16 +6,13 @@ using UnityEngine.Rendering;
 
 namespace Volken.Weather
 {
-    /// 一道闪电的视觉表现:主干 LineRenderer 逐段"生长" + 分叉 + 落点闪光球/点光源。播完自毁,不池化(雷击间隔秒级)。
-    /// 必须由 <see cref="Update"/> 驱动、**不能用协程**:层级 inactive 时 Unity 会静默拒绝启动协程(只打一行警告),
-    /// 销毁就再没有别的触发路径 → 闪电永久残留;分叉用整道雷共享的一份材质拷贝(<see cref="SplitMaterial"/>),
-    /// **不能**直接用主干材质 —— 主干收尾的 <c>Destroy(_boltMat)</c> 会让还在渲染的分叉变成品红/淡紫。
-    /// 残留/紫红根因与打包清单见 docs/archive/thunder-realism-2026-09-28.md §7 §8。
+    /// <summary>主干、分叉与落点闪光的生命周期由激活组件的 Update 推进,结束后销毁。</summary>
+    /// 分叉共用独立材质,由本对象统一回收;计龄使用排除游戏暂停的 GamePause.Now。
+    /// 实现记录见 docs/archive/thunder-realism-2026-09-28.md §7、§8。
     public class LightningBolt : MonoBehaviour
     {
         public Camera targetCamera;   // 每道闪电各持一个:改成 static 会在多相机(PIP)下互相覆盖,闪光朝向会串
 
-        // 参数(由 LightningModule 从 VolkenWeatherConfig.LightningSection 灌入)
         public float flashIntensity = 50f;
         public float flashPlaneIntensity = 20f;
         public int arcs = 20;
@@ -28,36 +25,28 @@ namespace Volken.Weather
         public float lightIntensity = 8f;
         public float lightRange = 8000f;
 
-        /// 落雷后回调(延迟播雷声用)。**不带参数** —— 距离必须由调用方按"落点 ↔ 观测者"自己算
-        /// (<c>transform.position</c> 是 bolt 的起点、在云里,与观测者无关)。
+        /// <summary>落点回调;雷声距离由调用方按 Target 与观测者位置计算。</summary>
         public Action OnBoltLanded;
 
-        /// 整道闪电播完(自毁前)回调,**保证最多被调用一次**。
+        /// <summary>结束回调,自毁前最多调用一次。</summary>
         public Action OnBoltFinished;
 
         public Vector3 Target { get; private set; }
 
-        // 两个时间量不可混用:_lastActiveTime = 最近一次还在 Update 的时刻(随时间前移),_bornTime = 出生时刻(固定)。
-        // 混用会让"僵死判定"退化成"活满 N 秒就杀",正常雷都会被误杀(见 Update)。
-        // 两者都用 GamePause.Now(排除暂停时长):否则游戏暂停超过 HardLifetime 就会把这道雷掐掉,而它的雷声恢复后还会响 —— 空响一声雷。
-        private const float HardLifetime = 3.5f;       // 秒,自**出生**起算,超过无条件销毁(正常一道雷 <2s 播完)
+        private const float HardLifetime = 3.5f;       // 秒,自出生计龄,游戏暂停不计时
         private const int FlashCount = 4;              // 亮 25~35ms → 灭 25~35ms 交替;最后一次闪完直接淡出
-        private const float MaxHiddenSeconds = 1.5f;   // 连续不可见(自上次 Update 起算)超过它 → 认定不会再恢复 → 销毁;正常切视角远达不到
+        private const float MaxHiddenSeconds = 1.5f;   // 秒,距最近活跃时间超过此值时清理
 
-        // 全部存活闪电:模块停用 / 离开场景时整批清理(见 DestroyAll),防"永久残留"。
         private static readonly System.Collections.Generic.List<LightningBolt> ActiveBolts =
             new System.Collections.Generic.List<LightningBolt>();
 
-        /// <summary>当前参考系纪元:SR2 每次**浮动原点重定位**就 +1(由 <see cref="LightningModule"/> 检测后调
-        /// <see cref="DestroyStale"/> 推进)。本道闪电记住出生时的纪元,纪元一变就自毁。</summary>
+        /// <summary>参考帧纪元;出生纪元不同的闪电会在 Update 中清理。</summary>
         public static int FrameIndex { get; private set; }
 
-        /// <summary>推进纪元并清掉属于旧纪元的闪电。纪元只有"相等 / 不相等"两种含义,不做 &lt;/&gt; 比较。
-        /// 一行完成"推进 + 清理",免得调用方顺序写错(先清理后推进会把新纪元的雷也清掉)。返回清掉的条数。</summary>
+        /// <summary>清理已过期闪电并推进纪元;其余闪电在下一次 Update 检查失效。返回本次清理数量。</summary>
         public static int DestroyStale()
         {
             int killed = 0;
-            // 倒序 + 判空:Destroy 是帧末生效,列表里可能有已销毁(== null)的条目
             for (int i = ActiveBolts.Count - 1; i >= 0; i--)
             {
                 var b = ActiveBolts[i];
@@ -70,15 +59,14 @@ namespace Volken.Weather
             return killed;
         }
 
+        /// <summary>模块停用或离开场景时销毁全部闪电,包括未激活的对象。</summary>
         public static void DestroyAll()
         {
-            // 倒序 + 判空:Destroy 是帧末生效,列表里可能有已销毁(== null)的条目
             for (int i = ActiveBolts.Count - 1; i >= 0; i--)
             {
                 var b = ActiveBolts[i];
                 if (b == null) { ActiveBolts.RemoveAt(i); continue; }
                 b.Release();
-                // Destroy 不要求 GameObject 处于激活状态,所以不需要(也不应该)先 SetActive(true)
                 UnityEngine.Object.Destroy(b.gameObject);
             }
             ActiveBolts.Clear();
@@ -94,7 +82,7 @@ namespace Volken.Weather
             Done,
         }
 
-        // 程序化资源全闪电共用:每道雷重建 = 每次多一个网格,每分叉一个渐变。
+        // 网格与渐变跨闪电共享,不由单个闪电销毁。
         private static Mesh _sharedFlashMesh;
         private static Gradient _sharedGradient;
 
@@ -103,9 +91,8 @@ namespace Volken.Weather
         private Transform _flashPlane;
         private Material _boltMat;
         private Material _flashMat;
-        private Material _splitMat;   // 全部分叉共用;各分叉独占 = 每次落雷多造 (splits+1)×(arcs-2) 份材质
+        private Material _splitMat;   // 本道闪电的全部分叉共用
 
-        // 本道闪电生出的全部分叉,收尾时与主干**同步**销毁(见 Finish)。
         private readonly System.Collections.Generic.List<GameObject> _splits =
             new System.Collections.Generic.List<GameObject>();
 
@@ -113,31 +100,28 @@ namespace Volken.Weather
         private bool _begun;
         private bool _finishedInvoked;
         private bool _released;
+        // 出生时间固定,用于寿命上限;_lastActiveTime 随活跃帧更新。
         private float _bornTime;
         private float _phaseElapsed;
 
-        // 出生时的参考系纪元(见 FrameIndex):纪元变了 = 这道雷的线段/落点闪光/点光源坐标已经作废
+        // 浮动原点重定位后,旧纪元的帧空间坐标失效。
         private int _bornFrameIndex;
 
-        // Grow
         private int _arcIndex;
         private float _arcTimer;
         private float _arcInterval;
         private Vector3 _lastPoint;
         private float _arcDist;
 
-        // Flash
         private float[] _flashTimestamps;
         private int _flashState = -1;   // -1 = 未设置;0 = 灭;1 = 亮
 
-        // Fade
         private float _fadeTimer;
 
-        /// 创建一道闪电(组件已就位但尚未开播,需再调 <see cref="CastBolt(Vector3, Vector3)"/>)。
+        /// <summary>创建独立根对象;调用 CastBolt 后开始动画,不随相机层级停用。</summary>
         public static LightningBolt Create(Shader boltShader, Shader flashShader, Camera cam)
         {
             var go = new GameObject("VolkenLightningBolt");
-            // 刻意不 SetParent:bolt 要当根物体,挂到相机会让相机 inactive 时自毁链一起断掉
             var bolt = go.AddComponent<LightningBolt>();
             bolt.targetCamera = cam;
             bolt.Build(boltShader, flashShader);
@@ -155,8 +139,7 @@ namespace Volken.Weather
                 return;
             }
 
-            // 主干与落点闪光各用一个单 Pass shader:一个 Material 只用第一个匹配 Pass,共用双 Pass shader
-            // 时闪光球会一直跑主干那套逻辑(_CoreWidth/halo 全部失效)。flashShader 缺失时退化共用,免得整块变紫红。
+            // 落点使用独立单 Pass shader;缺失时回退主干 shader。
             Shader flashSrc = flashShader != null ? flashShader : boltShader;
             if (flashShader == null)
             {
@@ -172,7 +155,6 @@ namespace Volken.Weather
             _flashMat.SetColor("_Color", new Color(0.8f, 0.85f, 1f, 1f));
             _flashMat.SetFloat("_CoreWidth", 0.35f);
 
-            // 主干
             _line = gameObject.AddComponent<LineRenderer>();
             _line.material = _boltMat;
             _line.positionCount = 0;
@@ -188,7 +170,6 @@ namespace Volken.Weather
             _line.reflectionProbeUsage = ReflectionProbeUsage.Off;
             _line.colorGradient = SharedGradient;   // 两端渐隐(shader 会把顶点色乘进颜色)
 
-            // 落点闪光球
             var flashGo = new GameObject("FlashPlane");
             flashGo.transform.SetParent(transform, false);
             _flashPlane = flashGo.transform;
@@ -202,7 +183,6 @@ namespace Volken.Weather
             mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
             flashGo.SetActive(false);
 
-            // 落点点光源
             var lightGo = new GameObject("BoltLight");
             lightGo.transform.SetParent(transform, false);
             _light = lightGo.AddComponent<Light>();
@@ -214,7 +194,6 @@ namespace Volken.Weather
             _light.enabled = false;
         }
 
-        /// <summary>落点闪光球网格:全闪电共用的静态资源(每道雷重建一份纯属浪费)。</summary>
         private static Mesh SharedFlashMesh
         {
             get
@@ -228,7 +207,6 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>主干与分叉共用的颜色渐变(<c>LineRenderer.colorGradient</c> 是拷贝语义,可共享同一份)。</summary>
         private static Gradient SharedGradient
         {
             get
@@ -238,7 +216,7 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>主干材质的一次拷贝,供本道闪电的全部分叉共用;统一在 <see cref="DestroySplits"/> 回收。</summary>
+        /// <summary>分叉共用的主干材质拷贝,由 DestroySplits 统一回收。</summary>
         private Material SplitMaterial
         {
             get
@@ -269,7 +247,6 @@ namespace Volken.Weather
             return g;
         }
 
-        // 单位半径经纬球(只有 uv + position),程序生成以避免依赖内置资源。
         private static Mesh BuildSphereMesh(int segments, int rings)
         {
             var mesh = new Mesh { name = "VolkenLightningFlashSphere" };
@@ -322,7 +299,7 @@ namespace Volken.Weather
             CastBolt();
         }
 
-        /// 开播:**不启动协程**,只置状态机第一相,由 <see cref="Update"/> 推进(它是 inactive 时唯一还能跑的东西)。
+        /// <summary>设置动画初始状态;对象激活时由 Update 推进。</summary>
         public void CastBolt()
         {
             if (_line == null || _phase != Phase.Done) return;
@@ -372,7 +349,6 @@ namespace Volken.Weather
             next += _lastPoint;
             _line.SetPosition(_arcIndex, next);
 
-            // 末两段不挂分叉,其余每个节点各生 splits+1 条
             if (_arcIndex < arcs - 2 && splits >= 0)
             {
                 for (int j = 0; j <= splits; j++)
@@ -409,7 +385,6 @@ namespace Volken.Weather
                 _flashPlane.gameObject.SetActive(true);
             }
 
-            // 时刻表:亮 → 灭 交替
             _flashTimestamps = new float[FlashCount * 2];
             float t = 0f;
             for (int i = 0; i < FlashCount; i++)
@@ -428,7 +403,7 @@ namespace Volken.Weather
             _flashState = -1;
         }
 
-        /// 每帧按 <c>_phaseElapsed</c> **重算**该亮还是该灭(而不是"翻一次面"),才能容忍 <c>dt</c> 一次跨过多个时间点。
+        /// <summary>按累计时间重算亮灭状态,允许一帧跨过多个时间点。</summary>
         private void StepFlash(float dt)
         {
             _phaseElapsed += dt;
@@ -468,15 +443,9 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>暂停期间的"闪光收光"开关(见 <see cref="BeginFlashSuppression"/>)。</summary>
         private bool _flashSuppressed;
 
-        /// <summary>暂停时把闪光的**亮态**收掉,只留静止的线段与闪光球几何。
-        /// 为什么必须收:亮/灭的切换**只发生在 <see cref="StepFlash"/> 里**,而它被 <c>!GamePause.IsPaused</c> 挡在门外;
-        /// 计时又用 <see cref="GamePause.Now"/>(排除暂停时长),所以暂停中卡在"亮"那一帧的雷:
-        /// ① 点光源与加色闪光材质保持全亮的**最终值**;② <c>_phaseElapsed</c> 与 <c>_bornTime</c> 同时停表,<c>HardLifetime</c> 永远不会到期。
-        /// 合计 = 一盏**永久**挂在落点、穿地形绘制(ZTest Always)的灯 —— 正是"固定位置的射灯"。暂停本身会冻住动画,
-        /// 但"冻住一束强光"不是可接受的表现:闪光本来就只该是一瞬。</summary>
+        /// <summary>游戏暂停时关闭点光源和加色闪光,保留静止几何与基础亮度。</summary>
         private void BeginFlashSuppression()
         {
             if (_flashSuppressed || _phase != Phase.Flash) return;
@@ -488,18 +457,15 @@ namespace Volken.Weather
                 if (_flashMat != null) _flashMat.SetFloat("_Intensity", 0f);
                 if (_light != null) _light.enabled = false;
             }
-            // 线段压回基础强度:暂停时别留一根"永远最亮"的主干
             if (_boltMat != null) _boltMat.SetFloat("_Intensity", baseIntensity);
 
-            // 留证据:症状(固定位置射灯)若是这条路,日志里就会出现它,且落点/相机距离可复核
             var cam = targetCamera != null ? targetCamera : Camera.main;
             float camDist = cam != null ? Vector3.Distance(cam.transform.position, Target) : -1f;
             Mod.Log($"Volken:LightningBolt pause froze flash — light+additive flash turned off " +
                     $"(landing=({Target.x:F0},{Target.y:F0},{Target.z:F0}) camDist={camDist:F0}m phaseElapsed={_phaseElapsed:F3}s)");
         }
 
-        /// <summary>恢复:清掉抑制标记,并把亮/灭状态标成"未知",让 <see cref="StepFlash"/> 下一次按 <c>_phaseElapsed</c> 重算。
-        /// 无条件清(不看 <c>_phase</c>):若暂停期间相位已推进到 Flash 之外,标记也必须归零,否则会锁死后续判断。</summary>
+        /// <summary>无条件清除暂停抑制,使下一帧按时间表重算亮灭。</summary>
         private void EndFlashSuppression()
         {
             _flashSuppressed = false;
@@ -517,7 +483,7 @@ namespace Volken.Weather
             }
         }
 
-        /// 收尾:清理视觉残留 + 回调 + 销毁自身。**保证只执行一次**(靠 <c>Phase.Done</c> 守卫)。
+        /// <summary>清理视觉与分叉、触发一次结束回调并销毁自身;重复调用安全。</summary>
         private void Finish()
         {
             if (_phase == Phase.Done) return;
@@ -548,7 +514,6 @@ namespace Volken.Weather
             }
             _splits.Clear();
 
-            // 分叉共用的那**一份**材质在最后回收;漏掉则每次落雷都留下一份永不回收的材质。
             if (_splitMat != null)
             {
                 Destroy(_splitMat);
@@ -563,8 +528,7 @@ namespace Volken.Weather
             ActiveBolts.Remove(this);
         }
 
-        /// 一条分叉:8 点、朝"目标方向 + 球内随机 ×500"飞,存活 0.2~0.5s。
-        /// 材质**不能**直接用主干那份(主干收尾会 <c>Destroy(_boltMat)</c> → 分叉渲染成品红/淡紫),改用 <see cref="SplitMaterial"/> 的整道雷共享拷贝。
+        /// <summary>创建 8 点分叉,使用共享分叉材质并独立计龄。</summary>
         private void SpawnSplit(Vector3 from)
         {
             var splitGo = new GameObject("Split");
@@ -585,13 +549,10 @@ namespace Volken.Weather
             toTarget.Normalize();
             Vector3 targetPos = UnityEngine.Random.insideUnitSphere * 500f + from + toTarget * 500f;
 
-            // 折线点一次性算完(不逐点延迟):视觉差异不可辨,却彻底移除了"协程静默失败"这个故障源。
             const int splitPoints = 7;   // 段数;i = 0..7,共 8 个点
             sr.positionCount = splitPoints + 1;
 
-            //  第 0 个点必须**显式**写:positionCount 只是把新点初始化成 (0,0,0),而 useWorldSpace = true 时
-            // (0,0,0) 就是**世界原点**。少这一行 → 每条分叉都从世界原点拉出来;SR2 的浮动原点又把原点重定位到飞船处,
-            // 于是 (arcs-3)×(splits+1) 条分叉全部从**观测者**身上呈扇形射出 —— 看上去就是一把"射灯",而不是雷劈。
+            // world-space 线段必须显式写起点,避免连到参考帧原点。
             sr.SetPosition(0, from);
 
             Vector3 lastPoint = from;
@@ -610,7 +571,6 @@ namespace Volken.Weather
             }
             sr.SetPosition(splitPoints, targetPos);
 
-            // 自毁:存活 0.2~0.5s,用独立组件而不是协程
             var selfDestruct = splitGo.AddComponent<SelfDestruct>();
             selfDestruct.lifetime = UnityEngine.Random.Range(0.2f, 0.5f);
 
@@ -627,18 +587,14 @@ namespace Volken.Weather
             return dir;
         }
 
-        /// 动画与**自毁**的唯一推进点。五条独立销毁/收尾路径(正常播完 / 连续不可见过久 / 硬性寿命上限 / 参考系重定位 / 暂停收光),任一失效都不会留下残留。
+        /// <summary>推进动画,并检查纪元、最近活跃时间与总寿命;游戏暂停时收光。</summary>
         private void Update()
         {
-            // 连续不可见时长 = 现在 − **最近一次还在 Update 的时刻**(该时刻随时间前移)。
-            // 不要用 _bornTime:那是"总年龄",用它会把"活满 1.5s 就杀"当成僵死判定。
             float now = GamePause.Now;
             float hiddenFor = now - _lastActiveTime;
 
             if (_phase != Phase.Done)
             {
-                // 参考系重定位:本道雷的坐标全在旧世界里(线段是 world space、闪光球/点光源按落点摆好),
-                // 留到下个纪元就变成"固定在世界某处的一束亮光/射灯"。见 FrameIndex / LightningModule.BeginFrameGuard。
                 if (_bornFrameIndex != FrameIndex)
                 {
                     Mod.Log($"Volken:LightningBolt frame recentered mid-bolt (epoch {_bornFrameIndex}→{FrameIndex}, phase={_phase}) — cleaning up");
@@ -684,12 +640,11 @@ namespace Volken.Weather
             }
         }
 
-        /// 最近一次"本组件在 Update"的时间戳(随时间前移,与 <c>_bornTime</c> 不同),用于检测自己是否被藏起来。
+        // 最近活跃时间使用 GamePause.Now,与出生时间分别维护。
         private float _lastActiveTime;
 
         private void LateUpdate()
         {
-            // 放 LateUpdate:Update 里若已 Finish,这里就不会再刷新时间戳
             if (_phase != Phase.Done) _lastActiveTime = GamePause.Now;
         }
 
@@ -704,13 +659,10 @@ namespace Volken.Weather
             DestroySplits();   // 防漏:DestroyAll / 异常路径下也要把分叉带走(幂等)
             if (_boltMat != null) Destroy(_boltMat);
             if (_flashMat != null) Destroy(_flashMat);
-            // _sharedFlashMesh 是全闪电共用的静态资源,不在这里销毁
         }
     }
 
-    /// 极简自毁组件:存活 <see cref="lifetime"/> 秒后销毁自己的 GameObject(用途 = 闪电分叉线)。
-    /// **刻意不用协程**:协程在 <c>activeInHierarchy == false</c> 时会静默启动失败;Update 天然只在可见时跑,恢复可见后继续计时。
-    /// **计时用 <c>GamePause.Now</c>**:分叉是余晖,暂停时不该继续自毁 —— 注意 <c>realtimeSinceStartup</c> 与 <c>unscaledTime</c> 在**游戏暂停**时都照走,都不能用。
+    /// <summary>分叉按 GamePause.Now 计龄,游戏暂停期间不推进;材质由 LightningBolt 回收。</summary>
     public class SelfDestruct : MonoBehaviour
     {
         public float lifetime = 0.5f;   // 秒
@@ -730,6 +682,5 @@ namespace Volken.Weather
             }
         }
 
-        // 刻意没有 OnDestroy:分叉材质由 LightningBolt 统一回收(全部分叉共用一份,按分叉销毁会连累同伴)
     }
 }

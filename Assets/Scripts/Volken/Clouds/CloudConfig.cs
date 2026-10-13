@@ -21,7 +21,6 @@ namespace Volken.Clouds
     public class CloudConfig
     {
         public const string CONFIG_FOLDER = "/UserData/VolkenConfig/";
-        private const string DEFAULT_CONFIG_NAME = "Default";
 
         #region parameter
         public CompositeMode compositeMode = CompositeMode.Additive;
@@ -403,70 +402,6 @@ namespace Volken.Clouds
                 orbitDetailStrength = 0.4f,
                 orbitResolutionScale = 0.5f,
                 orbitDebugMode = 0f,
-            };
-        }
-
-        public CloudConfig Clone()
-        {
-            return new CloudConfig
-            {
-                compositeMode = this.compositeMode,
-                enabled = this.enabled,
-                density = this.density,
-                absorption = this.absorption,
-                ambientLight = this.ambientLight,
-                coverage = this.coverage,
-                shapeScale = this.shapeScale,
-                detailScale = this.detailScale,
-                detailStrength = this.detailStrength,
-                phaseParameters = this.phaseParameters,
-                offset = this.offset,
-                windSpeed = this.windSpeed,
-                windDirection = this.windDirection,
-                globalRotationAngular = this.globalRotationAngular,
-                scatterStrength = this.scatterStrength,
-                atmoBlendFactor = this.atmoBlendFactor,
-                cloudColor = this.cloudColor,
-                layerHeights = this.layerHeights,
-                layerSpreads = this.layerSpreads,
-                layerStrengths = this.layerStrengths,
-                maxCloudHeight = this.maxCloudHeight,
-                resolutionScale = this.resolutionScale,
-                stepSize = this.stepSize,
-                stepSizeFalloff = this.stepSizeFalloff,
-                numLightSamplePoints = this.numLightSamplePoints,
-                lightMarchDistance = this.lightMarchDistance,
-                blueNoiseStrength = this.blueNoiseStrength,
-                depthThreshold = this.depthThreshold,
-                historyBlend = this.historyBlend,
-                historyDepthThreshold = this.historyDepthThreshold,
-                scatterPower = this.scatterPower,
-                multiScatterBlend = this.multiScatterBlend,
-                ambientScatterStrength = this.ambientScatterStrength,
-                customWavelengths = this.customWavelengths,
-                silverLiningIntensity = this.silverLiningIntensity,
-                forwardScatteringBias = this.forwardScatteringBias,
-                nearThreshold = this.nearThreshold,
-                useTemporalUpscale = this.useTemporalUpscale,
-                upscaleX = this.upscaleX,
-                upscaleY = this.upscaleY,
-                useStockCloudMap = this.useStockCloudMap,
-                stockMapStrength = this.stockMapStrength,
-                stockMaskInfluence = this.stockMaskInfluence,
-                stockAlignSign = this.stockAlignSign,
-                stockAlignAngleOffset = this.stockAlignAngleOffset,
-                stockMapLayer = this.stockMapLayer,
-                stockDensityScale = this.stockDensityScale,
-                useOrbitClouds = this.useOrbitClouds,
-                orbitTransitionStartAltitude = this.orbitTransitionStartAltitude,
-                orbitTransitionEndAltitude = this.orbitTransitionEndAltitude,
-                orbitSampleAltitude = this.orbitSampleAltitude,
-                orbitDensityBoost = this.orbitDensityBoost,
-                orbitBrightness = this.orbitBrightness,
-                orbitReliefStrength = this.orbitReliefStrength,
-                orbitDetailStrength = this.orbitDetailStrength,
-                orbitResolutionScale = this.orbitResolutionScale,
-                orbitDebugMode = this.orbitDebugMode,
             };
         }
 

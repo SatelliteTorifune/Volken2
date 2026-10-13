@@ -84,7 +84,6 @@ namespace Volken.Weather
         private float _fade;                    // 0..1 淡入淡出包络
         private float _intensity = 0.5f;        // 当前 light→heavy 混合
         private bool _lastGateOpen;
-        private int _transitions;
 
         /// <summary>把雨声挂到常驻物体上(游戏 = VolkenWeather 的 DontDestroyOnLoad host;编辑器预览 = 预览台);已存在则复用。</summary>
         public static RainAudio Ensure(GameObject host)
@@ -334,7 +333,6 @@ namespace Volken.Weather
             if (gateOpen != _lastGateOpen)
             {
                 _lastGateOpen = gateOpen;
-                _transitions++;
                 Mod.Log("RainAudio: 门控 {0} (enabled={1} rainEnabled={2} rainVol={3:F2} altFade={4:F3} → 目标包络 {5})",
                     gateOpen ? "开 → 淡入" : "关 → 淡出", Enabled, RainParticles.Enabled,
                     RainParticles.Volume, altFade, gateOpen ? 1f : 0f);

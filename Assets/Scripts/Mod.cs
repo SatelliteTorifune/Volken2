@@ -24,9 +24,6 @@ namespace Assets.Scripts
         public int frontRenderQueue = 3000;
         public int backRenderQueue = 3000;
         
-        //f 2000 2500 2501
-        //b 2500-2501
-        
         public static Mod Instance { get; } = GetModInstance<Mod>();
 
         private GameObject VolkenUI;
@@ -40,9 +37,6 @@ namespace Assets.Scripts
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
-            
-            //PlanetRingsZWriteFix.Apply(harmony);
-            //PlanetRingsShaderPatch.Apply(harmony);
             
             SetUpGo<VolkenUserInterface>(ref VolkenUI,"VolkenUI");
             SetUpGo<ForceSetting>(ref ForceSettingScriptLoadGameObject,"ForceSettingObject");
@@ -149,9 +143,6 @@ namespace Assets.Scripts
 
         #region ASSET LOADING
 
-        /// <summary>资源加载台账;新增资产须加入打包清单。</summary>
-        private static readonly System.Collections.Generic.Dictionary<string, string> _assetLedger = new();
-        
         /// <summary>
         /// 从 bundle 载入资源;**用 <c>LoadAsset&lt;T&gt;</c> 而不是 <c>Load&lt;T&gt;</c>**(后者读不到 mod bundle)。
         /// 失败记日志并返回 null。
@@ -168,7 +159,6 @@ namespace Assets.Scripts
                 var editorAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
                 if (editorAsset != null)
                 {
-                    _assetLedger[path] = "ok(editor)";
                     return editorAsset;
                 }
             }
@@ -183,7 +173,6 @@ namespace Assets.Scripts
                 var asset = Instance.ResourceLoader.LoadAsset<T>(path);
                 if (asset != null)
                 {
-                    _assetLedger[path] = "ok";
                     return asset;
                 }
             }
@@ -192,7 +181,6 @@ namespace Assets.Scripts
             }
 
             if (required) Log($"LoadVolkenAsset: '{path}' not found (rebuild the asset bundle?)");
-            _assetLedger[path] = required ? "MISSING(required)" : "missing(optional)";
             return null;
         }
 

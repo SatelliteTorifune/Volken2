@@ -2,6 +2,7 @@
 
 > 状态:✅ 已归档(原状态:已实现 2026-08-24,2026-08-27 收工;时序超采样为核心)
 > 日期:2026-08-24
+> 2026-10-12 后续:当前项目没有调用旧 `UpscalingPixelSequence`,该文件已按用户要求删除;下文算法与文件表保留为历史移植记录。现行 TSS 由 `CloudRenderer` / `Clouds.shader` 实现,清理范围见[场景门控 §5](monobehaviour-scene-gate-2026-10-02.md#5-源码与注释清理2026-10-12)。
 > 适用管线:Unity **Built-in Render Pipeline (BIRP)**（Volken 现状:OnRenderImage / Graphics.Blit / _CameraDepthTexture）
 > 目标:把 KSA(Kitten Space Agency) 体积云管线中可复用的技术,按 BIRP 的 API 与约束翻译成 Volken 的实现方案。**一期只做"时序超采样 + 最优采样序列"这一件事**(收益/成本比最高),运动矢量膨胀、FlowMap 风场、照地云影列为后续。
 > 关联:本方案与 方案B(游戏自带云做全球分布) 正交,可叠加:时序超采样管的是"**怎么采样/怎么累积**",方案B管的是"**分布形状用什么数据**"。

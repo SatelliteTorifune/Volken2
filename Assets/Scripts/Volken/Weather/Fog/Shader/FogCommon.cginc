@@ -139,12 +139,6 @@ float4 VolkenFogAtRay(float2 uv, float distance, float3 ray)
     return float4(VolkenFogLighting(ray)*(1-T), T);
 }
 
-float4 VolkenFogAt(float2 uv, float distance)
-{
-    [branch] if (_VolkenFogEnabled < 0.5) return float4(0,0,0,1);
-    return VolkenFogAtRay(uv,distance,VolkenFogRay(uv));
-}
-
 float4 VolkenFogAtWorld(float3 world)
 {
     if (_VolkenFogEnabled < 0.5) return float4(0,0,0,1);

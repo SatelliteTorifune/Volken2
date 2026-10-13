@@ -3,6 +3,7 @@
 > 状态:✅ 已归档(实现已落地;真机回归未确认)
 > 2026-10-08 核对:已对照当前源码确认实现存在;历史编译结果不等于本次复验。待验收见 §4 及 [待办索引](../README.md#四之三待办清单backlog)。
 > 日期:2026-10-02
+> 2026-10-12 后续:指定死代码与注释已清理,见 §5。当前云生命周期类型为 `VolumetricClouds`;正文旧 `VolkenClouds` 名称与行号保留为当时证据。雨预览脚本已移除,旧工具入口以[当前工具说明](../../Assets/Scripts/VolkenTests/README.md)为准。
 > 关联:[雨/雷性能审计](../proposals/rain-lightning-perf-audit-2026-10-02.md)(其 §3.6 的 craft 链重复、§3.2 分叉合批)· [天气↔云解耦](weather-cloud-decoupling-2026-10-01.md)(行星生命周期只归 `VolkenClouds`)
 > 定位:回答"这些 `Update` 是不是只在 FlightScene 跑",把**确实跨场景空转**的几处按场景信号关掉,并清掉渲染路径里每帧的 LINQ 分配。
 
@@ -17,7 +18,7 @@
 | 相机 / 场景物体(随 Flight 场景卸载销毁) | `CloudRenderer`、`FarCameraScript`、`RainParticles`(面板开关才挂)、`LightningBolt` + `SelfDestruct` | ❌ 不跑 |
 | `DontDestroyOnLoad` 常驻物体 · **本次已门控** | `WeatherTicker`、`RainAudio`、`LightningModule`(懒建后常驻)、`VolkenUserInterface` | ✅ 改成不跑 |
 | `DontDestroyOnLoad` 常驻物体 · 刻意保留 | `ProfilerController`(每帧只读一个设置项,做双向同步)、`BootstrapRunner`(注册完即自毁) | 跑,量可忽略 |
-| 编辑器 / 控制台专用 | `RainPreview`(仅编辑器)、`NoiseVisualizer` / `RaymarchDebug`(全工程零实例化) | 玩家不受影响 |
+| 遗留开发组件 | `NoiseVisualizer` / `RaymarchDebug`(当前无配套 shader);旧 `RainPreview` 已移除 | 玩家不受影响 |
 
 量级:常驻那几项合计 **<1 µs/帧(估算)** —— 门控是"卫生",不是帧率;真正吃帧的是飞行内两条,已按 §2 的后两行改掉,其余剩余项见 §3。
 
@@ -49,10 +50,10 @@
 ## 3. 未做 / 剩余项
 
 - **`LightningBolt` 分叉合批**(最多 549 个 `LineRenderer` + 各自 `Update`/`LateUpdate`)—— 收益最高、风险也最高,按 [性能审计](../proposals/rain-lightning-perf-audit-2026-10-02.md) §3.2 继续挂起。
-- **`VolkenWeather.UpdateCameraMetrics` 的按需门控**(`IsActive == false` 时也在跑完整 craft 链 + 三角函数)—— 要保留"面板打开时的实时读数"就得先有"面板可见"这个信号,现在没有;见审计 §3.6。
+- **`VolkenWeather.UpdateCameraMetrics` 的按需门控**—— craft 链及现有环境指标仍保留;无消费者的相机速度和太阳角度计算已在 §5 删除。旧实时状态面板已移除,后续门控应按实际消费者核对,不沿用历史面板理由。
 - **`CloudRenderer.OnRenderImage` 里每层 `new RenderBuffer[3]`** —— 每帧一个 3 元素数组,量小;没动是因为改法要在 GPU 路径上验证(不能离线判定 `Graphics.SetRenderTarget` 是否保留该数组引用)。
 - **`ProfilerController.Update`**(常驻,每帧只读 `ModSettings.ShowProfiler` 做双向同步)与 **`BootstrapRunner`**(30 帧后自毁)—— 量可忽略,**刻意没动**。
-- **死代码**:`Clouds/DepthCapture.cs`(全工程零 `AddComponent` / `Init` 调用)、`PlanetRing/PlanetRingsZWriteFix.cs` 与 `HarmonyPatches/PlanetRingsShaderPatch.cs`(`Postfix` 首行 `return` 且 `Apply` 在 `Mod.cs` 里被注释)。**只登记未删** —— 见 [索引 §四之三](../README.md#四之三待办清单backlog)。
+- **未启用星环补丁**:`PlanetRing/PlanetRingsZWriteFix.cs` 与 `HarmonyPatches/PlanetRingsShaderPatch.cs` 仍保留;前者的 `Postfix` / `FixMaterial` 首行 `return`,两者当前均无 `Apply` 入口。旧 `DepthCapture` 已删除,具体范围见 §5。
 
 ## 4. 验收判据
 
@@ -63,3 +64,20 @@
   3. **离场雨声仍淡出**(不是硬切),淡出后不再有每帧开销;回场重新淡入。
   4. 开雷电飞行一次 → 回菜单:无残留闪电、**也无残留雷声**(`SetActive(false)` 已一并停掉雷声通道),`LightningModule.Update` 停表;飞行中在面板关掉雷电时,不该再听到已排程的远雷。
   5. 版本落后时:更新提醒仍只在**进主菜单**后弹(最多晚 0.5 s),飞行 / 设计场景不打断。
+
+## 5. 源码与注释清理(2026-10-12)
+
+【决策:2026-10-12,用户】按核对清单删除 A1 / A2 / A5 / A6 / A7 / A8 / B4 / D2,整理 C1~C6,修正文档中的失效说明。
+
+- 删除 `DepthCapture.cs`、`UpscalingPixelSequence.cs` 及各自 `.meta`;当前源码没有调用或场景 GUID 引用。现行深度生产与 TSS 入口继续保留。
+- 删除 `SerializableVector2`、未调用的 `VolkenFogAt` 包装函数、两种配置的 `Clone`。默认值、`CopyFrom`、限值、XML 保存 / 加载继续保留。
+- 删除仅写不读的资源台账 `_assetLedger`、未使用的 `DEFAULT_CONFIG_NAME`、仅自增的 `_transitions`。
+- 删除天气类中无消费者的 `CameraVelocity` 计算链、`LocalSolarHour` / `ComputeLocalSolarHour`;雨自身速度采样、雾太阳仰角与其他天气环境指标保留。
+- 移除 `Mod.cs` 的渲染队列速记和注释掉的星环调用;未启用星环补丁、配套 shader、`frs` / `brs` 命令仍保留。未选择的 2D Perlin 生成链与开发诊断 API 也保留。
+- 雨 compute / shader 和闪电 shader / 生命周期注释只留现行职责、不变量、单位、默认值与降级说明;修正四个 kernel、诊断累计清零、可选滚转与激活组件 Update 的描述。
+- 删除本地忽略目录 `.dsh-vision-router` 的 6 个图像工具产物及 0 字节 `screenshots/seam_shot.jpg`;其余 11 张截图与 `Build/` 历史证据保留。
+- 更新当前工具清单、`VolumetricClouds` / `zh-Hans.xml` 路径与配置维护约定。归档中的旧算法、雨预览和 Clone 验证保留为历史证据,在相关文档头部标明失效范围。
+
+验证:`dotnet build Volken.csproj --no-restore --verbosity quiet` 通过,0 错误 / 3 个既有警告(Tasks.Extensions 引用冲突、两处保留星环不可达代码)。五个纯注释文件使用 `strip-code-comments.ps1` 与修改前快照比对,代码与字符串均一致。本次未执行游戏画面 / 性能验证或资源包构建。
+
+文档检查:36 份 docs 与开发工具 README 的 9 项校验、`git diff --check` 均通过。已删除符号在当前源码中零残留;`ModData._otherAssets` 仍为 40 条且 GUID 全可解析,Assets 中无孤立 `.meta`。

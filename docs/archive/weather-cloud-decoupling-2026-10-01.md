@@ -2,6 +2,7 @@
 
 > 状态:✅ 已归档(已落地重构的记录;A2 / D 未排期,真机回归未确认)
 > 2026-10-08 核对:行星生命周期与高度带去重仍在代码中。当前配置文件 / 类名为 `Weather/VolkenWeatherConfig.cs` / `VolkenWeatherConfig`;§8 的 Settings 改名仅是当时记录。F 的天气值通道被后续删除天气值的决策取代。
+> 2026-10-12 后续:当前云生命周期类型为 `VolumetricClouds`;旧 `VolkenMod` / `VolkenClouds` 名称保留为历史证据。无消费者的 `LocalSolarHour` / `ComputeLocalSolarHour` 与 `CameraVelocity` 计算已删除;§8 中保留太阳时的决定已被本次清理接管,`CameraCloudFade` 仍保留。
 > 日期: 2026-10-01
 > 关联: [`sp2-weather-port-2026-09-27.md`](sp2-weather-port-2026-09-27.md)(天气母计划,本文只谈**结构**不谈功能范围)、[`thunder-realism-2026-09-28.md`](thunder-realism-2026-09-28.md)(雷电)、[`sp2-rain-particledomain-port-2026-09-28.md`](sp2-rain-particledomain-port-2026-09-28.md)(雨,本文的 C3/C4/C8 直接落在它身上)、[`weather-rain-fog-postmortem-2026-09-27.md`](weather-rain-fog-postmortem-2026-09-27.md)(雨雾复盘)
 > 主题: 审计「天气」与「云」两个模块之间**实际存在**的依赖,给出把边界划回 OOP 的分阶段重构方案。

@@ -96,7 +96,7 @@ Volken2 的「方案 C」主流程(低清全量 raymarch → MV 膨胀 → 时�
 ### #2 距离淡出 / LOD
 - VolRe CloudsRaymarchedVolume.checkVisible:scaledFadeStartAltitude/EndAltitude,超高度直接 SetActive(false) + 淡出。
 - KSA RenderWithCompute:高于 OrbitTransitionStartAltitude 只画 2D 云层,低于 OrbitTransitionEndAltitude 才跑体积云。
-- Volken2 现状:`useOrbitClouds` 与过渡高度已接入默认值、Clone、CopyFrom 和渲染分派;旧高度阈值字段已删除。
+- Volken2 现状:`useOrbitClouds` 与过渡高度已接入默认值、CopyFrom 和渲染分派;旧高度阈值字段及未使用的 Clone 方法已删除。
 
 ### #3 自适应步长(VolRe/KSA 三参数模型)
 - VolRe CloudsRaymarchedVolume.ApplyShaderParams:baseStepSize / maxStepSize / adaptiveStepSizeFactor。

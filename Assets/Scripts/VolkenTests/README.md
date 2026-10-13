@@ -5,8 +5,8 @@
 ## 契约（重要）
 
 1. **单向依赖**：本文件夹里的代码**可以**引用 `Assets/Scripts/Volken/**`（正式代码）；
-   **正式代码不得引用本文件夹**（`Mod.cs` / `VolkenMod.cs` / `RainParticles.cs` … 里不允许出现
-   `Volken.Tests` / `ProfilerController` / `RainPreview` 等类型名）。
+   **正式代码不得引用本文件夹**（`Mod.cs` / `VolumetricClouds.cs` / `RainParticles.cs` 等文件不引用
+   `Volken.Tests` / `ProfilerController` / `NoiseVisualizer` 等类型）。
 2. **可整体删除**：删掉整个 `VolkenTests` 文件夹后，mod 仍能编译并正常运行（只是少了这些工具与命令）。
    所以想"彻底不打包进游戏"，直接删文件夹即可。
 3. **自发创建工具**：本文件夹里的工具不靠正式代码启动，而是由 `TestsBootstrap.cs` 用
@@ -19,21 +19,20 @@
 
 | 文件 | 用途 | 入口 |
 | --- | --- | --- |
-| `RainPreview.cs` | **编辑器内雨预览台**：自由飞相机 + 参数面板即时生效 + 地面/参照物；跑的是同一份 compute/shader/驱动代码 | Unity 里 Add Component「Volken Rain Preview」→ Play（可勾「下次 Play 自动启动」写 PlayerPrefs，仅编辑器生效） |
-| `NoiseVisualizer.cs` | 体积云噪声可视化（`[ExecuteInEditMode]`） | 场景里挂组件 |
-| `RaymarchDebug.cs` | 体积云 raymarch 步进调试 | 场景里挂组件 |
+| `NoiseVisualizer.cs` | 遗留体积云噪声可视化组件（`[ExecuteInEditMode]`） | 当前项目缺少 `Hidden/NoiseVisualizer` shader,需补齐后使用 |
+| `RaymarchDebug.cs` | 遗留体积云 raymarch 步进组件 | 当前项目缺少 `Hidden/RaymarchDebug` shader,需补齐后使用 |
 | `Profiler/` | 性能剖析覆盖层（帧耗时/面板） | 由 `TestsBootstrap` 自动创建；读取开发配置 `ShowProfiler`,设置页入口保留 |
 | `TestsBootstrap.cs` | 上述工具的自发创建入口 | 自动（`RuntimeInitializeOnLoadMethod`） |
 
 ## 校验"零引用"（改完正式代码后可自查）
 
-雨预览台支持雨滴碰撞 / 高精度深度图 / 水花距离、寿命、半径与密度;开启水花自动开启碰撞,关闭碰撞一并关闭水花。勾选“假设有水”时 y=0 为水面。参数记忆 v7 兼容 v1~v6,XML 复制包含新字段;重置后碰撞与水花关闭。实现与验收判据见 [雨计划 §10.8](../../../docs/archive/sp2-rain-particledomain-port-2026-09-28.md#108-gpu-雨滴碰撞与水花2026-10-08)。
+2026-10-12 核对:`RainPreview.cs` 已不在当前项目中,旧文档的 Add Component、自动启动、参数记忆与 XML 复制入口均已失效。雨参数使用游戏天气面板调整;历史实现与验证结果仍见[雨计划 §10.8](../../../docs/archive/sp2-rain-particledomain-port-2026-09-28.md#108-gpu-雨滴碰撞与水花2026-10-08)。
 
 ```powershell
 # 期望输出：只有注释行，没有任何代码引用
 Get-ChildItem Assets\Scripts -Recurse -File -Include *.cs |
   Where-Object { $_.FullName -notmatch '\\VolkenTests\\' } |
-  Select-String -Pattern 'Volken\.Tests|ProfilerController|VolkenProfiler|RainPreview|NoiseVisualizer|RaymarchDebug'
+  Select-String -Pattern 'Volken\.Tests|ProfilerController|VolkenProfiler|NoiseVisualizer|RaymarchDebug'
 ```
 
 ## 历史

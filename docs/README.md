@@ -2,6 +2,7 @@
 
 > 新会话先读 [AGENT_CONTEXT.md](AGENT_CONTEXT.md)。本索引只保留入口、待办与维护规则;实现细节归主题文档。
 > 2026-10-09 更新:近地薄雾、流动体积雾与可操作 UI 已写入原工程,旧占位已清理;独立 GPU 验证完成,游戏表现待验收,见 §一。雨碰撞 / 水花已获用户真机确认并归档;归档不代替其他项目验收,剩余回归见 §四之三。
+> 2026-10-12 清理:未使用代码、配置 Clone 与冗余天气指标已删除,雨 / 闪电注释与失效工具说明已整理,见[清理记录](archive/monobehaviour-scene-gate-2026-10-02.md#5-源码与注释清理2026-10-12)。
 
 ## 一、当前推进
 
@@ -58,7 +59,7 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 
 | 约束 | 权威出处 |
 |---|---|
-| 生命周期归 `VolkenClouds`;高度带走 `CloudConfig.TryGetBand`,不恢复已撤抽象层 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §2.1、§8 |
+| 生命周期归 `VolumetricClouds`;高度带走 `CloudConfig.TryGetBand`,不恢复已撤抽象层 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §2.1、§8 |
 | 雨 / 雷独立启停,无全局天气值;云 / 天气预设各自存储 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8 |
 | XML 是跨场景配置来源;Flight→Flight 同行星早退保留内存状态 | [雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §3 |
 | 常驻按飞行状态停表;雨挂载和绘制另查活体场景状态 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §1、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §4 |
@@ -105,8 +106,8 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 
 - 解耦 A2 相机海拔去重、D 行星映射双写者:[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8;F 的全局天气值通道已被后续决策撤销。
 - 性能工作统一从 [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) 选项与测量;未实施,拖 UI 的 A 组维持不做。
-- 死代码候选 `DepthCapture` 和未启用星环补丁:[场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §3;本次未删代码。
-- 注释中的阶段号、日期与过期描述:按 §五.10 清理;旧占比只代表 2026-10-02,不当作当前实测。
+- 未启用星环补丁仍保留,`DepthCapture` 等用户指定项已删除:[场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §5。
+- 注释继续按 §五.10 维护;雨 / 闪电的指定历史与过期描述已清理,旧占比不当作当前实测。
 - 雾的两种效果已进入 [游戏适配 / 验证阶段](fog-implementation-plan-2026-10-09.md);雨图集、落雷贴地形、联机表现、机体反射探头仍未排期。
 - 新功能保持可关闭且默认关闭;天气联动云须用户另行提出,不能恢复旧占位字段或天气值方案。
 - 日志已收口:雨 / 雨声自动心跳、调参回显、逐次雷声记录已移除;错误告警保留;游戏诊断按钮已移除,GPU 回读留给开发接口。见 [UI 清理](archive/user-ui-cleanup-2026-10-09.md) §2、[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.9。

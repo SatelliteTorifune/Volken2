@@ -435,13 +435,6 @@ namespace Volken.Weather
             lightning.CopyFrom(source.lightning);
         }
 
-        public VolkenWeatherConfig Clone()
-        {
-            var c = CreateDefault();
-            c.CopyFrom(this);
-            return c;
-        }
-
         // 文件 IO(按预设名存,与 Volken.Clouds.CloudConfig 同一套逻辑)
 
         /// <summary>天气预设根目录(相对 <c>persistentDataPath</c>)。**刻意与云的 <c>/UserData/VolkenConfig/</c> 分开**:两边预设同名,放同一个目录会互相覆盖,

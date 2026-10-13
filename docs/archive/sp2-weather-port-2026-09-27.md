@@ -4,7 +4,8 @@
 > 日期:2026-09-27;归档核对:2026-10-08
 > 当前工作:[雨计划](sp2-rain-particledomain-port-2026-09-28.md) §10、[雷声](thunder-realism-2026-09-28.md)、[解耦](weather-cloud-decoupling-2026-10-01.md) §8。
 > 适用范围:正文记录当时的调查和决策,保留 §10 的证据及编号供引用。“只剩雷电”、旧天气状态机、旧配置路径和 dev 命令均不代表当前项目。
-> 当前代码已有雨视觉 / 雨声 / 闪电 / 雷声,雾仍占位;云 / 天气预设独立,无全局天气值。现行约束与调试入口见 [会话上下文](../AGENT_CONTEXT.md)。
+> 当前代码已有雨视觉 / 雨声 / 闪电 / 雷声及[两种雾](../fog-implementation-plan-2026-10-09.md);云 / 天气预设独立,无全局天气值。现行约束与调试入口见 [会话上下文](../AGENT_CONTEXT.md)。
+> 2026-10-12 后续:未接入的 `DepthCapture`、无消费者的 `CameraVelocity` / `LocalSolarHour` 已删除;下文相关复用方案与旧类型名仅作历史参考。当前深度入口为 `CloudRenderer.LinearSceneDepth`,雾使用太阳仰角。
 
 ## 1. 背景与目标
 

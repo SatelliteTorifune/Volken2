@@ -4,6 +4,7 @@
 > UI 后续:天气 / 云调试控件已按用户要求移除,见 [UI 清理](archive/user-ui-cleanup-2026-10-09.md);§9.2 的当前排查入口已同步,§10 保留当时修复记录。
 > 2026-10-10 UI 后续:天气总开关已移除,效果改为独立启停,配置条目直接并入天气根组,见 [UI 清理 §6](archive/user-ui-cleanup-2026-10-09.md#6-天气根组精简2026-10-10);下文雾示例开启总开关的描述仅为历史实现。
 > 工具清理:编辑器验证脚本已按用户要求删除,以下 GPU / 性能结果保留为历史证据,详见[开发工具说明](../Assets/Scripts/VolkenTests/README.md)。
+> 2026-10-12 后续:旧 `DepthCapture`、无消费者的 `LocalSolarHour` 与配置 `Clone` 已删除;雾仍用现有深度与太阳仰角。下文相关基线和 Clone 验证属于当时记录,本次范围见[清理记录](archive/monobehaviour-scene-gate-2026-10-02.md#5-源码与注释清理2026-10-12)。
 > 日期:2026-10-09;源码基线 `5e4bb88`,保留当前工作树中的性能审计文档。
 > 【决策:2026-10-09,用户】近地薄雾和明显的流动体积雾**二者都做**。下面的分阶段顺序是交付顺序,不表示体积雾改为可选待办。
 > 关联:[会话上下文](AGENT_CONTEXT.md)、[天气解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8、[旧雨雾复盘](archive/weather-rain-fog-postmortem-2026-09-27.md)、[性能清单](proposals/frame-rate-optimization-audit-2026-10-08.md)。
@@ -176,7 +177,7 @@ Additive 云: out = Bfog + Tf*C
 | 保留 `dawnFog` | 显示改为“晨昏增强”;用太阳仰角的平滑权重,两侧对等触发,不依赖错误的 LocalSolarHour |
 | 新增 `ExtraCameraFog` | 单独控制附加相机,默认关闭;开启后默认低档,不修改主相机配置 |
 
-晨昏增强应基于非零的用户密度乘倍率,不能在用户 density=0 时偷偷生雾。NaN / Infinity、负数与极大值要在 Clamp 中变成有限合法值;同步 CopyFrom / Clone、保存 / 加载和 EN-US / ZH-CN / RU-RU。
+晨昏增强应基于非零的用户密度乘倍率,不能在用户 density=0 时偷偷生雾。NaN / Infinity、负数与极大值要在 Clamp 中变成有限合法值;同步默认值 / CopyFrom / ClampAll、保存 / 加载和 EN-US / zh-Hans / RU-RU。
 
 建议示例值用于原型调参,不是自动写入用户预设:薄雾 `density=0.0003 /m,H=200m`;体积雾先以约 500–1500 m 的雾团尺度观察,随后按参考截图与实际视距校准。两种共同启用时检查浓度是否过饱和。
 

@@ -32,7 +32,7 @@
     <s id="Volken.UI.RainEdgeFade">Boundary fade fraction</s>
     <s id="Volken.UI.RainSoftParticles">Soft particle strength</s>
     <s id="Volken.UI.RainTailFalloff">Streak tail falloff</s>
-    <s id="Volken.UI.RainBrightness">Brightness gain</s>
+    <s id="Volken.UI.RainBrightness">Rain emissiveness</s>
     <s id="Volken.UI.RainTransparency">Rain transparency</s>
     <s id="Volken.UI.RainCollision">Rain collision</s>
     <s id="Volken.UI.RainCollisionHighPrecision">High precision collision</s>
@@ -84,16 +84,18 @@
     <s id="Volken.UI.LightningFlashIntensity">Flash Intensity</s>
     <s id="Volken.UI.LightningLightIntensity">Strike Light Intensity</s>
     <s id="Volken.UI.LightningLightRange">Strike Light Range (m)</s>
+    <s id="Volken.UI.LightningCloudLightingEnabled">Lightning Lights Clouds</s>
+    <s id="Volken.UI.LightningCloudLightIntensity">Cloud Light Intensity</s>
+    <s id="Volken.UI.LightningCloudLightRange">Cloud Light Range (m)</s>
+    <s id="Volken.UI.LightningCloudLightSamples">Cloud Light Samples</s>
     <s id="Volken.UI.ThunderVolume">Thunder Volume</s>
     <s id="Volken.UI.ThunderDelay">Thunder Delay at 0 Distance (s)</s>
     <s id="Volken.UI.ThunderDistanceAttenuation">Thunder Sound-Speed Delay / Falloff</s>
     <s id="Volken.UI.ThunderNearDistance">Near/Far Thunder Threshold (m)</s>
-    <s id="Volken.UI.ThunderFallbackSpeedOfSound">Fallback Speed of Sound (m/s)</s>
     <s id="Volken.UI.ThunderSourceBlend">Thunder Source: Cloud-Base Blend</s>
 
     
     <!-- Group Names -->
-    <s id="Volken.UI.ConfigManagement">Config Management</s>
     <s id="Volken.UI.Clouds">Clouds</s>
     <s id="Volken.UI.CloudContainer">Cloud Container</s>
     <s id="Volken.UI.CloudQuality">Cloud Quality</s>
@@ -197,7 +199,6 @@
     <!-- Extra Layer UI -->
     <s id="Volken.UI.ExtraLayer">Extra Layer: {0}</s>
     <s id="Volken.UI.ExtraLayerEnabled">{0} Enabled</s>
-    <s id="Volken.UI.ExtraLayerConfig">{0} Config</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} Save Current</s>
     <s id="Volken.UI.ExtraLayerSaveAs">{0} Save As...</s>
     <s id="Volken.UI.ExtraLayerLoadPreset">{0} Load Preset</s>

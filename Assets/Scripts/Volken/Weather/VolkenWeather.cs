@@ -184,15 +184,15 @@ namespace Volken.Weather
             }
             Config = cfg;
 
-            SetActive(CanRunWeather());
+            RainParticles.ApplyConfig(cfg.rain);
+            RainParticles.SyncToCurrentView();
+            SetActive(CanRunWeather(), refreshSchedule: true);
 
             Mod.Log($"VolkenWeather: planet={planetName} preset={configName} active={IsActive} " +
                     $"rain={cfg.rain.enabled} fog={cfg.fog.enabled} lightning={cfg.lightning.enabled}");
 
             try { PlanetConfigLoaded?.Invoke(planetName); }
             catch (Exception ex) { Mod.Log("VolkenWeather: PlanetConfigLoaded handler threw: " + ex.Message); }
-
-            UpdateLightning();
         }
 
         // 天气预设的独立管理(与云层预设无关)
@@ -280,14 +280,15 @@ namespace Volken.Weather
         public void ResetCurrentConfigToDefault()
         {
             Config?.CopyFrom(VolkenWeatherConfig.CreateDefault());
-            SetActive(CanRunWeather());
-            UpdateLightning();
+            RainParticles.ApplyConfig(Config?.rain);
+            RainParticles.SyncToCurrentView();
+            SetActive(CanRunWeather(), refreshSchedule: true);
         }
 
         // 【不做联动】天气不修改云的任何参数。要做的话见 docs/archive/weather-cloud-decoupling-2026-10-01.md §3.6。
 
         /// <summary>按雷电开关与当前环境起停雷电;雷暴节奏由 <see cref="LightningModule"/> 自己管。</summary>
-        private void UpdateLightning()
+        private void UpdateLightning(bool refreshSchedule = false)
         {
             var cfg = Config;
             bool want = IsActive && cfg != null && cfg.lightning.enabled;
@@ -307,7 +308,7 @@ namespace Volken.Weather
                 _lightning.Initialize(LoadBoltShader());
             }
 
-            _lightning.SetActive(true);
+            _lightning.SetActive(true, refreshSchedule);
         }
 
         /// <summary>载入闪电 shader;失败回退 <c>Shader.Find</c>(开发期 shader 可能已在内存里)。</summary>
@@ -353,11 +354,11 @@ namespace Volken.Weather
         /// <summary>供开发代码检查的雷电模块,可能为 null。</summary>
         public LightningModule Lightning => _lightning;
 
-        private void SetActive(bool active)
+        private void SetActive(bool active, bool refreshSchedule = false)
         {
-            if (IsActive == active) return;
+            if (IsActive == active && !refreshSchedule) return;
             IsActive = active;
-            UpdateLightning();
+            UpdateLightning(refreshSchedule);
         }
 
         private bool CanRunWeather() => Config != null && !string.IsNullOrEmpty(CurrentPlanet) &&

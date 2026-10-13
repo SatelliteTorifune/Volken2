@@ -6,7 +6,7 @@ using ModApi.Flight.Sim;
 using UnityEngine;
 using UnityEngine.Rendering;
 /*
-    云渲染主流程:合并远近相机深度 → 逐层低清 raymarch(+ 云面深度/MV 的 MRT)→ MV 膨胀 → 全清时序上采样 → 逐层合成。
+    云渲染主流程:合并远近相机深度 → 逐层低清 raymarch(+ 云面深度/MV 的 MRT)→ 全清时序上采样 → 逐层合成。
      每个 CloudRenderer 实例 = 一台相机,每相机状态全在 CloudLayerView;farDepthSource = 这台相机的远相机。
      风/自转是全球共享量,每帧只能推进一次(AdvanceGlobalCloudState),多相机下推两次 = 云速翻倍。
      [ImageEffectOpaque] 必须保留:云要在不透明之后、透明之前合成,否则会盖住水面/玻璃/UI。
@@ -99,6 +99,7 @@ namespace Volken.Clouds
         // 浮动原点重置(离帧中心 >5000m / 帧速 >1000m/s / 时间加速 / 表面锁定切换)时世界坐标整体平移,重投影错位
         private void OnReferenceFrameRecentered(ModApi.Flight.GameView.IReferenceFrame referenceFrame, Vector3d positionDelta, Vector3d velocityDelta)
         {
+            if (!CloudLayerView.HasRecenterMotion(positionDelta.magnitude, velocityDelta.magnitude)) return;
             try
             {
                 _visibilityDiagnostics.RecordRecenter(positionDelta.magnitude, velocityDelta.magnitude);
@@ -322,6 +323,47 @@ namespace Volken.Clouds
             }
         }
 
+        internal static RenderTextureFormat CloudColorFormat => RenderTextureFormat.ARGB32;
+        internal static bool CloudLightningEnabled =>
+            Volken.Weather.VolkenWeather.Instance?.Config?.lightning?.cloudLightingEnabled == true &&
+            SystemInfo.supportedRenderTargetCount >= 4;
+
+        // 游戏环境色按当前颜色空间转换一次,不额外施加太阳高度或亮度下限。
+        internal static Vector4 CloudAmbientColor(Color ambient, bool linear)
+        {
+            float r = float.IsNaN(ambient.r) || float.IsInfinity(ambient.r) ? 0f : Mathf.Max(0f, ambient.r);
+            float g = float.IsNaN(ambient.g) || float.IsInfinity(ambient.g) ? 0f : Mathf.Max(0f, ambient.g);
+            float b = float.IsNaN(ambient.b) || float.IsInfinity(ambient.b) ? 0f : Mathf.Max(0f, ambient.b);
+            var color = new Color(r, g, b, 1f);
+            if (linear) color = color.linear;
+            return new Vector4(color.r, color.g, color.b, 0f);
+        }
+
+        internal static void SetCloudAmbientProperties(Material mat) =>
+            mat.SetVector("_CloudAmbientColor", CloudAmbientColor(RenderSettings.ambientLight,
+                QualitySettings.activeColorSpace == ColorSpace.Linear));
+
+        internal static Vector4 SetCloudLightningProperties(Material mat, bool reflection)
+        {
+            Vector4 positionRange = Vector4.zero, colorIntensity = Vector4.zero;
+            var weather = Volken.Weather.VolkenWeather.Instance;
+            var cfg = weather?.Config?.lightning;
+            int samples = 0;
+            if (Game.InFlightScene && weather?.IsActive == true && cfg != null && cfg.enabled &&
+                cfg.cloudLightingEnabled && !Volken.Weather.GamePause.IsPaused)
+            {
+                float intensity = Mathf.Clamp(cfg.cloudLightIntensity, 0f, 100f);
+                float range = Mathf.Clamp(cfg.cloudLightRange, 1f, 30000f);
+                if (!float.IsNaN(range) && !float.IsInfinity(range) &&
+                    Volken.Weather.LightningBolt.TryGetCloudLight(intensity, range, out positionRange, out colorIntensity))
+                    samples = reflection ? Mathf.Clamp(cfg.cloudLightSamples, 2, 4) : Mathf.Clamp(cfg.cloudLightSamples, 2, 16);
+            }
+            mat.SetVector("_LightningPositionRange", positionRange);
+            mat.SetVector("_LightningColorIntensity", colorIntensity);
+            mat.SetInt("_LightningSamples", samples);
+            return positionRange;
+        }
+
         public void SetLayerDynamicProperties(CloudLayer layer, CloudLayerView view, int renderW, int renderH)
         {
             if (layer?.config == null || layer.material == null || view == null) return;
@@ -331,6 +373,9 @@ namespace Volken.Clouds
             var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
 
             var mat = layer.material;
+            SetCloudAmbientProperties(mat);
+            SetCloudLightningProperties(mat, false);
+            if (!view.currentLightningEnabled) mat.SetInt("_LightningSamples", 0);
             mat.SetFloat("currentRotation", layer.accumulatedRotation);
             mat.SetFloat("maxDepth", 0.9f * Mathf.Max(cam.farClipPlane, farDepthSource != null ? farDepthSource.maxFarDepth : 0f));
             mat.SetVector("sphereCenter", planetCenter);
@@ -345,7 +390,9 @@ namespace Volken.Clouds
             // → 运动残影,并在残影边缘形成水平割裂线。φ = 自转累积角 + 风平移折算的经度角(2π·runningOffset.x)。
             float cloudPhi = layer.accumulatedRotation + 2.0f * Mathf.PI * layer.runningOffset.x;
             float dPhi = float.IsNaN(view.prevCloudAngle) ? 0.0f : cloudPhi - view.prevCloudAngle;
-            mat.SetMatrix("reprojMat", view.prevViewProjMat * BuildCloudSpaceRepro(dPhi, planetCenter));
+            var cloudReprojection = BuildCloudSpaceRepro(dPhi, planetCenter);
+            mat.SetMatrix("reprojMat", view.prevViewProjMat * cloudReprojection);
+            mat.SetMatrix("_HistoryCloudViewMat", view.prevWorldToCameraMat * cloudReprojection);
             view.prevCloudAngle = cloudPhi;
             // 观察射线用相机 transform 轴构造。 不要用 cameraToWorldMatrix 第 2 列当 fwd —— Unity 视图约定里那是 -forward,会反向。
             mat.SetVector("_CamPos", cam.transform.position);
@@ -390,6 +437,7 @@ namespace Volken.Clouds
             //  必须用 GL.GetGPUProjectionMatrix(cam.projectionMatrix, true),不能用逻辑投影:Clouds 顶点着色器
             // 用光栅化 clip 重建射线,D3D 下 GPU clip 与逻辑投影 Y 约定相反 → 历史采错行 → 云带边缘镜像鬼影(割裂线)。
             view.prevViewProjMat = GL.GetGPUProjectionMatrix(cam.projectionMatrix, true) * cam.worldToCameraMatrix;
+            view.prevWorldToCameraMat = cam.worldToCameraMatrix;
         }
 
         /// <summary>构造"绕行星中心 C 的 Y 轴旋转 +dPhi"的仿射矩阵;旋转约定与 shader SampleDensity 的 R_y(+θ) 一致。</summary>
@@ -715,6 +763,8 @@ namespace Volken.Clouds
                         view.currentW != renderW || view.currentH != renderH ||
                         Mathf.Abs(view.currentResolutionScale - layer.config.resolutionScale) > 0.001f ||
                         Mathf.Abs(view.currentOrbitRes - orbitRes) > 0.001f ||
+                        view.currentColorFormat != CloudColorFormat ||
+                        view.currentLightningEnabled != CloudLightningEnabled ||
                         view.currentTemporal != (tss ? 1 : 0) ||
                         view.currentUpX != upX || view.currentUpY != upY;
                     if (needsCreate)
@@ -793,31 +843,11 @@ namespace Volken.Clouds
                     if (view.orbitFade >= 0.999f) continue;   // 高空纯 2D:跳过体积 raymarch(性能大头)
 
                     layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
-                    // MRT: cloudTex(RGBA) + cloudDepthTex(RFloat 云面距离) + cloudMVTex(RG 本帧运动矢量)
-                    var mrt = new RenderBuffer[] { view.cloudTex.colorBuffer, view.cloudDepthTex.colorBuffer, view.cloudMVTex.colorBuffer };
-                    Graphics.SetRenderTarget(mrt, view.cloudTex.depthBuffer);
+                    if (view.currentLightningEnabled) view.lightningCache.Prepare(layer.material);
+                    // MRT:颜色 + 云面距离 + 运动数据(RG=UV 位移,B=上一相机云距离×1e-5)。
+                    Graphics.SetRenderTarget(view.currentLightningEnabled ? view.lightningTargets : view.cloudTargets, view.cloudTex.depthBuffer);
                     layer.material.SetPass(cloudsPass);
                     Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
-
-                    // 本帧 MV 膨胀 3 次 → cloudMVDilatedTex,供同帧 Upscale(无 1 帧滞后)
-                    int dilatePass = layer.material.FindPass("DilateMV");
-                    if (dilatePass >= 0)
-                    {
-                        RenderTexture mvTmp1 = null, mvTmp2 = null;
-                        try
-                        {
-                            mvTmp1 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
-                            mvTmp2 = RenderTexture.GetTemporary(view.cloudMVTex.width, view.cloudMVTex.height, 0, view.cloudMVTex.format);
-                            Graphics.Blit(view.cloudMVTex, mvTmp1, layer.material, dilatePass);
-                            Graphics.Blit(mvTmp1, mvTmp2, layer.material, dilatePass);
-                            Graphics.Blit(mvTmp2, view.cloudMVDilatedTex, layer.material, dilatePass);
-                        }
-                        finally
-                        {
-                            if (mvTmp1 != null) RenderTexture.ReleaseTemporary(mvTmp1);
-                            if (mvTmp2 != null) RenderTexture.ReleaseTemporary(mvTmp2);
-                        }
-                    }
                 }
 
                 // 轨道云(2D 壳着色):每层渲染到 view.orbitCloudTex(淡入因子>0 才做;pass 缺失则降级为纯体积云)
@@ -835,7 +865,7 @@ namespace Volken.Clouds
                     }
                 }
 
-                // 逐层上采样。 不要改成 MRT + DrawMeshNow:双 MRT(0 深度)在该路径上不渲染 → upscaled 恒黑 → 看不到云。
+                // 上采样走 Blit;运动数据只使用同一云面的格点。
                 int upscalePass = matRef.FindPass("Upscale");
                 foreach (var layer in activeLayers)
                 {
@@ -845,7 +875,7 @@ namespace Volken.Clouds
 
                     var mat = layer.material;
                     mat.SetTexture("CloudDepthTex", view.cloudDepthTex);
-                    mat.SetTexture("CloudMVDilatedTex", view.cloudMVDilatedTex);
+                    mat.SetTexture("CloudMVTex", view.cloudMVTex);
                     mat.SetTexture("CombinedDepthTex", combinedDepthTex);
                     mat.SetTexture("HistoryTex", view.historyTex);
                     mat.SetTexture("HistoryDepthTex", view.historyDepthTex);
@@ -853,9 +883,12 @@ namespace Volken.Clouds
                     Graphics.Blit(view.cloudTex, view.upscaledCloudTex, mat, upscalePass);
 
                     // 时序写回:上采样结果 → 历史(下一帧在 Upscale 里按 MV 重投影采样);云面距离历史供下一帧 cloudGate 校验
-                    Graphics.Blit(view.upscaledCloudTex, view.historyTex);
-                    Graphics.Blit(combinedDepthTex, view.historyDepthTex);
-                    Graphics.Blit(view.cloudDepthTex, view.historyCloudDepthTex);
+                    if (layer.config.useTemporalUpscale || layer.config.historyBlend > 0f)
+                    {
+                        Graphics.Blit(view.upscaledCloudTex, view.historyTex);
+                        Graphics.Blit(combinedDepthTex, view.historyDepthTex);
+                        Graphics.Blit(view.cloudDepthTex, view.historyCloudDepthTex);
+                    }
                 }
 
                 // 逐层链式合成,每层按其 compositeMode 混合
@@ -869,6 +902,8 @@ namespace Volken.Clouds
                     if (view == null) continue;
                     var compositeMat = layer.material;
                     compositeMat.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
+                    compositeMat.SetTexture("CloudLightningTex", view.lightningTex != null && view.orbitFade < 0.999f && compositeMat.GetInt("_LightningSamples") >= 2
+                        ? (Texture)view.lightningTex : Texture2D.blackTexture);
                     compositeMat.SetTexture("OrbitCloudTex", view.orbitCloudTex);
                     compositeMat.SetTexture("SceneDepthTex", combinedDepthTex);
                     compositeMat.SetTexture("FogCloudDepthTex", view.cloudDepthTex);

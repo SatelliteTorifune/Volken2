@@ -46,6 +46,7 @@ namespace Volken.Clouds
     public static class CloudReflectionRenderer
     {
         private static RenderTexture _cloudTex;
+        private static readonly CloudLightningCache _lightningCache = new CloudLightningCache();
         private static Mesh _fullscreenTriangle;
         private static readonly Dictionary<CloudLayer, Material> _materials = new Dictionary<CloudLayer, Material>();
         private static readonly List<CloudLayer> _activeLayers = new List<CloudLayer>();
@@ -146,6 +147,9 @@ namespace Volken.Clouds
                 }
 
                 layer.SetStaticShaderProperties(mat);   // 与主材质同步(clone 可能落后于配置变更)
+                CloudRenderer.SetCloudAmbientProperties(mat);
+                CloudRenderer.SetCloudLightningProperties(mat, true);
+                mat.SetTexture("CloudLightningTex", Texture2D.blackTexture);
 
                 mat.SetFloat("_ReflectionMode", 1f);     // 跳过 DepthTex 遮挡 + 用显式相机位置
                 mat.SetFloat("_VolkenFogComposite", 0f);
@@ -185,6 +189,7 @@ namespace Volken.Clouds
                 mat.SetVector("_LowResSize", new Vector2(rt.width, rt.height));
                 mat.SetFloat("_UseTemporal", 0f);
                 mat.SetFloat("historyBlend", 0f);
+                _lightningCache.Prepare(mat);
 
                 // 低清 raymarch → _cloudTex,再 additive 合成进反射 RT
                 RenderTexture prev = RenderTexture.active;
@@ -242,12 +247,19 @@ namespace Volken.Clouds
 
         private static void EnsureResources(int w, int h)
         {
-            if (_cloudTex != null && _cloudTex.IsCreated() && _cloudTex.width == w && _cloudTex.height == h)
+            bool cloudLightning = Volken.Weather.VolkenWeather.Instance?.Config?.lightning?.cloudLightingEnabled == true;
+            if (!cloudLightning) _lightningCache.Dispose();
+            var colorFormat = cloudLightning && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
+                ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
+            if (_cloudTex != null && _cloudTex.IsCreated() && _cloudTex.width == w && _cloudTex.height == h && _cloudTex.format == colorFormat)
                 return;
 
-            if (_cloudTex != null && _cloudTex.IsCreated())
+            if (_cloudTex != null)
+            {
                 _cloudTex.Release();
-            _cloudTex = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32);
+                UnityEngine.Object.Destroy(_cloudTex);
+            }
+            _cloudTex = new RenderTexture(w, h, 0, colorFormat);
             _cloudTex.name = "VolkenReflectionCloudTex";
             _cloudTex.Create();
 

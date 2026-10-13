@@ -55,7 +55,7 @@ namespace Volken.Clouds
             try
             {
                 string context = string.Format(
-                    "build=9 frame={0} camera='{1}' altitude={2:F1}m fov={3:F1} clip={4:F2}/{5:F0} fog={6} layers={7} farReady={8} farMax={9:G6} recenterCount={10} lastDelta={11:G6}/{12:G6}m,m/s",
+                    "build=12 frame={0} camera='{1}' altitude={2:F1}m fov={3:F1} clip={4:F2}/{5:F0} fog={6} layers={7} farReady={8} farMax={9:G6} recenterCount={10} lastDelta={11:G6}/{12:G6}m,m/s",
                     Time.frameCount, camera.name, altitude, camera.fieldOfView, camera.nearClipPlane,
                     camera.farClipPlane, fogActive, views.Count, far != null && Ready(far.farDepthTex),
                     far != null ? far.maxFarDepth : 0f, _recenterCount, _lastPositionDelta, _lastVelocityDelta);
@@ -76,9 +76,9 @@ namespace Volken.Clouds
                         mat.GetTexture("DepthTex") == scene && Ready(scene) ? "scene" : "other");
                     var shape = mat.GetTexture("CloudShapeTex") as RenderTexture;
                     var detail = mat.GetTexture("CloudDetailTex") as RenderTexture;
-                    layerContext += string.Format(" shapeNoise={0} noiseMips={1}/{2}",
+                    layerContext += string.Format(" shapeNoise={0} noiseMips={1}/{2} ambientRGB={3}",
                         shape != null ? shape.name : "other", shape != null ? shape.mipmapCount : 0,
-                        detail != null ? detail.mipmapCount : 0);
+                        detail != null ? detail.mipmapCount : 0, mat.GetVector("_CloudAmbientColor").ToString("F5"));
                     if (view.orbitFade >= 0.999f)
                     {
                         Mod.Log("Volken:CloudVisibility skipped-volume " + layerContext);

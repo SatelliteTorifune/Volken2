@@ -2,6 +2,7 @@
 // 逐粒长宽变化与滚转由 _StreakVariation / _StreakRoll 控制,滚转默认关闭。
 // 软粒子读取 RFloat 线性眼空间深度(米);深度未就绪时 _InvFade=0。
 // 网格 UV 为 0..1,uv.y=0 为亮头、1 为尾部;渲染位置来自 _Positions。
+// RGB 由场景入射光与独立自发光组成;_Emission=0 不保留恒定亮色。
 // 坐标和重定位约束见 docs/archive/sp2-rain-particledomain-port-2026-09-28.md §10。
 
 Shader "Volken/RainParticles"
@@ -9,7 +10,7 @@ Shader "Volken/RainParticles"
     Properties
     {
         _MainTex ("Main Texture (RGB, A=alpha)", 2D) = "white" {}
-        _Emission ("Emission Boost", Range(0, 3)) = 0
+        _Emission ("Emissiveness", Range(0, 3)) = 0
         _MainColor ("Main Color", Color) = (0.72, 0.82, 1, 1)
         _InvFade ("Soft Particles Factor", Range(0.01, 3)) = 1
         _Falloff ("Tail Fade", Range(0, 1)) = 0.9
@@ -17,7 +18,7 @@ Shader "Volken/RainParticles"
         _StreakVariation ("Per-streak Size Variation", Range(0, 1)) = 0.5
         _StreakRoll ("Per-streak Roll", Range(0, 1)) = 0
         _MinStreakWidthPx ("Min On-screen Streak Width (px)", Range(0, 4)) = 0
-        _ShaderVer ("Shader Build (部署探针)", Float) = 9
+        _ShaderVer ("Shader Build (部署探针)", Float) = 10
         _EdgeFade ("Domain Edge Fade", Range(0, 0.5)) = 0.2
     }
     SubShader
@@ -44,6 +45,7 @@ Shader "Volken/RainParticles"
             sampler2D _MainTex;
             fixed4 _MainColor;
             float _Emission;
+            float3 _RainIncidentLight;
             float _InvFade;
             float _Falloff;
             float _FadeAmount;         // 环境淡出因子
@@ -151,7 +153,7 @@ Shader "Volken/RainParticles"
             fixed4 frag(v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.uv) * _MainColor;
-                col.rgb *= 1.0 + _Emission;
+                col.rgb *= _RainIncidentLight + max(0.0, _Emission);
                 col.a *= _FadeAmount;
                 col.a *= i.edgeFade;   // 域边界淡出(隐藏球域边界/回收突现)
                 col.a *= 1.0 - saturate(i.uv.y * _Falloff);

@@ -15,8 +15,11 @@ namespace Volken.Clouds
 
         public RenderTexture cloudTex;              // 低清 raymarch 颜色(MRT 0)
         public RenderTexture cloudDepthTex;         // 本帧云面距离(MRT 1, RFloat)
-        public RenderTexture cloudMVTex;            // 本帧新鲜格运动矢量(MRT 2, RG)
-        public RenderTexture cloudMVDilatedTex;     // 3×3 膨胀后的运动矢量(供同帧 Upscale 使用)
+        public RenderTexture cloudMVTex;            // MRT 2:RG=UV 位移,B=上一相机云距离×1e-5
+        public readonly RenderBuffer[] cloudTargets = new RenderBuffer[3];
+        public readonly RenderBuffer[] lightningTargets = new RenderBuffer[4];
+        public RenderTexture lightningTex;         // 当前帧云内雷光,不进入基础云颜色历史。
+        internal readonly CloudLightningCache lightningCache = new CloudLightningCache();
         public RenderTexture upscaledCloudTex;      // 全清上采样结果
         public RenderTexture historyTex;            // 全清历史颜色
         public RenderTexture historyDepthTex;       // 全清场景深度历史
@@ -33,9 +36,12 @@ namespace Volken.Clouds
         public float currentResolutionScale = -1f;
         public float currentOrbitRes = -1f;         // 轨道云当前分辨率缩放(签名,变化触发 RT 重建)
         public int currentShaderRevision = -1;
+        public RenderTextureFormat currentColorFormat = (RenderTextureFormat)(-1);
+        public bool currentLightningEnabled;
         private int _lastRenderFrame = -1;
 
         public Matrix4x4 prevViewProjMat;
+        public Matrix4x4 prevWorldToCameraMat;
         public float prevCloudAngle = float.NaN;    // 上一帧的云转角相位;NaN = 尚无历史,回退纯世界空间重投影
 
         public float orbitFade;                     // 本帧海拔淡入因子 0..1(CloudRenderer 每帧写入)
@@ -47,10 +53,14 @@ namespace Volken.Clouds
         }
 
         public bool IsCreated => Ready(cloudTex) && Ready(cloudDepthTex) && Ready(cloudMVTex) &&
-            Ready(cloudMVDilatedTex) && Ready(upscaledCloudTex) && Ready(historyTex) &&
-            Ready(historyDepthTex) && Ready(historyCloudDepthTex) && Ready(orbitCloudTex);
+            Ready(upscaledCloudTex) && Ready(historyTex) &&
+            Ready(historyDepthTex) && Ready(historyCloudDepthTex) && Ready(orbitCloudTex) &&
+            (!currentLightningEnabled || Ready(lightningTex));
 
         private static bool Ready(RenderTexture rt) => rt != null && rt.IsCreated();
+
+        internal static bool HasRecenterMotion(double positionDelta, double velocityDelta) =>
+            !(positionDelta <= 0.001 && velocityDelta <= 0.001);
 
         public void SynchronizeShaderRevision()
         {
@@ -88,15 +98,30 @@ namespace Volken.Clouds
                 ? new Vector2Int(Mathf.Max(1, Mathf.RoundToInt(renderW * scale / upX)), Mathf.Max(1, Mathf.RoundToInt(renderH * scale / upY)))
                 : new Vector2Int(Mathf.Max(1, Mathf.RoundToInt(renderW * scale)), Mathf.Max(1, Mathf.RoundToInt(renderH * scale)));
 
-            cloudTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGB32, "CloudTex" + layer.layerIndex, 16);
+            currentColorFormat = CloudRenderer.CloudColorFormat;
+            cloudTex = CreateRT(cloudRes.x, cloudRes.y, currentColorFormat, "CloudTex" + layer.layerIndex, 16);
             cloudDepthTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.RFloat, "CloudDepthTex" + layer.layerIndex);
             cloudMVTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGBHalf, "CloudMVTex" + layer.layerIndex);
-            cloudMVDilatedTex = CreateRT(cloudRes.x, cloudRes.y, RenderTextureFormat.ARGBHalf, "CloudMVDilatedTex" + layer.layerIndex);
+            cloudDepthTex.filterMode = FilterMode.Point;
+            cloudMVTex.filterMode = FilterMode.Point;
+            cloudTargets[0] = cloudTex.colorBuffer;
+            cloudTargets[1] = cloudDepthTex.colorBuffer;
+            cloudTargets[2] = cloudMVTex.colorBuffer;
+            currentLightningEnabled = CloudRenderer.CloudLightningEnabled;
+            if (currentLightningEnabled)
+            {
+                var lightFormat = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
+                    ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
+                lightningTex = CreateRT(cloudRes.x, cloudRes.y, lightFormat, "CloudLightningTex" + layer.layerIndex);
+                Array.Copy(cloudTargets, lightningTargets, 3);
+                lightningTargets[3] = lightningTex.colorBuffer;
+            }
 
-            upscaledCloudTex = CreateRT(renderW, renderH, RenderTextureFormat.ARGB32, "UpscaledCloudTex" + layer.layerIndex);
-            historyTex = CreateRT(renderW, renderH, RenderTextureFormat.ARGB32, "HistoryTex" + layer.layerIndex);
+            upscaledCloudTex = CreateRT(renderW, renderH, currentColorFormat, "UpscaledCloudTex" + layer.layerIndex);
+            historyTex = CreateRT(renderW, renderH, currentColorFormat, "HistoryTex" + layer.layerIndex);
             historyDepthTex = CreateRT(renderW, renderH, RenderTextureFormat.RFloat, "HistoryDepthTex" + layer.layerIndex);
             historyCloudDepthTex = CreateRT(renderW, renderH, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layer.layerIndex);
+            historyCloudDepthTex.filterMode = FilterMode.Point;
 
             // 轨道云(2D 壳着色):按 orbitResolutionScale 降分辨率渲染,Composite 时双线性软化
             float orbitRes = Mathf.Clamp(layer.config.orbitResolutionScale, 0.1f, 1f);
@@ -123,13 +148,15 @@ namespace Volken.Clouds
             ReleaseRT(ref cloudDepthTex);
             ReleaseRT(ref historyCloudDepthTex);
             ReleaseRT(ref cloudMVTex);
-            ReleaseRT(ref cloudMVDilatedTex);
+            ReleaseRT(ref lightningTex);
+            lightningCache.Dispose();
             ReleaseRT(ref orbitCloudTex);
         }
 
         // 清空时序历史(颜色/场景深度/云面距离)→ Upscale 的 validHist 全 0 → 全走本帧新鲜 raymarch
         public void ClearHistory()
         {
+            lightningCache.Invalidate();
             frameNumber = 0;
             prevCloudAngle = float.NaN;
             var prevActive = RenderTexture.active;

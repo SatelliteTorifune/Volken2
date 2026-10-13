@@ -32,7 +32,7 @@
     <s id="Volken.UI.RainEdgeFade">边界淡出比例</s>
     <s id="Volken.UI.RainSoftParticles">软粒子强度</s>
     <s id="Volken.UI.RainTailFalloff">雨丝尾淡</s>
-    <s id="Volken.UI.RainBrightness">亮度增益</s>
+    <s id="Volken.UI.RainBrightness">雨滴自发光</s>
     <s id="Volken.UI.RainTransparency">雨滴透明度</s>
     <s id="Volken.UI.RainCollision">雨滴碰撞</s>
     <s id="Volken.UI.RainCollisionHighPrecision">高精度碰撞</s>
@@ -48,7 +48,6 @@
     <s id="Volken.UI.RainCeilingBand">上限淡出比例</s>
     <s id="Volken.UI.RainUnderwaterGate">水下隐藏雨滴</s>
     <s id="Volken.UI.RainUnderwaterFade">水下淡出深度(米)</s>
-    <s id="Volken.UI.RainRespawnMirror">出域镜像重生</s>
     <s id="Volken.UI.RainAmount">粒子数量</s>
     <s id="Volken.UI.RainDomainRadius">粒子域半径(米)</s>
     <s id="Volken.UI.RainAdaptiveDomain">域半径随速度自适应</s>
@@ -84,16 +83,18 @@
     <s id="Volken.UI.LightningFlashIntensity">闪光强度</s>
     <s id="Volken.UI.LightningLightIntensity">落雷点光强度</s>
     <s id="Volken.UI.LightningLightRange">落雷点光范围(米)</s>
+    <s id="Volken.UI.LightningCloudLightingEnabled">闪电照亮云层</s>
+    <s id="Volken.UI.LightningCloudLightIntensity">云内雷光强度</s>
+    <s id="Volken.UI.LightningCloudLightRange">云内雷光范围(米)</s>
+    <s id="Volken.UI.LightningCloudLightSamples">云内雷光采样数</s>
     <s id="Volken.UI.ThunderVolume">雷声音量</s>
     <s id="Volken.UI.ThunderDelay">零距离时的雷声延迟(秒)</s>
     <s id="Volken.UI.ThunderDistanceAttenuation">雷声声速延迟 / 距离衰减</s>
     <s id="Volken.UI.ThunderNearDistance">近雷/远雷分界距离(米)</s>
-    <s id="Volken.UI.ThunderFallbackSpeedOfSound">兜底声速(米/秒)</s>
     <s id="Volken.UI.ThunderSourceBlend">雷声声源:云底混合</s>
 
     
     <!-- Group Names -->
-    <s id="Volken.UI.ConfigManagement">配置管理</s>
     <s id="Volken.UI.Clouds">云层</s>
     <s id="Volken.UI.CloudContainer">云层容器</s>
     <s id="Volken.UI.CloudQuality">云层质量</s>
@@ -198,7 +199,6 @@
     <!-- Extra Layer UI -->
     <s id="Volken.UI.ExtraLayer">额外云层: {0}</s>
     <s id="Volken.UI.ExtraLayerEnabled">{0} 启用</s>
-    <s id="Volken.UI.ExtraLayerConfig">{0} 配置</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} 保存当前</s>
     <s id="Volken.UI.ExtraLayerSaveAs">{0} 另存为...</s>
     <s id="Volken.UI.ExtraLayerLoadPreset">{0} 加载预设</s>

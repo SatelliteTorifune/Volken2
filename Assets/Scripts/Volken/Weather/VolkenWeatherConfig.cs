@@ -23,12 +23,11 @@ namespace Volken.Weather
         [Serializable]
         public class OverallSection
         {
-            public bool enabled = false;
 
             public void CopyFrom(OverallSection s)
             {
                 if (s == null) return;
-                enabled = s.enabled;
+             
             }
         }
 
@@ -74,7 +73,7 @@ namespace Volken.Weather
 
             public float tailFalloff = 0.9f;   // SP2 _falloff;0 = 不淡,1 = 尾端全透明
 
-            public float brightness = 0f;   // = shader _Emission;0 = 不额外提亮
+            public float brightness = 0f;   // = shader _Emission;0 = 无自发光,仍接受场景光照
 
             public float transparency = 0f;   // 0 = 原有透明度,1 = 完全透明;仅影响雨滴视觉
 
@@ -104,8 +103,7 @@ namespace Volken.Weather
             public float underwaterFade = 2f;    // 米;海平面 → 水面下此深度内线性淡出到 0(贴水面浮动时不会闪断)
 
             // false = 域内随机重生(默认,持续混合 = 连续雨帘);true = 确定性镜像,会零混合、周期团块。
-
-            public bool respawnMirror = false;   // true = 确定性镜像(仅对照用)
+            
 
             public void CopyFrom(RainSection s)
             {
@@ -141,7 +139,6 @@ namespace Volken.Weather
                 ceilingBand = s.ceilingBand;
                 underwaterGate = s.underwaterGate;
                 underwaterFade = s.underwaterFade;
-                respawnMirror = s.respawnMirror;
             }
         }
 
@@ -244,9 +241,14 @@ namespace Volken.Weather
 
             public float flashIntensity = 50f;   // 闪光瞬间亮度
 
-            public float lightIntensity = 8f;   // 落雷点光源强度
+            public float lightIntensity = 1f;   // 落雷点光源强度
 
             public float lightRange = 8000f;   // 落雷点光源照射半径(米)
+
+            public bool cloudLightingEnabled = false;
+            public float cloudLightIntensity = 8f;
+            public float cloudLightRange = 3000f;   // 云端光源半径(米)
+            public int cloudLightSamples = 8;       // 有限光程中点采样;反射最多 4 步
 
             public float thunderDelay = 0.05f;   // 秒;落雷后到雷声的延迟
 
@@ -256,9 +258,6 @@ namespace Volken.Weather
 
             /// <summary>near / far 雷声素材的分界距离(米):落点到观测者 ≤ 本值播 near,否则播 far。默认 2000 = 与 targetRange(3000)同量级,近/远两种都真能听到。</summary>
             public float thunderNearDistance = 2000f;
-
-            /// <summary>音速取不到时的兜底值(米/秒,默认 343):声速在"无物理大气"或"高度 ≥ 大气顶"时恒为 0,必须兜底而不是除 0。</summary>
-            public float thunderFallbackSpeedOfSound = 343f;
 
             /// <summary>雷击"声源距离"里"云底距离"的混合比例(0~1):雷声由整条放电通道(云底↔落点)发出,远处先听到声程最短的那段(通常是云底端),
             /// 所以真实延迟比"到落点距离 / 声速"短 —— 0 = 纯落点距离,1 = 取 min(落点, 云底)。</summary>
@@ -281,11 +280,14 @@ namespace Volken.Weather
                 flashIntensity = s.flashIntensity;
                 lightIntensity = s.lightIntensity;
                 lightRange = s.lightRange;
+                cloudLightingEnabled = s.cloudLightingEnabled;
+                cloudLightIntensity = s.cloudLightIntensity;
+                cloudLightRange = s.cloudLightRange;
+                cloudLightSamples = s.cloudLightSamples;
                 thunderDelay = s.thunderDelay;
                 thunderVolume = s.thunderVolume;
                 thunderDistanceAttenuation = s.thunderDistanceAttenuation;
                 thunderNearDistance = s.thunderNearDistance;
-                thunderFallbackSpeedOfSound = s.thunderFallbackSpeedOfSound;
                 thunderSourceBlend = s.thunderSourceBlend;
             }
         }
@@ -309,7 +311,7 @@ namespace Volken.Weather
         {
             return new VolkenWeatherConfig
             {
-                overall = new OverallSection { enabled = false },
+                overall = new OverallSection (),
                 rain = new RainSection(),
                 fog = new FogSection(),
                 lightning = new LightningSection(),
@@ -409,11 +411,13 @@ namespace Volken.Weather
             lightning.flashIntensity = Mathf.Max(0f, lightning.flashIntensity);
             lightning.lightIntensity = Mathf.Clamp(lightning.lightIntensity, 0f, 100f);
             lightning.lightRange = Mathf.Clamp(lightning.lightRange, 1f, 1e7f);
+            lightning.cloudLightIntensity = FogFinite(lightning.cloudLightIntensity, 8f, 0f, 100f);
+            lightning.cloudLightRange = FogFinite(lightning.cloudLightRange, 3000f, 1f, 30000f);
+            lightning.cloudLightSamples = Mathf.Clamp(lightning.cloudLightSamples, 2, 16);
             lightning.thunderDelay = Mathf.Clamp(lightning.thunderDelay, 0f, 10f);
             lightning.thunderVolume = Mathf.Clamp01(lightning.thunderVolume);
             lightning.thunderDistanceAttenuation = Mathf.Clamp01(lightning.thunderDistanceAttenuation);
             lightning.thunderNearDistance = Mathf.Max(1f, lightning.thunderNearDistance);
-            lightning.thunderFallbackSpeedOfSound = Mathf.Clamp(lightning.thunderFallbackSpeedOfSound, 1f, 5000f);
             lightning.thunderSourceBlend = Mathf.Clamp01(lightning.thunderSourceBlend);
         }
 

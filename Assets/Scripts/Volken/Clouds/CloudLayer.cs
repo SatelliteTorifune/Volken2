@@ -90,7 +90,6 @@ namespace Volken.Clouds
             mat.SetFloat("scatterStrength", config.scatterStrength * 1e-3f);
             mat.SetFloat("atmoBlendFactor", config.atmoBlendFactor * 4e-6f);
             mat.SetColor("cloudColor", config.cloudColor);
-            mat.SetFloat("depthThreshold", 0.01f * config.depthThreshold);
             mat.SetFloat("blueNoiseStrength", config.blueNoiseStrength);
             mat.SetFloat("historyBlend", config.historyBlend);
             mat.SetFloat("historyDepthThreshold", config.historyDepthThreshold);

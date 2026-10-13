@@ -169,7 +169,7 @@ namespace Volken.Clouds
                 layerStrengths = new Vector4(1.0f, 1.5f, 0f, 0f),
                 maxCloudHeight = 35000f, resolutionScale = 0.3f,
                 stepSize = 400f, stepSizeFalloff = 1.0f, numLightSamplePoints = 10,
-                blueNoiseStrength = 0f, depthThreshold = 0.5f,
+                blueNoiseStrength = 0f,
                 historyBlend = 0f, historyDepthThreshold = 0.05f,
                 scatterPower = 1.5f, multiScatterBlend = 0.1f, ambientScatterStrength = 0.3f,
                 customWavelengths = new Vector3(680f, 550f, 450f),

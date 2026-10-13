@@ -264,9 +264,6 @@ namespace Volken.Core
                 var main = VolumetricClouds.Instance.MainLayer;
                 if (main == null) return;
 
-                // Config Management (uses MainLayer)
-                CreateConfigManagementGroup(main);
-
                 CreateLayerGroup(main, "Main");
 
                 for (int i = 1; i < VolumetricClouds.Instance.layers.Count; i++)
@@ -274,7 +271,6 @@ namespace Volken.Core
                     var layer = VolumetricClouds.Instance.layers[i];
                     if (layer != null)
                     {
-                        CreateExtraConfigManagementGroup(layer, layer.displayName);
                         CreateExtraLayerGroup(layer, layer.displayName);
                     }
                 }
@@ -302,15 +298,13 @@ namespace Volken.Core
             }
         }
 
-        #region Config Management
+        #region Config Controls
 
-        private void CreateConfigManagementGroup(CloudLayer mainLayer)
+        private void AddConfigControls(GroupModel group, CloudLayer mainLayer)
         {
-            GroupModel configManagementGroup = new GroupModel(Locale.GetString("Volken.UI.ConfigManagement"));
-
             var currentConfigLabel = new TextModel(Locale.GetString("Volken.UI.CurrentConfig"),
                 () => mainLayer.currentConfigName);
-            configManagementGroup.Add(currentConfigLabel);
+            group.Add(currentConfigLabel);
 
             var saveCurrentButton = new TextButtonModel(Locale.GetString("Volken.UI.SaveCurrentConfig"),
                 (Action<TextButtonModel>)(b =>
@@ -330,7 +324,7 @@ namespace Volken.Core
                             Locale.GetString("Volken.UI.ErrorSavingConfig"));
                     }
                 }));
-            configManagementGroup.Add(saveCurrentButton);
+            group.Add(saveCurrentButton);
 
             var saveAsButton = new TextButtonModel(Locale.GetString("Volken.UI.SaveAsNewConfig"),
                 (Action<TextButtonModel>)(b =>
@@ -387,7 +381,7 @@ namespace Volken.Core
                         Mod.Log("Volken: Error creating save dialog: " + ex);
                     }
                 }));
-            configManagementGroup.Add(saveAsButton);
+            group.Add(saveAsButton);
 
             var loadConfigDropdown = new DropdownModel(
                 Locale.GetString("Volken.UI.LoadConfig"),
@@ -428,7 +422,7 @@ namespace Volken.Core
                     }
                 },
                 VolumetricClouds.Instance._availableConfigs);
-            configManagementGroup.Add(loadConfigDropdown);
+            group.Add(loadConfigDropdown);
 
             var resetToDefaultButton = new TextButtonModel(Locale.GetString("Volken.UI.ResetCurrentToDefault"),
                 (Action<TextButtonModel>)(b =>
@@ -447,7 +441,7 @@ namespace Volken.Core
                             Locale.GetString("Volken.UI.ErrorResettingConfig"));
                     }
                 }));
-            configManagementGroup.Add(resetToDefaultButton);
+            group.Add(resetToDefaultButton);
 
             var tryAnotherButton = new TextButtonModel(Locale.GetString("Volken.UI.TryAnotherConfig"),
                 (Action<TextButtonModel>)(b =>
@@ -466,14 +460,11 @@ namespace Volken.Core
                             Locale.GetString("Volken.UI.ErrorGettingConfig"));
                     }
                 }));
-            configManagementGroup.Add(tryAnotherButton);
-
-            inspectorModel.Add(configManagementGroup);
+            group.Add(tryAnotherButton);
         }
 
-        private void CreateExtraConfigManagementGroup(CloudLayer layer, string title)
+        private void AddExtraConfigControls(GroupModel group, CloudLayer layer, string title)
         {
-            GroupModel group = new GroupModel(string.Format(Locale.GetString("Volken.UI.ExtraLayerConfig"), title));
             string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
 
             var currentLabel = new TextModel(Locale.GetString("Volken.UI.CurrentConfig"),
@@ -561,8 +552,6 @@ namespace Volken.Core
                 },
                 VolumetricClouds.Instance._availableConfigs);
             group.Add(loadDropdown);
-
-            inspectorModel.Add(group);
         }
 
         #endregion
@@ -572,6 +561,7 @@ namespace Volken.Core
         private void CreateLayerGroup(CloudLayer layer, string title)
         {
             GroupModel group = new GroupModel(Locale.GetString("Volken.UI.Clouds") + " [" + title + "]");
+            AddConfigControls(group, layer);
             var cfg = layer.config;
 
             // Enable Toggle
@@ -780,6 +770,7 @@ namespace Volken.Core
         private void CreateExtraLayerGroup(CloudLayer layer, string title)
         {
             GroupModel group = new GroupModel(string.Format(Locale.GetString("Volken.UI.ExtraLayer"), title));
+            AddExtraConfigControls(group, layer, title);
             var cfg = layer.config;
 
             // Enable Toggle

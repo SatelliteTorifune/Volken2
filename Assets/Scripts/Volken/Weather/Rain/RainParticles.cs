@@ -39,7 +39,7 @@ namespace Volken.Weather
         public static float StretchLimit = 3.5f;     // SP2 _stretchLimit(拉伸上限)
         public static float InvFade = 1.0f;          // SP2 _InvFade(软粒子因子;0 = 关闭软粒子)
         public static float Falloff = 0.9f;          // SP2 _falloff(尾淡/软边)
-        public static float Brightness = 0f;         // 亮度增益(= shader _Emission)
+        public static float Brightness = 0f;         // 自发光(= shader _Emission);0 仅保留场景光照
         public static float Transparency = 0f;       // 0 = 原效果,1 = 完全透明;不参与雨声门控
         public static bool CollisionEnabled;
         public static int CollisionResolution = 256;
@@ -144,7 +144,7 @@ namespace Volken.Weather
         private const float ReadbackInterval = 10f;                  // 手动诊断请求最小间隔(秒)
         private const float DistInterval = 300f;                     // 落点分布诊断周期(秒;整块回读,一次性成本约 cap×16B)
         private const float RespawnPhaseRate = 20f;                  // 重生相位速率(/秒):_phase = floor(_time × 本值)
-        private const float ShaderBuild = 9f;                        // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
+        private const float ShaderBuild = 10f;                       // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
         private const float AssetRetryInterval = 5f;                 // 资产加载重试间隔(秒)
         private const int AssetMaxRetries = 6;                       // 资产加载最多重试次数(Awake 那一刻资源加载器可能还没就绪)
 
@@ -732,7 +732,6 @@ namespace Volken.Weather
             CeilingBand = Mathf.Clamp(cfg.ceilingBand, 0.02f, 1f);
             UnderwaterGate = cfg.underwaterGate;
             UnderwaterFade = Mathf.Clamp(cfg.underwaterFade, 0.1f, 50f);
-            RespawnMirror = cfg.respawnMirror;
             StreakLength = newLen;
             StreakThickness = newWidth;
             Enabled = cfg.enabled;
@@ -902,6 +901,20 @@ namespace Volken.Weather
         {
             return !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z)
                   || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));
+        }
+
+        /// <summary>雨的入射光;环境色转换一次,太阳受地平线、开关和行星遮挡约束,不设亮度下限。</summary>
+        internal static Vector4 EvaluateIncidentLight(Color ambient, Color sunColor, float sunIntensity,
+            bool sunEnabled, float sunElevation, bool linear)
+        {
+            Color light = FogLighting.WorkingColor(ambient, linear);
+            if (sunEnabled)
+            {
+                float daylight = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 0.1f, sunElevation));
+                float amount = Mathf.Max(0f, sunIntensity) * Mathf.Clamp01(sunColor.a) * daylight;
+                light += FogLighting.WorkingColor(sunColor, linear) * amount;
+            }
+            return new Vector4(light.r, light.g, light.b, 0f);
         }
 
         private void Awake()
@@ -1168,6 +1181,14 @@ namespace Volken.Weather
             _compute.SetInt("_amount", amount);
             _compute.Dispatch(_kernelFillArgs, Mathf.CeilToInt(amount / (float)ThreadGroupSize), 1, 1);
 
+            Light sun = StandaloneMode ? RenderSettings.sun : Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight;
+            Vector3 lightUp = craft.SeaUp.sqrMagnitude > 0.5f ? craft.SeaUp : -down;
+            Vector4 incidentLight = EvaluateIncidentLight(RenderSettings.ambientLight,
+                sun != null ? sun.color : Color.black, sun != null ? sun.intensity : 0f,
+                sun != null && sun.isActiveAndEnabled,
+                sun != null ? Vector3.Dot(lightUp, -sun.transform.forward) : 0f,
+                QualitySettings.activeColorSpace == ColorSpace.Linear);
+
             // 4) 间接绘制:十字四边形 × instanceCount,实例化 shader 按 SV_InstanceID 读位置
             if (_mat != null)
             {
@@ -1227,6 +1248,7 @@ namespace Volken.Weather
                 // 视觉透明度叠加环境淡出;环境诊断量保持供雨声独立读取。
                 _mat.SetFloat("_FadeAmount", gateFade * (1f - Mathf.Clamp01(Transparency)));
                 _mat.SetFloat("_Emission", Brightness);
+                _mat.SetVector("_RainIncidentLight", incidentLight);
             }
             var rp = new RenderParams(_mat)
             {

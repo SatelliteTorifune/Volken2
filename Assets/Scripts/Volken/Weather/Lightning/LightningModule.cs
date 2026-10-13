@@ -143,18 +143,19 @@ namespace Volken.Weather
             }
         }
 
-        /// 天气 / 行星变化时由 <c>VolkenWeather</c> 调用,按需起停雷暴循环。
-        public void SetActive(bool active)
+        /// <summary>启停雷暴;refreshSchedule 在已启用时只重排下一次落雷,保留在播闪电与雷声。</summary>
+        public void SetActive(bool active, bool refreshSchedule = false)
         {
             // 常驻宿主:不跑雷暴时把 Update 也停掉(本组件会长久留在宿主上,不停就在所有场景里每帧空转)
             enabled = active;
 
-            if (active == _running) return;
+            if (active == _running && !(active && refreshSchedule)) return;
             _running = active;
 
             if (active)
             {
                 if (!_assetsLoaded) LoadAudioAssets();
+                if (_stormRoutine != null) StopCoroutine(_stormRoutine);
                 _stormRoutine = StartCoroutine(StormLoop());
                 Mod.Log("Volken:LightningModule storm loop started");
             }
@@ -448,7 +449,7 @@ namespace Volken.Weather
             // bolt 是根物体,不挂到相机下:挂在 inactive 的相机会让层级里的 bolt 也 inactive,自毁链随之断掉 → 永久残留。
             var bolt = LightningBolt.Create(_boltShader, _flashShader, cam);
             bolt.flashIntensity = cfg.lightning.flashIntensity;
-            bolt.flashPlaneIntensity = cfg.lightning.flashIntensity * 0.4f;
+            bolt.flashPlaneIntensity = cfg.lightning.flashIntensity * 0.2f;
             bolt.arcs = cfg.lightning.arcs;
             bolt.inaccuracy = cfg.lightning.inaccuracy;
             bolt.splits = cfg.lightning.splits;
@@ -487,12 +488,13 @@ namespace Volken.Weather
         }
 
         /// 雷声全流程:① 声程 = 按 <c>thunderSourceBlend</c> 在"落点距离"与"云底距离"之间取(观测者 = 相机,AudioListener 所在处);
-        /// ② 声速取 <c>AtmosphereSample.SpeedOfSound</c>,真空 / 超大气顶时恒为 0 → **必须**回退 <c>thunderFallbackSpeedOfSound</c>;
+        /// ② 在同一观测位置查询游戏大气声速;无有效大气样本时不排雷声。
         /// ③ <c>strikeDist &lt;= thunderNearDistance</c> 选近雷素材,组为空时自动落到另一组。
         private void PlayThunderForStrike(Vector3 strikePos, Vector3 observerPos, float cloudBaseAsl,
                                           Vector3 radialUp, VolkenWeatherConfig cfg)
         {
             var lcfg = cfg.lightning;
+            if (!TryGetSpeedOfSound(observerPos, out float c, out float observerAsl)) return;
 
             // ---- ① 距离 / 声程 ----
             float strikeDist = Vector3.Distance(observerPos, strikePos);
@@ -503,23 +505,16 @@ namespace Volken.Weather
                 Vector3 toStrike = strikePos - observerPos;
                 float vert = Mathf.Abs(Vector3.Dot(toStrike, radialUp));   // 高度差
                 float horizSq = Mathf.Max(0f, toStrike.sqrMagnitude - vert * vert);
-                float obsAsl = VolkenWeather.Instance?.CameraAltitudeAsl ?? 0f;
-                float cloudBaseVert = Mathf.Abs(cloudBaseAsl - obsAsl);
+                float cloudBaseVert = Mathf.Abs(cloudBaseAsl - observerAsl);
                 float cloudBaseDist = Mathf.Sqrt(horizSq + cloudBaseVert * cloudBaseVert);
                 pathDist = Mathf.Lerp(strikeDist, Mathf.Min(strikeDist, cloudBaseDist),
                     Mathf.Clamp01(lcfg.thunderSourceBlend));
             }
 
-            // ---- ② 声速 ----
-            float c = GetSpeedOfSound();
-            if (c <= 1f)
-            {
-                c = Mathf.Max(1f, lcfg.thunderFallbackSpeedOfSound);
-            }
-
-            // ---- 延迟 / 音量(thunderDistanceAttenuation = 0 → 回到"恒 0.05s + 恒音量") ----
+            // thunderDistanceAttenuation = 0 使用配置的固定延迟与恒音量。
             float at = Mathf.Clamp01(lcfg.thunderDistanceAttenuation);
-            float delay = Mathf.Lerp(lcfg.thunderDelay, pathDist / c, at);
+            float delay = at > 0f ? Mathf.Lerp(lcfg.thunderDelay, pathDist / c, at) : lcfg.thunderDelay;
+            if (float.IsNaN(delay) || float.IsInfinity(delay)) return;
             float volume = lcfg.thunderVolume * Mathf.Lerp(1f, DistanceVolume(strikeDist, lcfg.thunderNearDistance), at);
 
             // ---- ③ near / far ----
@@ -528,20 +523,31 @@ namespace Volken.Weather
             PlayThunder(strikePos, volume, delay, near, strikeDist, pathDist, c);
         }
 
-        /// 观测者(飞船)当前所在处的声速(m/s);取不到 / 无物理大气 / 超出大气顶 → 返回 0(调用方兜底);用 <c>AtmosphereSample.SpeedOfSound</c>(与 HUD 同源,**不要自己按温度算**)。
-        private static float GetSpeedOfSound()
+        /// <summary>按相机观测点海拔查询游戏大气;声速为有限正数时才允许排程,不使用飞船样本或人为声速。</summary>
+        private static bool TryGetSpeedOfSound(Vector3 observerPos, out float speedOfSound, out float altitudeAsl)
         {
+            speedOfSound = 0f;
+            altitudeAsl = 0f;
             try
             {
-                var flightData = Game.Instance?.FlightScene?.CraftNode?.CraftScript?.FlightData;
-                if (flightData == null) return 0f;
+                var craftNode = Game.Instance?.FlightScene?.CraftNode;
+                var planetData = craftNode?.Parent?.PlanetData;
+                var atmosphere = planetData?.AtmosphereData;
+                if (craftNode?.ReferenceFrame == null || atmosphere == null || !atmosphere.HasPhysicsAtmosphere) return false;
 
-                // struct(按值返回),没有空引用风险;无物理大气 / 高度 ≥ 大气顶时保持默认 0。
-                return flightData.AtmosphereSample.SpeedOfSound;
+                Vector3 center = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
+                double altitude = ((Vector3d)(observerPos - center)).magnitude - planetData.Radius;
+                if (double.IsNaN(altitude) || double.IsInfinity(altitude)) return false;
+
+                float value = atmosphere.SampleAltitude(altitude).SpeedOfSound;
+                if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f) return false;
+                speedOfSound = value;
+                altitudeAsl = (float)altitude;
+                return true;
             }
             catch
             {
-                return 0f;
+                return false;
             }
         }
 

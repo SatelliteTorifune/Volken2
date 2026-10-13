@@ -14,7 +14,7 @@ namespace Volken.Weather
         public Camera targetCamera;   // 每道闪电各持一个:改成 static 会在多相机(PIP)下互相覆盖,闪光朝向会串
 
         public float flashIntensity = 50f;
-        public float flashPlaneIntensity = 20f;
+        public float flashPlaneIntensity = 10f;
         public int arcs = 20;
         public float arcLength = 1f;
         public float arcVariation = 1f;
@@ -22,7 +22,7 @@ namespace Volken.Weather
         public int splits = 4;
         public float width = 10f;
         public float baseIntensity = 1f;
-        public float lightIntensity = 8f;
+        public float lightIntensity = 1f;
         public float lightRange = 8000f;
 
         /// <summary>落点回调;雷声距离由调用方按 Target 与观测者位置计算。</summary>
@@ -73,6 +73,31 @@ namespace Volken.Weather
         }
 
         public static int ActiveCount => ActiveBolts.Count;
+
+        // 只选当前参考系内最强的亮脉冲;所有相机消费同一光源,不增加 Unity Light。
+        public static bool TryGetCloudLight(float intensity, float range, out Vector4 positionRange, out Vector4 colorIntensity)
+        {
+            positionRange = colorIntensity = Vector4.zero;
+            if (range <= 0f || float.IsNaN(range) || float.IsInfinity(range)) return false;
+            float strongest = 0f;
+            for (int i = ActiveBolts.Count - 1; i >= 0; i--)
+            {
+                var bolt = ActiveBolts[i];
+                if (bolt == null || !bolt.isActiveAndEnabled || bolt._released ||
+                    bolt._bornFrameIndex != FrameIndex || bolt._phase != Phase.Flash ||
+                    bolt._flashState != 1 || bolt._flashSuppressed) continue;
+                float energy = intensity * bolt.flashIntensity / 50f;
+                if (float.IsNaN(energy) || float.IsInfinity(energy)) continue;
+                energy = Mathf.Min(energy, 1000f);
+                if (energy <= strongest) continue;
+                Vector3 pos = bolt.transform.position;
+                if (float.IsNaN(pos.sqrMagnitude) || float.IsInfinity(pos.sqrMagnitude)) continue;
+                strongest = energy;
+                positionRange = new Vector4(pos.x, pos.y, pos.z, range);
+                colorIntensity = new Vector4(0.85f, 0.9f, 1f, strongest);
+            }
+            return strongest > 0f;
+        }
 
         private enum Phase
         {
@@ -319,6 +344,8 @@ namespace Volken.Weather
             _begun = true;
 
             _light.enabled = false;
+            _light.intensity = lightIntensity;
+            _light.range = lightRange;
             _line.widthMultiplier = width;
             _boltMat.SetFloat("_Intensity", baseIntensity);
             _line.positionCount = 2;
@@ -391,9 +418,9 @@ namespace Volken.Weather
             {
                 _flashTimestamps[i * 2] = t;                                        // 亮
                 t += UnityEngine.Random.Range(0.025f, 0.035f);
+                _flashTimestamps[i * 2 + 1] = t;                                    // 灭
                 if (i < FlashCount - 1)
                 {
-                    _flashTimestamps[i * 2 + 1] = t;                                // 灭
                     t += UnityEngine.Random.Range(0.025f, 0.035f);
                 }
             }
@@ -401,6 +428,7 @@ namespace Volken.Weather
             _phase = Phase.Flash;
             _phaseElapsed = 0f;
             _flashState = -1;
+            StepFlash(0f);
         }
 
         /// <summary>按累计时间重算亮灭状态,允许一帧跨过多个时间点。</summary>
@@ -423,8 +451,7 @@ namespace Volken.Weather
                 _light.enabled = on;
             }
 
-            float flashTotal = _flashTimestamps[_flashTimestamps.Length - 1] +
-                               UnityEngine.Random.Range(0.025f, 0.035f);
+            float flashTotal = _flashTimestamps[_flashTimestamps.Length - 1];
             if (_phaseElapsed >= flashTotal)
             {
                 if (_flashState != 0)
@@ -465,9 +492,10 @@ namespace Volken.Weather
                     $"(landing=({Target.x:F0},{Target.y:F0},{Target.z:F0}) camDist={camDist:F0}m phaseElapsed={_phaseElapsed:F3}s)");
         }
 
-        /// <summary>无条件清除暂停抑制,使下一帧按时间表重算亮灭。</summary>
+        /// <summary>恢复后按冻结的时间表重算亮灭。</summary>
         private void EndFlashSuppression()
         {
+            if (!_flashSuppressed) return;
             _flashSuppressed = false;
             _flashState = -1;
         }

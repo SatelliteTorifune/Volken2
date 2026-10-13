@@ -32,7 +32,7 @@
     <s id="Volken.UI.RainEdgeFade">Доля затухания у границы</s>
     <s id="Volken.UI.RainSoftParticles">Сила смягчения частиц</s>
     <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи</s>
-    <s id="Volken.UI.RainBrightness">Усиление яркости</s>
+    <s id="Volken.UI.RainBrightness">Самосвечение капель</s>
     <s id="Volken.UI.RainTransparency">Прозрачность дождя</s>
     <s id="Volken.UI.RainCollision">Столкновения капель</s>
     <s id="Volken.UI.RainCollisionHighPrecision">Высокая точность столкновений</s>
@@ -48,7 +48,6 @@
     <s id="Volken.UI.RainCeilingBand">Доля затухания у предела высоты</s>
     <s id="Volken.UI.RainUnderwaterGate">Скрывать дождь под водой</s>
     <s id="Volken.UI.RainUnderwaterFade">Глубина затухания под водой (м)</s>
-    <s id="Volken.UI.RainRespawnMirror">Зеркальное перерождение</s>
     <s id="Volken.UI.RainAmount">Количество частиц</s>
     <s id="Volken.UI.RainDomainRadius">Радиус области (м)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Адаптивный радиус области</s>
@@ -84,16 +83,18 @@
     <s id="Volken.UI.LightningFlashIntensity">Яркость вспышки</s>
     <s id="Volken.UI.LightningLightIntensity">Яркость света удара</s>
     <s id="Volken.UI.LightningLightRange">Радиус света удара (м)</s>
+    <s id="Volken.UI.LightningCloudLightingEnabled">Молния освещает облака</s>
+    <s id="Volken.UI.LightningCloudLightIntensity">Яркость света в облаках</s>
+    <s id="Volken.UI.LightningCloudLightRange">Радиус света в облаках (м)</s>
+    <s id="Volken.UI.LightningCloudLightSamples">Число выборок света в облаках</s>
     <s id="Volken.UI.ThunderVolume">Громкость грома</s>
     <s id="Volken.UI.ThunderDelay">Задержка грома на нулевой дистанции (с)</s>
     <s id="Volken.UI.ThunderDistanceAttenuation">Гром: задержка по скорости звука / затухание</s>
     <s id="Volken.UI.ThunderNearDistance">Порог близкого/дальнего грома (м)</s>
-    <s id="Volken.UI.ThunderFallbackSpeedOfSound">Резервная скорость звука (м/с)</s>
     <s id="Volken.UI.ThunderSourceBlend">Источник грома: примесь нижней кромки облаков</s>
 
     
     <!-- Group Names -->
-    <s id="Volken.UI.ConfigManagement">Редактирование Конфигурации</s>
     <s id="Volken.UI.Clouds">Облака</s>
     <s id="Volken.UI.CloudContainer">Контейнер Облака</s>
     <s id="Volken.UI.CloudQuality">Качество Облаков</s>
@@ -197,7 +198,6 @@
     <!-- Extra Layer UI -->
     <s id="Volken.UI.ExtraLayer">Слой-Дополнение: {0}</s>
     <s id="Volken.UI.ExtraLayerEnabled">{0} ВКЛ</s>
-    <s id="Volken.UI.ExtraLayerConfig">{0} Конфиг</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} Сохранить Текущее</s>
     <s id="Volken.UI.ExtraLayerSaveAs">Сохранить {0} Как...</s>
     <s id="Volken.UI.ExtraLayerLoadPreset">{0} Загрузить Пресет</s>

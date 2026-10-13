@@ -131,13 +131,6 @@ namespace Volken.Weather
                 },
                 weather.AvailableConfigs));
 
-            // 重置:只改内存(需再点"保存"才落盘)
-            group.Add(new TextButtonModel(Locale.GetString("Volken.UI.ResetCurrentToDefault"), _ =>
-            {
-                weather.ResetCurrentConfigToDefault();
-                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                    Locale.GetString("Volken.UI.WeatherResetToDefault"));
-            }));
 
         }
         // 雨(实时控制)
@@ -238,10 +231,7 @@ namespace Volken.Weather
             AddSlider(group, "Volken.UI.RainSplashDensity",
                 () => weather.Config?.rain?.splashDensity ?? 0.35f,
                 v => ApplyRain(c => c.rain.splashDensity = v), 0f, 1f, 2);
-
-            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainRespawnMirror"),
-                () => weather.Config?.rain?.respawnMirror ?? true,
-                v => ApplyRain(c => c.rain.respawnMirror = v)));
+            
 
             // 海拔闸门(必需:JNO 镜头能缩到整颗星球,不限制会在太空下雨)
             AddSlider(group, "Volken.UI.RainCeilingAltitude",
@@ -407,11 +397,23 @@ namespace Volken.Weather
                 () => weather.Config?.lightning?.flashIntensity ?? 50f,
                 v => Set(c => c.lightning.flashIntensity = v), 1f, 200f, 0);
             AddSlider(group, "Volken.UI.LightningLightIntensity",
-                () => weather.Config?.lightning?.lightIntensity ?? 8f,
+                () => weather.Config?.lightning?.lightIntensity ?? 1f,
                 v => Set(c => c.lightning.lightIntensity = v), 0f, 50f, 1);
             AddSlider(group, "Volken.UI.LightningLightRange",
                 () => weather.Config?.lightning?.lightRange ?? 8000f,
                 v => Set(c => c.lightning.lightRange = v), 100f, 50000f, 0);
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.LightningCloudLightingEnabled"),
+                () => weather.Config?.lightning?.cloudLightingEnabled ?? false,
+                v => Set(c => c.lightning.cloudLightingEnabled = v)));
+            AddSlider(group, "Volken.UI.LightningCloudLightIntensity",
+                () => weather.Config?.lightning?.cloudLightIntensity ?? 8f,
+                v => Set(c => c.lightning.cloudLightIntensity = v), 0f, 100f, 1);
+            AddSlider(group, "Volken.UI.LightningCloudLightRange",
+                () => weather.Config?.lightning?.cloudLightRange ?? 3000f,
+                v => Set(c => c.lightning.cloudLightRange = v), 100f, 30000f, 0);
+            AddSlider(group, "Volken.UI.LightningCloudLightSamples",
+                () => weather.Config?.lightning?.cloudLightSamples ?? 8,
+                v => Set(c => c.lightning.cloudLightSamples = Mathf.RoundToInt(v)), 2f, 16f, 0, true);
             AddSlider(group, "Volken.UI.ThunderVolume",
                 () => weather.Config?.lightning?.thunderVolume ?? 0.65f,
                 v => Set(c => c.lightning.thunderVolume = v), 0f, 1f, 2);
@@ -427,9 +429,6 @@ namespace Volken.Weather
             AddSlider(group, "Volken.UI.ThunderNearDistance",
                 () => weather.Config?.lightning?.thunderNearDistance ?? 2000f,
                 v => Set(c => c.lightning.thunderNearDistance = v), 100f, 20000f, 0);
-            AddSlider(group, "Volken.UI.ThunderFallbackSpeedOfSound",
-                () => weather.Config?.lightning?.thunderFallbackSpeedOfSound ?? 343f,
-                v => Set(c => c.lightning.thunderFallbackSpeedOfSound = v), 50f, 1500f, 0);
             AddSlider(group, "Volken.UI.ThunderSourceBlend",
                 () => weather.Config?.lightning?.thunderSourceBlend ?? 0.5f,
                 v => Set(c => c.lightning.thunderSourceBlend = v), 0f, 1f, 2);

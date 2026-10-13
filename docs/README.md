@@ -6,10 +6,15 @@
 
 ## 一、当前推进
 
-TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§13。旧体积密度与轨道宏观覆盖保持,§13 修正单段云光积分并在输出端重建远景颜色 / 透射率;185 项 Unity / GPU 回归通过,最新 `build=9 shader=8`,待代码 / shader 的游戏画质与性能验收。
+TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§16。用户复测 §14 仍卡顿,§15 补雷光缓存 / 独立通道及微小重定位过滤;§16 保留体积夜光,§16.5 仅回退 2D 轨道环境照明。当前 `build=12 shader=12`,Linear 356 项独立 Unity / GPU 回归通过;此前各 228 / 150 / 119 / 185 项为历史结果,游戏画面与镜头表现待复测。
+
+夜间云不可见:同文 §16 的体积 / 反射环境光保留,§16.5 按用户要求仅回退 2D 轨道夜光,夜侧恢复旧行为。§16.4 游戏反馈确认近云可见,Additive 星空穿云、环境遮蔽与云形真实性仍待处理,昼夜画质未验收。
 
 | 文档 | 状态 / 下一步 |
 |---|---|
+| [天气预设运行态同步](weather-preset-runtime-sync-2026-10-14.md) | ✅ 加载预设立即应用雨参数 / 开关,雷电刷新下一次落雷排程;C# 编译与 36 项独立 Unity 集成检查通过,待游戏复测 |
+| [雨滴与水花自发光修复](rain-lighting-fix-2026-10-14.md) | ✅ §5 已撤回导致水花压暗的修改,恢复原显示路径;雨滴修复保留,shader=10,C# 编译及 Gamma / Linear 各 115 项检查通过,待游戏复测 |
+| [闪电照亮体积云](lightning-cloud-lighting-2026-10-13.md) | ✅ §8 按用户复测改为固定世界格点遮光、独立本帧 HDR 雷光,保留基础云历史,并降低落点球形闪光;C# 编译及最新 150 项检查通过,待游戏复测 |
 | [雨滴水面溅射修复](rain-water-splash-fix-2026-10-09.md) | 🚧 水面专用涟漪 / 竖直飞溅 / 场景深度遮挡已接入;53 项独立 GPU 回归通过,待用户打包与游戏水面验收 |
 | [雾重做实施方案](fog-implementation-plan-2026-10-09.md) | 🚧 两种雾代码 / 面板 / 日志已接入原工程;独立 GPU 验证通过,待游戏画质 / 水面 / PIP / 性能验收;UI 修复见 §10;§12 已取得游戏帧时间,薄雾 / 体积资源均生效,持续分配稳定;CPU / GPU 主瓶颈尚未分离,已修正调参额外刷新;§13 夜间光照修正及 161 项验证通过,待游戏验收;用户指定本轮不负责打包 |
 
@@ -33,7 +38,7 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 | 文档 | 已落地结论 / 保留价值 |
 |---|---|
 | [雨滴方向修复与诊断](archive/rain-direction-diagnosis-2026-10-11.md) | 方向修复已获用户视觉反馈与游戏日志确认,34 组预期角差最大 0.17°;本次诊断 / 周期回读及临时日志已清理,修复保留;移动参考帧 / 非零变体边界仍待处理 |
-| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;§6 移除天气总开关、合并配置条目到天气根组;游戏视觉待验收 |
+| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;§6 移除天气总开关、合并配置条目到天气根组;§7 云配置操作并入各自云层根组;游戏视觉待验收 |
 | [雨重做](archive/sp2-rain-particledomain-port-2026-09-28.md) | 雨视觉 / 雨声 / 透明度 / GPU 碰撞与水花已落地;无标签 shader 捕获修复获用户真机确认,135 项 GPU 验证通过;性能和专项矩阵未排期 |
 | [天气与云解耦](archive/weather-cloud-decoupling-2026-10-01.md) | 生命周期与高度带去重已落地;A2 / D 未排期,回归待验证 |
 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) | 常驻停表、相机扫描与渲染集合优化已落地;待回归 |
@@ -41,6 +46,7 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 | [预设下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) | 选项过期重建与缺失文件护栏已落地;待回归 |
 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) | 每相机实例和主视图诊断量归属已落地;待 PIP 回归 |
 | [雷声真实化](archive/thunder-realism-2026-09-28.md) | 距离 / 声速 / near-far 与残留、紫红修复;当前部署和完整听感回归未确认 |
+| [雷声兜底声速删除 / 配置审查](archive/thunder-fallback-removal-2026-10-14.md) | ✅ 已删配置 / UI 并统一相机大气取样;真实引用编译和 63 项核心检查通过,游戏听感待验收;其他候选只审查 |
 | [闪电固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) | 最终根因是分叉第 0 点未赋值;已补 `SetPosition(0, from)`,待回归 |
 | [雷电海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) | 上限与手动触发反馈已落地;待回归 |
 | [天气母计划](archive/sp2-weather-port-2026-09-27.md) | 历史方案、反编译和素材底账;后续雨计划与解耦记录已接管当前工作 |
@@ -78,11 +84,20 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 | 3 | N/S 风未纳入云空间重投影;[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §5、§12 | 未修;另有双缓冲与非新采样硬回退缺口 |
 | 4 | `low/mid/highAltitudeThreshold` 已删除,旧“不可删”告警错误;[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8 | ✅ 已更正;旧 XML 未知节点由 `XmlSerializer` 忽略 |
 | 5 | 自适应雨域变大但粒子数固定,密度变稀;`RainParticles.OnPreCull` | 已知代价;不恢复渲染回调内自动重建 GPU buffer |
-| 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[帧率清单](proposals/frame-rate-optimization-audit-2026-10-08.md) §4 L1 | 源码已确认,尚未修复;未做运行时复验 |
+| 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[雷光实施](lightning-cloud-lighting-2026-10-13.md) §6 | ✅ 已改为动画开始时应用配置;同步修复闪光时间表末项,本机实际源码验证通过,待游戏验收 |
 | 7 | 夜间雾偏亮:环境光强制下限、颜色空间处理与太阳状态消费缺口;[雾记录](fog-implementation-plan-2026-10-09.md) §13 | ✅ 源码已修正,161 项独立验证通过;待游戏昼夜画面 / 光照日志验收 |
-| 8 | TSS 丢云、轨道深度 / 生命周期 / 合成、镜头抖动与颗粒;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§13 | ✅ 源码修复及 185 项 Unity / GPU 回归通过;最新 build=9 / shader=8 补单段积分与远景输出重建,待游戏画质 / 性能验收;底层周期仍在,新曲线与反平铺未实施 |
+| 8 | TSS 丢云、轨道深度 / 生命周期 / 合成、镜头抖动与颗粒;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§16 | ✅ §14 游戏复测仍卡顿;§15 补雷光缓存 / 历史隔离与微小重定位过滤;§16.5 轨道回退与既有回归 Linear 356 项通过,待游戏复测;底层周期仍在,新曲线与反平铺未实施 |
+| 9 | 夜间云 RGB 为零及 Additive 不遮暗背景;修复后夜云仍有灰片 / 灰团与星空穿云;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §16 | ✅ 近云环境光已有游戏可见性证据;§16.5 仅回退 2D 轨道夜光,当前 build=12 / shader=12;§16.4 的体积合成 / 环境遮蔽 / 云形剩余问题未修,画质未验收 |
+| 10 | 雨滴自发光 0 仍亮;首轮扩展水花光照后用户反馈溅落消失;[雨光照修复](rain-lighting-fix-2026-10-14.md) §1~§5 | ✅ 雨滴修复保留,水花已恢复原显示路径;C# 编译及 Gamma / Linear 各 115 项检查通过,待游戏验收 |
+| 11 | 雷声声程按相机、声速按飞船,缺失值与真空均使用人为声速;[删除记录](archive/thunder-fallback-removal-2026-10-14.md) §5 | ✅ 兜底配置 / UI 已删,统一观察者游戏大气样本;真实引用编译与 63 项核心检查通过,游戏听感待验收 |
+| 12 | 云 depthThreshold 无效果消费者、Overall 仅兼容、镜像重生对照模式仍在面板、nearThreshold 近景经验保护;[配置审查](archive/thunder-fallback-removal-2026-10-14.md) §6 | 已核对消费者,本轮只审查;删除 / 替换尚未实施 |
+| 13 | 切换天气预设后雨保留旧开关 / 参数,雷保留旧等待间隔;[运行态同步](weather-preset-runtime-sync-2026-10-14.md) §1~§3 | ✅ 雨加载时套参、雷显式重排已接入,36 项集成检查通过,待游戏验收 |
 
 ## 四之三、待办清单(backlog)
+
+天气预设切换后的雨 / 雷启停、参数、排程与 PIP 验收见 [运行态同步](weather-preset-runtime-sync-2026-10-14.md) §4。
+
+雨滴 / 水花昼夜光照与自发光验收见 [光照修复](rain-lighting-fix-2026-10-14.md) §4;不并入原水花可见性确认范围。
 
 待办只保留动作与来源;已落地修复台账合并在 §三,具体判据留在主题文档。
 
@@ -98,7 +113,7 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 | PIP | 相机有雨,主视图雨声不被覆盖,参数同步 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §4 |
 | 场景 / 解耦 | 非飞行停表、离场收雨雷、环境抑制不改用户开关 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §4、[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §6 |
 | 闪电 | 分叉起点、暂停 / 重定位、海拔上限与开发 API 反馈 | [固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) §5、[海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) §4 |
-| 雷声 / 资源 | 已部署包素材加载、声速延迟、near-far 听感和多声部 | [雷声](archive/thunder-realism-2026-09-28.md) §5.3、§5.4、§6 |
+| 雷声 / 资源 | 声速延迟、相机 / 飞船高度分离、near-far 听感、多声部与素材加载 | [兜底删除](archive/thunder-fallback-removal-2026-10-14.md) §4~§5、[原雷声](archive/thunder-realism-2026-09-28.md) §5.4、§6 |
 
 **资源核对(2026-10-09)**:`_otherAssets` 共 **40** 条,GUID 全可解析,水面溅射 shader 引用唯一;含 **6 条雨声 + 9 条雷声**。此前三个碰撞 / 水花资源已核实入包并获用户确认;雾补回引用的证据见[雾记录](fog-implementation-plan-2026-10-09.md) §11。当前新增水面 shader 仅已登记,待打包验收,见[水面修复](rain-water-splash-fix-2026-10-09.md) §3、§4。
 
@@ -106,6 +121,8 @@ TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-
 
 - 解耦 A2 相机海拔去重、D 行星映射双写者:[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8;F 的全局天气值通道已被后续决策撤销。
 - 性能工作统一从 [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) 选项与测量;未实施,拖 UI 的 A 组维持不做。
+- 夜云真实性:核对透射率 / 星空合成,评估环境入射遮蔽与银边解耦,再核对独立月光;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §16.4。云形 / 轨道衔接按既有提案顺序,尚未实施。
+- 雷声兜底已删:[实施 / 待验收](archive/thunder-fallback-removal-2026-10-14.md) §4~§5;近远雷、相机 / 飞船高度分离、暂停与游戏听感待复测。§6 的其他配置候选尚未处理。
 - 未启用星环补丁仍保留,`DepthCapture` 等用户指定项已删除:[场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §5。
 - 注释继续按 §五.10 维护;雨 / 闪电的指定历史与过期描述已清理,旧占比不当作当前实测。
 - 雾的两种效果已进入 [游戏适配 / 验证阶段](fog-implementation-plan-2026-10-09.md);雨图集、落雷贴地形、联机表现、机体反射探头仍未排期。

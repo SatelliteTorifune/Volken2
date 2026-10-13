@@ -130,7 +130,6 @@ namespace Volken.Clouds
         public int numLightSamplePoints;
         public float lightMarchDistance = 12000f;   // 光照步进总距离(米);lightStepSize = lightMarchDistance / numLightSamplePoints
         public float blueNoiseStrength;
-        public float depthThreshold;
         public float historyBlend;
         public float historyDepthThreshold = 0.05f;
         public float scatterPower = 1.5f;
@@ -308,7 +307,6 @@ namespace Volken.Clouds
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
                 blueNoiseStrength = 0f,
-                depthThreshold = 1f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
                 scatterPower = 1.04046762f,
@@ -372,7 +370,6 @@ namespace Volken.Clouds
                 numLightSamplePoints = 5,
                 lightMarchDistance = 12000f,
                 blueNoiseStrength = 0f,
-                depthThreshold = 0.12f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
                 scatterPower = 2.5f,
@@ -392,12 +389,12 @@ namespace Volken.Clouds
                 stockAlignAngleOffset = 0f,
                 stockMapLayer = 3,
                 stockDensityScale = 1f,
-                useOrbitClouds = false,
+                useOrbitClouds = true,
                 orbitTransitionStartAltitude = 25000f,
                 orbitTransitionEndAltitude = 100000f,
                 orbitSampleAltitude = 0f,
                 orbitDensityBoost = 1f,
-                orbitBrightness = 0.7f,
+                orbitBrightness = 0f,
                 orbitReliefStrength = 1.5f,
                 orbitDetailStrength = 0.4f,
                 orbitResolutionScale = 0.5f,
@@ -434,7 +431,6 @@ namespace Volken.Clouds
             this.numLightSamplePoints = source.numLightSamplePoints;
             this.lightMarchDistance = source.lightMarchDistance;
             this.blueNoiseStrength = source.blueNoiseStrength;
-            this.depthThreshold = source.depthThreshold;
             this.historyBlend = source.historyBlend;
             this.historyDepthThreshold = source.historyDepthThreshold;
             this.scatterPower = source.scatterPower;

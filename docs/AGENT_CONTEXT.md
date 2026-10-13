@@ -5,16 +5,22 @@
 
 ## 0. 定位与当前状态
 
+- [天气预设运行态同步](weather-preset-runtime-sync-2026-10-14.md):`ApplyPreset` 和默认重置立即应用雨参数 / 开关,雷电显式重排下一次落雷,保留在播闪电 / 雷声;加载事件在同步后通知。普通状态刷新不重排,未新增每帧套参 / 字段 / shader。C# 编译和 36 项独立 Unity 集成检查通过,待游戏复测。
+
+- [雨滴与水花自发光修复](rain-lighting-fix-2026-10-14.md) §5:首轮扩展水花光照后用户反馈溅落消失,已撤回两个水花 shader 的入射光乘法及驱动新增参数,恢复原显示路径。雨滴保留环境 / 太阳光与独立自发光,`brightness=0` 无独立发光;三语标签、旧 XML 字段与 shader=10 保留。C# 编译及 Gamma / Linear 各 115 项专项检查通过,待游戏验收。
+
+- [闪电照亮体积云](lightning-cloud-lighting-2026-10-13.md) §8:2026-10-13 用户复测仍卡顿,已改固定 33³ 世界格点的有限光程遮光,默认 8 步 / 反射最多 4 步。基础云颜色 / 历史保持 ARGB32,雷光另写低清 HDR 后合成;撤回光域 RGB 历史拒绝。过滤微小重定位,落点球形闪光减亮。默认关闭;最新 150 项独立检查及 C# 编译通过,待游戏复测;纯轨道云 / 跨层遮挡未接入。
 - [雨滴方向修复](archive/rain-direction-diagnosis-2026-10-11.md) §6~§8:世界 Y 速度绝对值反射已去除;用户反馈与 `build=2` 游戏日志确认本次场景通过,34 组预期角差最大 0.17°。已按用户要求移除本次诊断代码 / 周期回读及专用临时日志并归档;旧 `RainDirection` 字段仅是历史证据。移动参考帧补偿及非零变体缩放缺口仍存在。
-- [云可见性与噪声修复](cloud-visibility-diagnosis-2026-10-10.md) §5~§13:§12 恢复旧体积 Worley / mip 0,轨道改用现有宏观分布;用户确认有改善后,§13 针对纯体积颗粒补单段 Beer 积分及输出端颜色 / 透射率重建,不改变密度场。185 项 Unity / GPU 回归通过;最新 `build=9 shader=8`,正常 `shapeNoise=VolkenWorleyFBM noiseMips=8/8`,轨道深度仍为 scene。旧体积 RGB 等价只适用于 build=8,新积分会降低偏大的云光;待游戏画质 / 性能复核,未打包。
+- [云可见性与噪声修复](cloud-visibility-diagnosis-2026-10-10.md) §5~§16:旧 Worley / mip 0、轨道宏观覆盖、单段积分 / 输出重建及原始 MV / 上一相机云面匹配保留。§14 用户复测仍卡顿,§15 补雷光缓存、历史隔离与微小重定位过滤,§16 补体积夜光。§16.5 仅回退 2D 轨道环境照明,Linear 356 项回归通过;此前各 228 / 150 / 119 / 185 项为历史结果。当前 `build=12 shader=12 lightning=2`,正常 `shapeNoise=VolkenWorleyFBM noiseMips=8/8`,待游戏复测。
+- 同文 §16:2026-10-14 体积 / 反射夜云保留游戏环境 RGB 与有效段积分,§16.5 按用户要求仅恢复轨道壳面旧太阳门控,深夜 RGB=0、白天旧公式与覆盖保持。密度 / 透射率、配置及 Additive 不变。§16.4 游戏反馈只确认近云可见;体积星空穿云、环境遮蔽、银边耦合与云形真实性仍未修复,独立月光未接入,轨道回退 / 昼夜画质待游戏验收。
 - SimpleRockets 2 / Juno: New Origins 的 `Volken` 模组;Unity **2022.3.62f3**,内置渲染管线 **BIRP**。
 - 云包含 raymarch、时序超采样、自带云分布、轨道云、水面反射;天气已有**雨视觉、雨声、闪电、雷声**。雾已有**径向薄雾、流动体积雾、三语面板和详细日志**;[雾记录](fog-implementation-plan-2026-10-09.md) §9 为实现状态,§10 为 UI 修复,§11 为薄雾查询纹理,§12 为游戏帧时间 / 调参解耦修正;两种雾资源运行正常,大幅掉帧主因仍未分离,游戏水面 / 原生透明 / 反射与性能待验收。§13 夜间光照已修正,161 项独立验证通过;`code=3 shader=3`,新增 `Fog lighting` 日志,待游戏昼夜验收。
 - 原雨实现已归档,见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10;自适应域、雨声、多相机、整数 hash、透明度与碰撞已落地。2026-10-09 用户反馈水面无水花,后续 [水面溅射修复](rain-water-splash-fix-2026-10-09.md) 已接入独立 shader / 竖直飞溅 / 场景深度遮挡,53 项 GPU 回归通过,待打包与真机确认。
-- [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) 已移除天气 / 云诊断控件与状态文字,当前设置页保留开发日志 / Profiler 开关;§4 已按截图精简三语参数标签,只留名称和单位。§6 已移除天气总开关和配置管理子组,配置操作直接并入天气根组;各效果独立启停,旧 Overall 字段仅作 XML 兼容。后台日志保留,游戏视觉待验收。
+- [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) 已移除天气 / 云诊断控件与状态文字,当前设置页保留开发日志 / Profiler 开关;§4 已按截图精简三语参数标签,只留名称和单位。§6 已移除天气总开关和配置管理子组,配置操作直接并入天气根组;各效果独立启停,旧 Overall 字段仅作 XML 兼容。§7 已合并主 / 附加云层配置操作到各自云层根组,每层仅一个顶层组。后台日志保留,游戏视觉待验收。
 - 场景门控、预设下拉、雷电修复等记录已归档;**归档不代表真机验收通过**。待验证项目见 README §四之三。
 - 未排期方案在 [proposals/](proposals/)。天气母计划是历史底账,旧状态机、命令与路径不能当作当前接口。
 - [过渡曲线与反平铺提案](proposals/orbit-transition-antitiling-plan-2026-10-11.md):用户确定先改 2D–3D 过渡、后引入共用反平铺;适配不同类型行星,全球贴图相关配置暂缓。曲线候选保持互补权重,反平铺同步体积密度 / 反射 / 可选轨道 albedo;宏观覆盖继续读现有分布,尚未实施。[KSA 复核](proposals/ksa-orbit-cloud-reference-audit-2026-10-11.md) 保留源码证据,原全球贴图优先建议已被接管;同源单切片不保证体积积分形状一致。
-- 当前性能待办见 [帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md);按 `5e4bb88` 源码核对,未实施 / 未测耗时。雷光配置应用顺序缺陷已登记 README,不要把字段已赋值当作真实 Light 已更新。
+- 当前性能待办见 [帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md);原清单按 `5e4bb88` 核对,未实施 / 未测耗时。2026-10-13 已在雷光实施中修复配置应用顺序与闪光时间表缺陷,游戏性能仍待测。
 
 ## 1. 关键路径
 
@@ -65,8 +71,8 @@
 - **雨碰撞 / 水花**:`RainCollision` 为每相机独立 GPU 管线,同帧正交深度 + 局部海平面检测;默认关闭,面板开启水花自动开启碰撞。游戏原始地形 / 建筑 / 机体 shader 没有 RenderType,26/29/31 层须空标签捕获;导出 DummyShader 的 Opaque 不能当证据。深度全空修复已获用户真机确认。详见 [雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.8。
 - **预设下拉**:列表变化须重建面板并保留可见性;切换前检查文件存在,避免隐式新建默认预设。[下拉修复](archive/weather-preset-dropdown-stale-2026-10-04.md) §1。
 - **坐标原点重置(浮动原点)**:离帧中心 >5000m、帧速 >1000m/s、时间加速或表面锁定切换可触发;订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)` 清云历史。[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §12。
-- **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)。
-- **云状态契约**:每层合成用本层材质;所有云颜色 alpha 为透射率,无云为 1;轨道 shape / detail 为 3D。主材质静态参数同步递增修订,每相机 `PrepareFrame` 按修订与绘制连续性清自己的历史。见[云自查](cloud-visibility-diagnosis-2026-10-10.md) §8。
+- **渲染**:重投影用 `GL.GetGPUProjectionMatrix(..., true)`,RFloat 云深度读 R 通道;MV / 云距离用同一格点,禁止把零位移当缺失值向邻点传播,历史云面匹配用上一相机预期距离。N/S 风重投影仍有缺口。轨道云按海拔淡入,反射 `_OrbitFade=0`。[割裂线](archive/seamline-reprojection-2026-08-25.md)、[轨道云](archive/orbit-clouds-crossfade-2026-08-27.md)、[镜头修复](cloud-visibility-diagnosis-2026-10-10.md) §14。
+- **云状态契约**:每层合成用本层材质;基础云颜色 alpha 为透射率,无云为 1;当前雷光独立 RT 只加 RGB,不入历史、不改变 alpha。主材质静态参数递增修订,每相机 `PrepareFrame` 按修订与绘制连续性清历史,近零重定位通知忽略。见[云自查](cloud-visibility-diagnosis-2026-10-10.md) §8、§15。
 - **云噪声与镜头稳定性**:shape / detail 为旧 Worley,体积 / 光照 / 云影 / 反射密度与 stock 固定 mip 0;禁止按 FOV / 朝向在阈值前改变密度。轨道轮廓用现有分布和恒定均值标定,albedo 与浮雕采用固定世界尺度。单段云光对 Beer 解析积分;Upscale 只对积分后的 RGB / 透射率按像素足迹重建,须保留中心云距离及前景拒绝。固定低清格点的 TSS 用统一运动自适应混合,不能轮换权重冒充空间超采样。见[修复](cloud-visibility-diagnosis-2026-10-10.md) §13;两种表示不等价,新过渡曲线与反平铺未实施。
 - **资产**:按子系统放 `Shader/`;移动时带 `.meta`,同步 `LoadVolkenAsset` 路径与 `_otherAssets` GUID。新增资产不会自动入包,清单可解析不等于已部署。
 - **雾投影**:雾以纹理 UV 为输入,用 `GL.GetGPUProjectionMatrix(..., false)`;云光栅 clip / TSS 的 `true` 保持。两者已有 GPU 方向回归,不得一刀切统一。
@@ -76,7 +82,7 @@
 
 - `PlanetCubemapUtility.LoadCubemap(..., PlanetCubemapType.Clouds, ...)`:R/G/B 为低 / 中 / 高云,A 为纬度 / 行星遮罩。
 - `WaterReflectionPlaneScript.UpdateReflections`:水面反射;机体 `ReflectionProbeScript` 适配未做。水调参入口为 `WaterMaterialModifier` / `PlanetWaterConfig` / `WaterQualitySettings`。
-- `AtmosphereSample.SpeedOfSound`:雷声传播速度,取不到或无物理大气时由配置兜底。
+- `AtmosphereData.SampleAltitude(observerAsl).SpeedOfSound`:雷声按相机位置查询游戏声速,无有效样本不新排雷声;[兜底删除](archive/thunder-fallback-removal-2026-10-14.md) §5 已完成,真实引用 C# 编译与 63 项核心检查通过,游戏听感待验收。§6 列出 depthThreshold / Overall / 镜像重生 / nearThreshold 候选,本轮未删除。
 - `CraftScript.GravityNormal` / `FrameVelocity`:帧空间径向下和飞行器速度;不能写死世界 -Y,不能把绕飞相机速度当飞行器速度。
 
 ## 5. 开发流程约定

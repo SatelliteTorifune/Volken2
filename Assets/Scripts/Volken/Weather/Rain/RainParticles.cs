@@ -15,12 +15,12 @@ namespace Volken.Weather
     /// 雨粒子:手写 compute(Randomize/Positioning/FillArgs/TranslateFixed)+ 实例化雨丝 shader,经 Graphics.RenderMeshIndirect 绘制。
     ///  雨丝朝向必须**世界系**:C# 每帧算世界旋转矩阵 _RotationMatrix 传给材质 —— 不要用屏幕平面投影(贴相机,垂直看会糊成横块)。
     ///  本游戏编译器**没有** RWByteAddressBuffer 的 4 参 InterlockedAdd,必须用带下标的 RWStructuredBuffer&lt;uint&gt; 2/3 参形式;一个 kernel 编译失败会毒掉整个 compute。
-    /// 设计沿革与九轮踩坑见 docs/archive/sp2-rain-particledomain-port-2026-09-28.md §10。
+    /// 密度、朝向与每相机资源契约见 docs/weather.md。
     /// </summary>
     public class RainParticles : MonoBehaviour
     {
 
-        public static bool Enabled;
+        public static bool Enabled;   // 有效运行态;用户开关保留在 Config.rain.enabled。
         public static bool TestRow;                     // 1 = 画相机前等距排;全挤在一点 = SV_InstanceID 恒 0(查 buffer 绑定)
         public static int Capacity = DefaultCapacity;   // buffer 容量(重建 buffer 才生效)
 
@@ -425,6 +425,31 @@ namespace Volken.Weather
             catch { return false; }
         }
 
+        private static bool CanRunInCurrentEnvironment()
+        {
+            if (StandaloneMode) return true;
+            var weather = VolkenWeather.Instance;
+            return IsGameInFlightScene() && weather != null && weather.IsActive && weather.CanRunWeather();
+        }
+
+        private static void SetRuntimeEnabled(bool value)
+        {
+            if (Enabled && !value)
+            {
+                // 环境停雨时立即清掉所有相机的旧落点,不等它们再次渲染。
+                for (int i = 0; i < Live.Count; i++)
+                {
+                    var inst = Live[i];
+                    if (inst == null) continue;
+                    inst._collision?.Reset();
+                    inst._hasLastCamPos = false;
+                    inst._hasLastCraftFramePos = false;
+                    inst._hasPendingRecenter = false;
+                }
+            }
+            Enabled = value;
+        }
+
         /// <summary>场景门控命中 → 节流打一行(出现它即"有东西想在本场景挂/画雨")。</summary>
         private static void LogSceneGate(string what)
         {
@@ -486,6 +511,7 @@ namespace Volken.Weather
                 LogSceneGate("Attach(" + cam.name + ")");
                 return null;
             }
+            if (!CanRunInCurrentEnvironment()) return null;
             try
             {
                 var existing = cam.GetComponent<RainParticles>();
@@ -516,6 +542,7 @@ namespace Volken.Weather
                 LogSceneGate("AttachExtra(" + cam.name + ")");
                 return null;
             }
+            if (!CanRunInCurrentEnvironment()) return null;
             try
             {
                 var existing = cam.GetComponent<RainParticles>();
@@ -565,8 +592,7 @@ namespace Volken.Weather
         }
 
         /// <summary>
-        /// 按配置把雨挂到当前视图相机(幂等),由常驻天气 tick 每帧调用 —— 相机会随 Flight 场景卸载,而雨的资产/缓冲全是实例字段,
-        /// 所以**换场景后必须重挂**;命中缓存时开销 = 一次静态引用判空。
+        /// 按配置和行星环境同步雨运行态;相机随 Flight 卸载后由常驻天气 tick 重试挂载。
         /// </summary>
         public static void SyncToCurrentView()
         {
@@ -575,15 +601,16 @@ namespace Volken.Weather
             // ResolveViewCamera 会回退到 Camera.main = **刚加载好的设计器 / 菜单相机**,雨就被挂到别的场景去了。
             if (!StandaloneMode && !IsGameInFlightScene())
             {
+                SetRuntimeEnabled(false);
                 LogSceneGate("SyncToCurrentView");
                 return;
             }
 
             var cfg = VolkenWeather.Instance?.Config?.rain;
-            if (cfg == null) return;
-            if (!cfg.enabled)
+            if (cfg == null && StandaloneMode) return;
+            SetRuntimeEnabled(cfg?.enabled == true && CanRunInCurrentEnvironment());
+            if (!Enabled)
             {
-                Enabled = false;   // 配置关着:清掉上一场景遗留的静态开关(雨声门控与面板状态都读它)
                 return;
             }
             if (_current != null) return;
@@ -635,8 +662,9 @@ namespace Volken.Weather
 
         public static void SetEnabled(int on)
         {
-            if (on != 0) AttachToCurrentView();   // 先确保挂载:只开开关不挂载 = 静默无效果
-            Enabled = on != 0;
+            bool want = on != 0 && CanRunInCurrentEnvironment();
+            if (want) AttachToCurrentView();
+            SetRuntimeEnabled(want);
         }
 
         /// <summary>一帧一次的 craft 属性链采样:径向"下" / 本体速度 / 参考帧位置 / 相机海拔都取自同一条链。</summary>
@@ -734,7 +762,7 @@ namespace Volken.Weather
             UnderwaterFade = Mathf.Clamp(cfg.underwaterFade, 0.1f, 50f);
             StreakLength = newLen;
             StreakThickness = newWidth;
-            Enabled = cfg.enabled;
+            SetRuntimeEnabled(cfg.enabled && CanRunInCurrentEnvironment());
 
             // 落到**每一个**存活实例:容量 / 雨丝长宽是实例资源,附加相机(PIP)上的实例也要跟着重建
             for (int i = 0; i < Live.Count; i++)
@@ -951,6 +979,7 @@ namespace Volken.Weather
             }
 
             if (_isMainView) PreCullCalls++;
+            if (!CanRunInCurrentEnvironment()) SetRuntimeEnabled(false);
             if (!Enabled)
             {
                 _collision?.Reset();
@@ -1344,7 +1373,7 @@ namespace Volken.Weather
                     n, seen.Count, ratio, maxMult, ge8, bad, Time.time, PhaseNow());
                 if (ratio < 0.9f)
                 {
-                    Mod.Diag("RainParticles 分布诊断: 唯一率偏低 → 重生随机数质量不足(种子/相位要用整数 hash;见 docs/rain-spawn-hash-precision-2026-10-04.md)");
+                    Mod.Diag("RainParticles 分布诊断: 唯一率偏低 → 重生随机数质量不足(种子/相位要用整数 hash;见 docs/weather.md)");
                 }
             }
             catch (Exception ex) { Mod.Log("Volken:RainParticles distribution readback ERROR: " + ex.Message); }

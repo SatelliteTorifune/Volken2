@@ -1,6 +1,6 @@
 // 闪电主干与分叉的单 Pass 材质:_Intensity 控制发光强度。
 // 加色混合、关闭深度写入、保留深度测试;落点闪光使用 LightningFlash.shader。
-// 实现记录见 docs/archive/thunder-realism-2026-09-28.md §7、§8。
+// 生命周期与材质所有权见 docs/weather.md。
 
 Shader "Hidden/Volken/LightningBolt"
 {

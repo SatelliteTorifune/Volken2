@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+*.md text eol=lf
+/tools/check-docs.ps1 text eol=lf

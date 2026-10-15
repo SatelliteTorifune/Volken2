@@ -26,6 +26,16 @@
 
 
     <s id="Volken.UI.WeatherRain">Дождь</s>
+    <s id="Volken.UI.RainLens">Капли на объективе</s>
+    <s id="Volken.UI.RainLensEnabled">Включить капли на объективе</s>
+    <s id="Volken.UI.RainLensIntensity">Интенсивность капель</s>
+    <s id="Volken.UI.RainLensSpawnRate">Частота появления (капель/с)</s>
+    <s id="Volken.UI.RainLensDropSize">Радиус капель (% высоты экрана)</s>
+    <s id="Volken.UI.RainLensLifetime">Время жизни капель (с)</s>
+    <s id="Volken.UI.RainLensRefraction">Преломление (пикс.)</s>
+    <s id="Volken.UI.RainLensBlur">Локальное размытие (пикс.)</s>
+    <s id="Volken.UI.RainLensSpeedThreshold">Порог скорости (м/с)</s>
+    <s id="Volken.UI.RainLensShelterCheck">Проверять укрытие от дождя</s>
     <s id="Volken.UI.RainStreamMode">Струи вдоль относительной скорости</s>
     <s id="Volken.UI.RainStretch">Растяжение от скорости</s>
     <s id="Volken.UI.RainStretchLimit">Максимальный коэффициент растяжения</s>

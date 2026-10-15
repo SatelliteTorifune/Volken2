@@ -10,11 +10,11 @@ namespace Volken.Weather
 {
     
     // --------------------------------------------------------------------------------------------
-    //  天气预设(一份预设 = 一个文件;总体、雨、雾、雷四个 XML 节点)。
+    //  天气预设(一份预设 = 一个文件;总体、雨、镜头水珠、雾、雷 XML 节点)。
     //  新增效果默认关闭或恒等;旧 XML 中已移除的字段由 XmlSerializer 忽略。
     // --------------------------------------------------------------------------------------------
 
-    /// <summary>一套天气预设(总体 / 雨 / 雾 / 雷)。存于 <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> ——
+    /// <summary>一套天气预设(总体 / 雨 / 镜头水珠 / 雾 / 雷)。存于 <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> ——
     /// **独立目录**,与云的 <c>UserData/VolkenConfig/</c> 分开(否则同名预设互相覆盖);两边预设名也互相独立。</summary>
     [Serializable]
     public class VolkenWeatherConfig
@@ -33,7 +33,7 @@ namespace Volken.Weather
 
         // ③ 雨
 
-        /// <summary>雨子系统参数;密度/域半径的标定基线与踩坑见 <c>docs/archive/sp2-rain-particledomain-port-2026-09-28.md</c> 与 <c>docs/archive/weather-rain-fog-postmortem-2026-09-27.md</c>。</summary>
+        /// <summary>雨子系统参数;密度、域半径与运行契约见 <c>docs/weather.md</c>。</summary>
         [Serializable]
         public class RainSection
         {
@@ -139,6 +139,35 @@ namespace Volken.Weather
                 ceilingBand = s.ceilingBand;
                 underwaterGate = s.underwaterGate;
                 underwaterFade = s.underwaterFade;
+            }
+        }
+
+        /// <summary>主视图镜头水珠;生成依赖雨开关,关闭效果会清除残留。</summary>
+        [Serializable]
+        public class RainLensSection
+        {
+            public bool enabled = false;
+            public float intensity = 1f;
+            public float spawnRate = 18f;          // 滴/秒,基准雨量和完全迎雨时
+            public float dropSize = 0.018f;        // 屏幕高度比例,水珠半径
+            public float lifetime = 6f;           // 秒
+            public float refraction = 14f;        // 最大折射偏移,像素
+            public float blur = 1.8f;              // 局部模糊半径,像素
+            public float speedThreshold = 40f;    // 地表相对速度,米/秒
+            public bool shelterCheck = true;
+
+            public void CopyFrom(RainLensSection source)
+            {
+                if (source == null) return;
+                enabled = source.enabled;
+                intensity = source.intensity;
+                spawnRate = source.spawnRate;
+                dropSize = source.dropSize;
+                lifetime = source.lifetime;
+                refraction = source.refraction;
+                blur = source.blur;
+                speedThreshold = source.speedThreshold;
+                shelterCheck = source.shelterCheck;
             }
         }
 
@@ -300,6 +329,9 @@ namespace Volken.Weather
         [XmlElement("Rain")]
         public RainSection rain = new RainSection();
 
+        [XmlElement("RainLens")]
+        public RainLensSection rainLens = new RainLensSection();
+
         [XmlElement("Fog")]
         public FogSection fog = new FogSection();
 
@@ -313,6 +345,7 @@ namespace Volken.Weather
             {
                 overall = new OverallSection (),
                 rain = new RainSection(),
+                rainLens = new RainLensSection(),
                 fog = new FogSection(),
                 lightning = new LightningSection(),
             };
@@ -323,12 +356,13 @@ namespace Volken.Weather
         {
             if (overall == null) overall = new OverallSection();
             if (rain == null) rain = new RainSection();
+            if (rainLens == null) rainLens = new RainLensSection();
             if (fog == null) fog = new FogSection();
             if (lightning == null) lightning = new LightningSection();
         }
 
         /// <summary>默认值升级:**只重写"仍是旧默认值"的字段**(用户手动改过的一律不动)。XML 反序列化对已存在的字段用存档值,新默认值不会自动生效 —— 必须有这一步。
-        /// 当前升级项:<c>rain.streakWidth</c> 0.05→0.1、<c>rain.amount</c> 20000→100000、<c>rain.stretchLimit</c> →3.5。</summary>
+        /// 雨旧默认字段独立升级;镜头水珠只在四项视觉参数全部保持首版默认时一起升级。</summary>
         public void UpgradeUneditedDefaults()
         {
             EnsureSections();
@@ -336,10 +370,18 @@ namespace Volken.Weather
             if (Mathf.Abs(rain.streakWidth - 0.05f) < 1e-4f) { rain.streakWidth = 0.1f; upgraded++; }
             if (Mathf.Abs(rain.amount - 20000f) < 1f) { rain.amount = 100000f; upgraded++; }
             if (Mathf.Abs(rain.stretchLimit) < 1e-4f) { rain.stretchLimit = 3.5f; upgraded++; }   // 旧存档无此字段
+            if (Mathf.Abs(rainLens.spawnRate - 14f) < 1e-4f && Mathf.Abs(rainLens.dropSize - 0.012f) < 1e-6f &&
+                Mathf.Abs(rainLens.refraction - 8f) < 1e-4f && Mathf.Abs(rainLens.blur - 1.2f) < 1e-4f)
+            {
+                rainLens.spawnRate = 18f;
+                rainLens.dropSize = 0.018f;
+                rainLens.refraction = 14f;
+                rainLens.blur = 1.8f;
+                upgraded++;
+            }
             if (upgraded > 0)
             {
-                Mod.Diag("VolkenWeatherConfig: 默认值升级 {0} 项(雨丝宽度→0.1、粒子数量→100000、拉伸上限→3.5;" +
-                         "仅当字段仍是旧默认值时改写,手动改过的不动)", upgraded);
+                Mod.Diag("VolkenWeatherConfig: 默认值升级 {0} 项(仅升级仍保持旧默认的雨 / 镜头水珠参数)", upgraded);
             }
         }
 
@@ -374,6 +416,14 @@ namespace Volken.Weather
             rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);
             rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
             rain.underwaterFade = Mathf.Clamp(rain.underwaterFade, 0.1f, 50f);
+
+            rainLens.intensity = FogFinite(rainLens.intensity, 1f, 0f, 3f);
+            rainLens.spawnRate = FogFinite(rainLens.spawnRate, 18f, 0f, 40f);
+            rainLens.dropSize = FogFinite(rainLens.dropSize, 0.018f, 0.003f, 0.035f);
+            rainLens.lifetime = FogFinite(rainLens.lifetime, 6f, 0.5f, 20f);
+            rainLens.refraction = FogFinite(rainLens.refraction, 14f, 0f, 30f);
+            rainLens.blur = FogFinite(rainLens.blur, 1.8f, 0f, 4f);
+            rainLens.speedThreshold = FogFinite(rainLens.speedThreshold, 40f, 1f, 500f);
 
             // ---- ④ 雾 ----
             fog.baseHeight = FogFinite(fog.baseHeight, 0f, -500f, 50000f);
@@ -435,6 +485,7 @@ namespace Volken.Weather
 
             overall.CopyFrom(source.overall);
             rain.CopyFrom(source.rain);
+            rainLens.CopyFrom(source.rainLens);
             fog.CopyFrom(source.fog);
             lightning.CopyFrom(source.lightning);
         }
@@ -495,8 +546,10 @@ namespace Volken.Weather
             return names;
         }
 
-        public void SaveToFile(string planetName, string configName)
+        /// <summary>完整写入临时文件后替换天气预设;失败保留旧文件并返回 false。</summary>
+        public bool SaveToFile(string planetName, string configName)
         {
+            string temporaryPath = null;
             try
             {
                 string filePath = GetConfigPath(planetName, configName);
@@ -507,15 +560,29 @@ namespace Volken.Weather
                 }
 
                 XmlSerializer serializer = new XmlSerializer(typeof(VolkenWeatherConfig));
-                using (FileStream stream = new FileStream(filePath, FileMode.Create))
+                temporaryPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     serializer.Serialize(stream, this);
+                    stream.Flush(true);
                 }
+                if (File.Exists(filePath)) File.Replace(temporaryPath, filePath, null);
+                else File.Move(temporaryPath, filePath);
                 Mod.Log($"Weather config '{configName}' saved to: {filePath}");
+                return true;
             }
             catch (Exception e)
             {
-                Mod.Log($"Failed to save weather config '{configName}': {e.Message}");
+                Mod.Diag($"Failed to save weather config '{configName}': {e.Message}");
+                return false;
+            }
+            finally
+            {
+                if (temporaryPath != null && File.Exists(temporaryPath))
+                {
+                    try { File.Delete(temporaryPath); }
+                    catch (Exception e) { Mod.Log($"Weather config temporary file cleanup failed: {e.Message}"); }
+                }
             }
         }
 

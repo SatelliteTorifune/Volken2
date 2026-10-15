@@ -8,7 +8,7 @@ namespace Volken.Weather
 {
     /// <summary>主干、分叉与落点闪光的生命周期由激活组件的 Update 推进,结束后销毁。</summary>
     /// 分叉共用独立材质,由本对象统一回收;计龄使用排除游戏暂停的 GamePause.Now。
-    /// 实现记录见 docs/archive/thunder-realism-2026-09-28.md §7、§8。
+    /// 生命周期与材质所有权见 docs/weather.md。
     public class LightningBolt : MonoBehaviour
     {
         public Camera targetCamera;   // 每道闪电各持一个:改成 static 会在多相机(PIP)下互相覆盖,闪光朝向会串

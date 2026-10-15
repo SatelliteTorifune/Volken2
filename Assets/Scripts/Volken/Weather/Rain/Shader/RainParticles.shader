@@ -3,7 +3,7 @@
 // 软粒子读取 RFloat 线性眼空间深度(米);深度未就绪时 _InvFade=0。
 // 网格 UV 为 0..1,uv.y=0 为亮头、1 为尾部;渲染位置来自 _Positions。
 // RGB 由场景入射光与独立自发光组成;_Emission=0 不保留恒定亮色。
-// 坐标和重定位约束见 docs/archive/sp2-rain-particledomain-port-2026-09-28.md §10。
+// 坐标和重定位约束见 docs/weather.md。
 
 Shader "Volken/RainParticles"
 {

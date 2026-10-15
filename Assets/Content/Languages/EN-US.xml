@@ -26,6 +26,16 @@
 
 
     <s id="Volken.UI.WeatherRain">Rain</s>
+    <s id="Volken.UI.RainLens">Lens droplets</s>
+    <s id="Volken.UI.RainLensEnabled">Enable lens droplets</s>
+    <s id="Volken.UI.RainLensIntensity">Droplet intensity</s>
+    <s id="Volken.UI.RainLensSpawnRate">Spawn rate (drops/s)</s>
+    <s id="Volken.UI.RainLensDropSize">Droplet radius (% of screen height)</s>
+    <s id="Volken.UI.RainLensLifetime">Droplet lifetime (s)</s>
+    <s id="Volken.UI.RainLensRefraction">Refraction (px)</s>
+    <s id="Volken.UI.RainLensBlur">Local blur (px)</s>
+    <s id="Volken.UI.RainLensSpeedThreshold">High speed threshold (m/s)</s>
+    <s id="Volken.UI.RainLensShelterCheck">Check for shelter</s>
     <s id="Volken.UI.RainStreamMode">Align streaks with relative velocity</s>
     <s id="Volken.UI.RainStretch">Speed stretch factor</s>
     <s id="Volken.UI.RainStretchLimit">Maximum stretch multiplier</s>

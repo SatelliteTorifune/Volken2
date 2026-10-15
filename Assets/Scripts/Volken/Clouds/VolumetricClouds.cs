@@ -80,8 +80,6 @@ namespace Volken.Clouds
         /// <summary>行星 → 预设名 映射(文件 <c>UserData/VolkenConfig/PlanetConfigList.xml</c>);云与天气各记各的,互相独立。</summary>
         public PlanetConfigList planetConfigList;
 
-        private bool _subscribedToSoi;
-
         /// <summary>初始化单例(幂等)。必须先于 <c>VolkenWeather.Initialize</c>(天气要订阅 <see cref="PlanetChanged"/>)。</summary>
         public static void Initialize()
         {
@@ -180,12 +178,11 @@ namespace Volken.Clouds
 
         private void TrySubscribeSoi()
         {
-            if (_subscribedToSoi) return;
             try
             {
+                // Flight 卸载会清空事件;每次加载都对当前实例去重重订阅。
                 Game.Instance.FlightScene.PlayerChangedSoi -= OnPlayerChangedSoi;
                 Game.Instance.FlightScene.PlayerChangedSoi += OnPlayerChangedSoi;
-                _subscribedToSoi = true;
             }
             catch
             {

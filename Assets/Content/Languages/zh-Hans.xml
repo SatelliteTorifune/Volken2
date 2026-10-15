@@ -26,6 +26,16 @@
 
 
     <s id="Volken.UI.WeatherRain">雨</s>
+    <s id="Volken.UI.RainLens">镜头水珠</s>
+    <s id="Volken.UI.RainLensEnabled">启用镜头水珠</s>
+    <s id="Volken.UI.RainLensIntensity">水珠强度</s>
+    <s id="Volken.UI.RainLensSpawnRate">生成率(滴/秒)</s>
+    <s id="Volken.UI.RainLensDropSize">水珠半径(屏幕高度%)</s>
+    <s id="Volken.UI.RainLensLifetime">水珠寿命(秒)</s>
+    <s id="Volken.UI.RainLensRefraction">折射强度(像素)</s>
+    <s id="Volken.UI.RainLensBlur">局部模糊(像素)</s>
+    <s id="Volken.UI.RainLensSpeedThreshold">高速触发速度(米/秒)</s>
+    <s id="Volken.UI.RainLensShelterCheck">遮雨检查</s>
     <s id="Volken.UI.RainStreamMode">雨丝沿相对速度方向</s>
     <s id="Volken.UI.RainStretch">随速度拉伸系数</s>
     <s id="Volken.UI.RainStretchLimit">最大拉伸倍率</s>

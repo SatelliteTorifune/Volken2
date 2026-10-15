@@ -394,7 +394,7 @@ namespace Volken.Weather
         {
             var weather = VolkenWeather.Instance;
             var cfg = weather?.Config;
-            if (cfg == null) return false;
+            if (cfg == null || !weather.IsActive || !weather.CanRunWeather() || !cfg.lightning.enabled) return false;
 
             if (_boltShader == null)
             {

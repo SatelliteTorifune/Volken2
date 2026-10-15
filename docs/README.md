@@ -1,194 +1,24 @@
-# Volken2 文档索引(docs/)
+# Volken 开发文档
 
-> 新会话先读 [AGENT_CONTEXT.md](AGENT_CONTEXT.md)。本索引只保留入口、待办与维护规则;实现细节归主题文档。
-> 2026-10-09 更新:近地薄雾、流动体积雾与可操作 UI 已写入原工程,旧占位已清理;独立 GPU 验证完成,游戏表现待验收,见 §一。雨碰撞 / 水花已获用户真机确认并归档;归档不代替其他项目验收,剩余回归见 §四之三。
-> 2026-10-12 清理:未使用代码、配置 Clone 与冗余天气指标已删除,雨 / 闪电注释与失效工具说明已整理,见[清理记录](archive/monobehaviour-scene-gate-2026-10-02.md#5-源码与注释清理2026-10-12)。
+> 2026-10-14 按当前源码整理。文档按主题维护，历史日期记录已合并，完整沿革可从 Git 历史恢复。
 
-## 一、当前推进
+## 阅读入口
 
-TSS 云、镜头稳定性与颗粒修复:见 [诊断与修复](cloud-visibility-diagnosis-2026-10-10.md) §6~§16。用户复测 §14 仍卡顿,§15 补雷光缓存 / 独立通道及微小重定位过滤;§16 保留体积夜光,§16.5 仅回退 2D 轨道环境照明。当前 `build=12 shader=12`,Linear 356 项独立 Unity / GPU 回归通过;此前各 228 / 150 / 119 / 185 项为历史结果,游戏画面与镜头表现待复测。
-
-夜间云不可见:同文 §16 的体积 / 反射环境光保留,§16.5 按用户要求仅回退 2D 轨道夜光,夜侧恢复旧行为。§16.4 游戏反馈确认近云可见,Additive 星空穿云、环境遮蔽与云形真实性仍待处理,昼夜画质未验收。
-
-| 文档 | 状态 / 下一步 |
+| 文档 | 内容 |
 |---|---|
-| [天气预设运行态同步](weather-preset-runtime-sync-2026-10-14.md) | ✅ 加载预设立即应用雨参数 / 开关,雷电刷新下一次落雷排程;C# 编译与 36 项独立 Unity 集成检查通过,待游戏复测 |
-| [雨滴与水花自发光修复](rain-lighting-fix-2026-10-14.md) | ✅ §5 已撤回导致水花压暗的修改,恢复原显示路径;雨滴修复保留,shader=10,C# 编译及 Gamma / Linear 各 115 项检查通过,待游戏复测 |
-| [闪电照亮体积云](lightning-cloud-lighting-2026-10-13.md) | ✅ §8 按用户复测改为固定世界格点遮光、独立本帧 HDR 雷光,保留基础云历史,并降低落点球形闪光;C# 编译及最新 150 项检查通过,待游戏复测 |
-| [雨滴水面溅射修复](rain-water-splash-fix-2026-10-09.md) | 🚧 水面专用涟漪 / 竖直飞溅 / 场景深度遮挡已接入;53 项独立 GPU 回归通过,待用户打包与游戏水面验收 |
-| [雾重做实施方案](fog-implementation-plan-2026-10-09.md) | 🚧 两种雾代码 / 面板 / 日志已接入原工程;独立 GPU 验证通过,待游戏画质 / 水面 / PIP / 性能验收;UI 修复见 §10;§12 已取得游戏帧时间,薄雾 / 体积资源均生效,持续分配稳定;CPU / GPU 主瓶颈尚未分离,已修正调参额外刷新;§13 夜间光照修正及 161 项验证通过,待游戏验收;用户指定本轮不负责打包 |
+| [AGENT_CONTEXT.md](AGENT_CONTEXT.md) | 新会话阅读顺序和开发约束 |
+| [architecture.md](architecture.md) | 模组入口、模块边界、生命周期、配置与已删除接口 |
+| [clouds.md](clouds.md) | 体积 / 轨道云、TSS、镜头历史、雷光与水面反射 |
+| [weather.md](weather.md) | 预设同步、雨 / 碰撞 / 水花、两种雾、闪电与雷声 |
+| [development.md](development.md) | 当前工具、诊断、历史验证证据与验证方法 |
+| [backlog.md](backlog.md) | 游戏验收、已知缺口、未实现方案与性能候选 |
 
-## 二、提案 · 待拍板(proposals/)
+本机真实路径仅存于被 Git 忽略的 [LOCAL_PATHS.md](LOCAL_PATHS.md)，不提交。公开文档使用路径令牌；本机工具见 [VolkenTests](../Assets/Scripts/VolkenTests/README.md)。
 
-| 文档 | 状态 / 范围 |
-|---|---|
-| [2D–3D 过渡与反平铺](proposals/orbit-transition-antitiling-plan-2026-10-11.md) | 📋 用户确定先过渡曲线、后共用反平铺采样;适配不同类型行星,暂缓全球贴图相关配置;未实施 |
-| [KSA 轨道云参考复核](proposals/ksa-orbit-cloud-reference-audit-2026-10-11.md) | 📋 安装包 GLSL / 资产与 C# 已对照,保留参考证据;当前推进顺序由过渡 / 反平铺新提案接管,未移植 |
-| [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) | 📋 当前入口:云 / 雨碰撞 / 雷击 / 多相机,按当前源码排序;未实施、未测耗时 |
-| [云带区间步进](proposals/cloud-band-interval-raymarch-2026-10-03.md) | 📋 评估中:区间求交集中 raymarch 预算,未动手 |
-| [云优化路线图](proposals/cloud-optimization-roadmap-2026-08-28.md) | 📋 规划:部分已被 TSS / 轨道云覆盖,剩余项未排期 |
-| [雨 / 雷性能审计](proposals/rain-lightning-perf-audit-2026-10-02.md) | 📋 历史审计与剩余方案;当前计数 / 碰撞 / 日志状态见新清单 |
-| [剩余热点与代价](proposals/hotpath-optimization-backlog-2026-10-02.md) | 📋 历史代价分析;部分 B 组已完成,A 组按既有决定不做 |
-| [水体大修](proposals/water-system-overhaul-2026-09-02.md) | 📋 规划:A~E 路线待选,未排期 |
+## 使用约定
 
-## 三、已归档(archive/)
+当前实现以源码和主题文档为准，未完成工作只维护在 backlog。
 
-历史正文保留当时的诊断、参数和证据;头部核对说明与后续实施记录优先于早期方案。未完成验收不得因归档而勾选完成。
+源码已实现、独立验证通过、用户游戏确认是不同状态。历史检查不能证明最新游戏包已更新，也不能代替当前画质 / 性能验收。
 
-| 文档 | 已落地结论 / 保留价值 |
-|---|---|
-| [雨滴方向修复与诊断](archive/rain-direction-diagnosis-2026-10-11.md) | 方向修复已获用户视觉反馈与游戏日志确认,34 组预期角差最大 0.17°;本次诊断 / 周期回读及临时日志已清理,修复保留;移动参考帧 / 非零变体边界仍待处理 |
-| [用户 UI 清理](archive/user-ui-cleanup-2026-10-09.md) | 已移除天气 / 云调试控件与状态文字,精简三语冗余说明;当前设置页保留开发开关;§5 已删除指定 `VolkenTests/Editor` 工具;§6 移除天气总开关、合并配置条目到天气根组;§7 云配置操作并入各自云层根组;游戏视觉待验收 |
-| [雨重做](archive/sp2-rain-particledomain-port-2026-09-28.md) | 雨视觉 / 雨声 / 透明度 / GPU 碰撞与水花已落地;无标签 shader 捕获修复获用户真机确认,135 项 GPU 验证通过;性能和专项矩阵未排期 |
-| [天气与云解耦](archive/weather-cloud-decoupling-2026-10-01.md) | 生命周期与高度带去重已落地;A2 / D 未排期,回归待验证 |
-| [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) | 常驻停表、相机扫描与渲染集合优化已落地;待回归 |
-| [雨开关与切场景](archive/rain-toggle-scene-switch-2026-10-02.md) | 实例加载、重挂、设计器场景门控已修;待回归 |
-| [预设下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) | 选项过期重建与缺失文件护栏已落地;待回归 |
-| [附加相机雨](archive/extra-camera-rain-2026-10-04.md) | 每相机实例和主视图诊断量归属已落地;待 PIP 回归 |
-| [雷声真实化](archive/thunder-realism-2026-09-28.md) | 距离 / 声速 / near-far 与残留、紫红修复;当前部署和完整听感回归未确认 |
-| [雷声兜底声速删除 / 配置审查](archive/thunder-fallback-removal-2026-10-14.md) | ✅ 已删配置 / UI 并统一相机大气取样;真实引用编译和 63 项核心检查通过,游戏听感待验收;其他候选只审查 |
-| [闪电固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) | 最终根因是分叉第 0 点未赋值;已补 `SetPosition(0, from)`,待回归 |
-| [雷电海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) | 上限与手动触发反馈已落地;待回归 |
-| [天气母计划](archive/sp2-weather-port-2026-09-27.md) | 历史方案、反编译和素材底账;后续雨计划与解耦记录已接管当前工作 |
-| [雨滴落点重复](archive/rain-spawn-hash-precision-2026-10-04.md) | 整数 hash 修复;含真机唯一率 0.932 / 最大重复 5 的证据 |
-| [雨雾移植复盘](archive/weather-rain-fog-postmortem-2026-09-27.md) | 旧实现失败原因与诊断方法;朝向结论须结合雨计划 §10.3 |
-| [方案 A:密度缩放](archive/stock-density-scale-2026-09-06.md) | 自带云区域内密度控制,保留足迹边缘 |
-| [方案 B:云分布](archive/stock-cloud-distribution-2026-08-23.md) | 自带 cubemap 提供全球分布 |
-| [方案 C:TSS](archive/ksa-temporal-upscale-port-2026-08-24.md) | 时序上采样、运动自适应、浮动原点清历史 |
-| [覆盖分解](archive/coverage-decomposition-2026-08-27.md) | coverage 乘 biome / 旋转分布 / tiled detail 因子 |
-| [轨道云](archive/orbit-clouds-crossfade-2026-08-27.md) | 2D 云与体积云按海拔交叉淡入;TSS 切换后的深度漏绑定修复见当前诊断 §7 |
-| [重投影割裂线](archive/seamline-reprojection-2026-08-25.md) | GPU 投影 Y 约定修复 |
-| [水面反射](archive/reflection-adaptation-2026-09-02.md) | 水面反射云已落地;机体探头适配未做 |
-| [联机场景事件 NRE](archive/jno-sceneloaded-nre-2026-08-27.md) | 第三方事件处理器异常中断初始化链的证据 |
-
-## 四、决策速查
-
-| 约束 | 权威出处 |
-|---|---|
-| 生命周期归 `VolumetricClouds`;高度带走 `CloudConfig.TryGetBand`,不恢复已撤抽象层 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §2.1、§8 |
-| 雨 / 雷独立启停,无全局天气值;云 / 天气预设各自存储 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8 |
-| XML 是跨场景配置来源;Flight→Flight 同行星早退保留内存状态 | [雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §3 |
-| 常驻按飞行状态停表;雨挂载和绘制另查活体场景状态 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §1、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §4 |
-| 每相机资源独立,共享雨诊断只归主视图写 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §2 |
-| 下拉过期须重建面板;加载不存在的预设应失败 | [预设下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §1 |
-| 雨采用世界系构轴;自适应域只改半径,不自动扩容补密度 | [雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.3、§10.5 |
-| 重生随机数用整数 hash;禁无界浮点 `frac` hash | [落点重复](archive/rain-spawn-hash-precision-2026-10-04.md) §2 |
-| 资产路径和清单 GUID 都须同步;清单就绪不代表部署成功 | [解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8、[雷声](archive/thunder-realism-2026-09-28.md) §5.3 |
-
-## 四之二、当前代码里的已知问题
-
-| # | 问题 / 证据 | 状态 |
-|---|---|---|
-| 1 | 星环与云 / 水渲染顺序,原用户问题记录 | 待复现;本次未做运行时核实 |
-| 2 | Craft 高轨道云 scale,原用户问题记录 | 待复现;本次未做运行时核实 |
-| 3 | N/S 风未纳入云空间重投影;[方案 C](archive/ksa-temporal-upscale-port-2026-08-24.md) §5、§12 | 未修;另有双缓冲与非新采样硬回退缺口 |
-| 4 | `low/mid/highAltitudeThreshold` 已删除,旧“不可删”告警错误;[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8 | ✅ 已更正;旧 XML 未知节点由 `XmlSerializer` 忽略 |
-| 5 | 自适应雨域变大但粒子数固定,密度变稀;`RainParticles.OnPreCull` | 已知代价;不恢复渲染回调内自动重建 GPU buffer |
-| 6 | 雷光先 Build 后赋配置,`lightRange / lightIntensity` 未应用到真实 Light;[雷光实施](lightning-cloud-lighting-2026-10-13.md) §6 | ✅ 已改为动画开始时应用配置;同步修复闪光时间表末项,本机实际源码验证通过,待游戏验收 |
-| 7 | 夜间雾偏亮:环境光强制下限、颜色空间处理与太阳状态消费缺口;[雾记录](fog-implementation-plan-2026-10-09.md) §13 | ✅ 源码已修正,161 项独立验证通过;待游戏昼夜画面 / 光照日志验收 |
-| 8 | TSS 丢云、轨道深度 / 生命周期 / 合成、镜头抖动与颗粒;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §5~§16 | ✅ §14 游戏复测仍卡顿;§15 补雷光缓存 / 历史隔离与微小重定位过滤;§16.5 轨道回退与既有回归 Linear 356 项通过,待游戏复测;底层周期仍在,新曲线与反平铺未实施 |
-| 9 | 夜间云 RGB 为零及 Additive 不遮暗背景;修复后夜云仍有灰片 / 灰团与星空穿云;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §16 | ✅ 近云环境光已有游戏可见性证据;§16.5 仅回退 2D 轨道夜光,当前 build=12 / shader=12;§16.4 的体积合成 / 环境遮蔽 / 云形剩余问题未修,画质未验收 |
-| 10 | 雨滴自发光 0 仍亮;首轮扩展水花光照后用户反馈溅落消失;[雨光照修复](rain-lighting-fix-2026-10-14.md) §1~§5 | ✅ 雨滴修复保留,水花已恢复原显示路径;C# 编译及 Gamma / Linear 各 115 项检查通过,待游戏验收 |
-| 11 | 雷声声程按相机、声速按飞船,缺失值与真空均使用人为声速;[删除记录](archive/thunder-fallback-removal-2026-10-14.md) §5 | ✅ 兜底配置 / UI 已删,统一观察者游戏大气样本;真实引用编译与 63 项核心检查通过,游戏听感待验收 |
-| 12 | 云 depthThreshold 无效果消费者、Overall 仅兼容、镜像重生对照模式仍在面板、nearThreshold 近景经验保护;[配置审查](archive/thunder-fallback-removal-2026-10-14.md) §6 | 已核对消费者,本轮只审查;删除 / 替换尚未实施 |
-| 13 | 切换天气预设后雨保留旧开关 / 参数,雷保留旧等待间隔;[运行态同步](weather-preset-runtime-sync-2026-10-14.md) §1~§3 | ✅ 雨加载时套参、雷显式重排已接入,36 项集成检查通过,待游戏验收 |
-
-## 四之三、待办清单(backlog)
-
-天气预设切换后的雨 / 雷启停、参数、排程与 PIP 验收见 [运行态同步](weather-preset-runtime-sync-2026-10-14.md) §4。
-
-雨滴 / 水花昼夜光照与自发光验收见 [光照修复](rain-lighting-fix-2026-10-14.md) §4;不并入原水花可见性确认范围。
-
-待办只保留动作与来源;已落地修复台账合并在 §三,具体判据留在主题文档。
-
-**原修复已收束**:[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.8 的无标签表面捕获修复已获用户确认。2026-10-09 新反馈的水面无溅射由 §一的[水面修复](rain-water-splash-fix-2026-10-09.md) 接管;密度标定、性能测量和以下专项回归仍未排期。
-
-**尚未完成的专项回归**(未排期;不扩大本次用户确认的验收范围):
-
-| 范围 | 要验证的行为 | 判据 |
-|---|---|---|
-| 雨与配置 | 复杂材质与场景矩阵 / 透明度边界 / 软粒子 / 海拔 / 水下 / 重定位 / XML 往返 / 切场景 | [雨计划](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.5、§10.7、§10.8、[雨开关](archive/rain-toggle-scene-switch-2026-10-02.md) §2、§4 |
-| 雨方向剩余边界 | 移动参考帧速度补偿 / 非零随机长宽变体的轴线缩放 / 重定位与多相机 | [方向修复](archive/rain-direction-diagnosis-2026-10-11.md) §6、§7;本次通过限于表面锁定、变体关闭的游戏场景 |
-| Inspector / 设置 | 列表完整、缺失文件不新建、另存为可见;诊断控件消失、三语 / 参数 / 预设功能正常 | [下拉](archive/weather-preset-dropdown-stale-2026-10-04.md) §2、[UI 清理](archive/user-ui-cleanup-2026-10-09.md) §3 |
-| PIP | 相机有雨,主视图雨声不被覆盖,参数同步 | [附加相机雨](archive/extra-camera-rain-2026-10-04.md) §4 |
-| 场景 / 解耦 | 非飞行停表、离场收雨雷、环境抑制不改用户开关 | [场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §4、[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §6 |
-| 闪电 | 分叉起点、暂停 / 重定位、海拔上限与开发 API 反馈 | [固定端点](archive/lightning-fixed-position-diagnosis-verify-2026-10-02.md) §5、[海拔限位](archive/lightning-altitude-ceiling-2026-10-02.md) §4 |
-| 雷声 / 资源 | 声速延迟、相机 / 飞船高度分离、near-far 听感、多声部与素材加载 | [兜底删除](archive/thunder-fallback-removal-2026-10-14.md) §4~§5、[原雷声](archive/thunder-realism-2026-09-28.md) §5.4、§6 |
-
-**资源核对(2026-10-09)**:`_otherAssets` 共 **40** 条,GUID 全可解析,水面溅射 shader 引用唯一;含 **6 条雨声 + 9 条雷声**。此前三个碰撞 / 水花资源已核实入包并获用户确认;雾补回引用的证据见[雾记录](fog-implementation-plan-2026-10-09.md) §11。当前新增水面 shader 仅已登记,待打包验收,见[水面修复](rain-water-splash-fix-2026-10-09.md) §3、§4。
-
-**未排期 / 低优先度**:
-
-- 解耦 A2 相机海拔去重、D 行星映射双写者:[解耦](archive/weather-cloud-decoupling-2026-10-01.md) §8;F 的全局天气值通道已被后续决策撤销。
-- 性能工作统一从 [当前帧率优化清单](proposals/frame-rate-optimization-audit-2026-10-08.md) 选项与测量;未实施,拖 UI 的 A 组维持不做。
-- 夜云真实性:核对透射率 / 星空合成,评估环境入射遮蔽与银边解耦,再核对独立月光;[可见性诊断](cloud-visibility-diagnosis-2026-10-10.md) §16.4。云形 / 轨道衔接按既有提案顺序,尚未实施。
-- 雷声兜底已删:[实施 / 待验收](archive/thunder-fallback-removal-2026-10-14.md) §4~§5;近远雷、相机 / 飞船高度分离、暂停与游戏听感待复测。§6 的其他配置候选尚未处理。
-- 未启用星环补丁仍保留,`DepthCapture` 等用户指定项已删除:[场景门控](archive/monobehaviour-scene-gate-2026-10-02.md) §5。
-- 注释继续按 §五.10 维护;雨 / 闪电的指定历史与过期描述已清理,旧占比不当作当前实测。
-- 雾的两种效果已进入 [游戏适配 / 验证阶段](fog-implementation-plan-2026-10-09.md);雨图集、落雷贴地形、联机表现、机体反射探头仍未排期。
-- 新功能保持可关闭且默认关闭;天气联动云须用户另行提出,不能恢复旧占位字段或天气值方案。
-- 日志已收口:雨 / 雨声自动心跳、调参回显、逐次雷声记录已移除;错误告警保留;游戏诊断按钮已移除,GPU 回读留给开发接口。见 [UI 清理](archive/user-ui-cleanup-2026-10-09.md) §2、[雨记录](archive/sp2-rain-particledomain-port-2026-09-28.md) §10.9。
-
-## 五、文档写入规则(维护约定)
-
-### 0. 命名与位置
-
-- 主题用 `<topic>-YYYY-MM-DD.md`(英文 kebab-case),正文中文,单一主题一个文件。索引 / 上下文 / 本地路径表不带日期;脚本放根目录 `tools/`。
-
-### 1. 状态与单一事实源
-
-- 头部 `状态:` 是唯一事实源;使用 📋 规划 / 评估中、🚧 实施中、⏸ 暂停、✅ 已实现 / 已归档。状态变更同步索引、待办和上下文。
-- 实现与验收分开:源码存在、历史编译成功、历史真机证据、本次复验不能互相替代;未知须注明未确认。
-
-### 2. 结构、决策记录与“不复制正文”
-
-- 头部写状态、日期、关联和定位;正文按动机 → 现状 → 决策 → 实施记录 → 剩余项 / 回归判据组织。
-- 决策用 `【决策:YYYY-MM-DD】`;翻案保留历史范围并链到最终结论。索引只写摘要和入口,不抄参数表、论证与调试流水。
-
-### 3. 交叉链接
-
-- 用相对路径;移动后全仓检查 Markdown 链接、代码注释和正文路径,同步入链与出链。
-- 文档引用用“链接 + 小节名 / 编号”;只有源码用 `文件:行号`。重编号须保留旧 → 新对照并迁移所有引用,包括省略写法。
-
-### 4. 三区流转
-
-- 根目录放正在推进的主题;`proposals/` 放未拍板 / 未排期方案;`archive/` 放已落地实现记录及被取代方案。
-- 实现已收束而待验收的记录可归档,头部须注明未验收,在 §四之三保留入口;未排期剩余项也须保留。移动后检查旧路径消失、新内容完整。
-
-### 5. 已知问题
-
-- 登记 §四之二并附代码或运行证据;只有历史报告而未复验须注明。修复后保留结论,进入归档台账或标记已解决。
-
-### 6. 与代码同改、同提交
-
-- 行为、文案、命令、路径变化时同步对应文档;提交时成组包含相关改动。文档整理可独立提交,不要夹带行为修改。
-
-### 7. 编码与校验
-
-- `.md` / `.cs` 使用 UTF-8 无 BOM、LF,禁止 U+FFFD;避免 PowerShell 5.1 默认编码与误处理 Markdown 的正则替换。
-- 读取失败立即停止;命令中的路径用 ASCII 或枚举出的 `.FullName`。恢复 / 重写后重新检查编码与内容。
-
-### 8. 改后自检清单
-
-- 必跑 [check-docs.ps1](../tools/check-docs.ps1):`powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-docs.ps1 -Root docs`,退出码 0。
-- 人工复核状态 / 分区 / 待验收一致,路径与章节引用有效,新旧文件不并存,关键事实未丢失。脚本不能代替这些判断。
-- 删除 / 移动 / 批量改写后检查实际文件和退出码,不能只凭命令无报错判断成功。
-
-### 9. 隐私红线(公开仓库强制)
-
-- 公开文档不写本机绝对路径、用户名或 IP;真实值只在被忽略的 [LOCAL_PATHS.md](LOCAL_PATHS.md),严禁提交。
-- 令牌:`<PROJECT>`、`<USERPROFILE>`、`<JNO_CODE>`、`<JNO_D2>`、`<JNO_MP>`、`<VOLRE_REF>`、`<KSA_REF>`、`<SP2_D4>`、`<SP2_CODE>`、`<SP2_GAME>`、`<RVM_EA>`。反编译证据写文件名和行号。
-
-### 10. 代码注释(规范条文)
-
-- 留职责、不变量 / 契约、单位 / 范围 / 默认值、失败降级和必要反例;删复述名称、阶段号、日期、踩坑史、方案论证、调试流水。历史只放文档指针。
-- 类注释 ≤3 行,方法通常 1 行(必要说明 ≤3 行);shader / compute 头部可集中写不变量。参考占比:C# 5~8%,>15% 应检查;shader / compute ≤12%。
-- 过期注释按缺陷处理;代码 `TODO` 登记 §四之三。只清注释不得改代码或字符串;用 [strip-code-comments.ps1](../tools/strip-code-comments.ps1) `-Old <快照> -New <改后>` 自证退出码 0。
-
-### 11. 反模式与预防
-
-- 改名前留快照,改后检查旧文件消失;表格保留表头 / 分隔行;临时文件不留 docs;避免重复文档与圈号。
-- 精简前设可核对目标,改后检查事实、标识符、证据和隐式契约,不能只比较标题。无必要不删主题原始证据;大段历史留归档。
-- 预算遵循脚本:README ≤300 行 / 单行 ≤400 字符;AGENT_CONTEXT ≤200 行 / 单行 ≤500 字符;其他文档单行 ≤1200 字符。
-- 外部路径、临时文件、打包产物等事实必须实测并带日期,只记一处;历史记录不能写成未经核对的当前状态。
-- 批量整理按“移动修链接 → 精简 → 校验”分步核对;不要混入代码行为修改。机械阈值变化时同步规则与脚本。
+开工与文档规则统一见根目录 [AGENTS.md](../AGENTS.md)，新增内容前先按其分工更新现有段落。

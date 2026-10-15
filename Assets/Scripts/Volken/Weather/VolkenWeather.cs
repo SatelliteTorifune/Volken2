@@ -184,9 +184,12 @@ namespace Volken.Weather
             }
             Config = cfg;
 
+            SetActive(CanRunWeather(), refreshSchedule: true);
             RainParticles.ApplyConfig(cfg.rain);
             RainParticles.SyncToCurrentView();
-            SetActive(CanRunWeather(), refreshSchedule: true);
+
+            RainLensEffect.SyncToCurrentView();
+            RainLensEffect.ClearCurrent();
 
             Mod.Log($"VolkenWeather: planet={planetName} preset={configName} active={IsActive} " +
                     $"rain={cfg.rain.enabled} fog={cfg.fog.enabled} lightning={cfg.lightning.enabled}");
@@ -240,7 +243,7 @@ namespace Volken.Weather
                 return false;
             }
 
-            Config.SaveToFile(CurrentPlanet, newName);
+            if (!Config.SaveToFile(CurrentPlanet, newName)) return false;
             CurrentConfigName = newName;
             RefreshPresetList(CurrentPlanet);
             RegisterPresetName();
@@ -261,19 +264,24 @@ namespace Volken.Weather
         }
 
         /// <summary>把当前天气参数落盘到本行星的天气预设文件,并确保清单里记着这个预设名。</summary>
-        public void SaveCurrentConfig()
+        public bool SaveCurrentConfig()
         {
             try
             {
                 if (string.IsNullOrEmpty(CurrentPlanet) || Config == null)
                 {
                     Mod.Log("VolkenWeather: SaveCurrentConfig 失败 —— 当前没有行星/配置");
-                    return;
+                    return false;
                 }
-                Config.SaveToFile(CurrentPlanet, CurrentConfigName);
+                if (!Config.SaveToFile(CurrentPlanet, CurrentConfigName)) return false;
                 RegisterPresetName();
+                return true;
             }
-            catch (Exception ex) { Mod.Log("VolkenWeather: SaveCurrentConfig error: " + ex.Message); }
+            catch (Exception ex)
+            {
+                Mod.Diag("VolkenWeather: SaveCurrentConfig error: " + ex.Message);
+                return false;
+            }
         }
 
         /// <summary>把内存里的天气参数恢复成默认(完全关闭),不落盘 —— 需玩家再点"保存"才写文件。</summary>
@@ -283,9 +291,11 @@ namespace Volken.Weather
             RainParticles.ApplyConfig(Config?.rain);
             RainParticles.SyncToCurrentView();
             SetActive(CanRunWeather(), refreshSchedule: true);
+            RainLensEffect.SyncToCurrentView();
+            RainLensEffect.ClearCurrent();
         }
 
-        // 【不做联动】天气不修改云的任何参数。要做的话见 docs/archive/weather-cloud-decoupling-2026-10-01.md §3.6。
+        // 天气不修改云参数;模块边界见 docs/architecture.md。
 
         /// <summary>按雷电开关与当前环境起停雷电;雷暴节奏由 <see cref="LightningModule"/> 自己管。</summary>
         private void UpdateLightning(bool refreshSchedule = false)
@@ -358,11 +368,22 @@ namespace Volken.Weather
         {
             if (IsActive == active && !refreshSchedule) return;
             IsActive = active;
+            RainParticles.SyncToCurrentView();
+            if (!active)
+            {
+                RainLensEffect.ClearCurrent();
+                RainLensEffect.SyncToCurrentView();
+            }
             UpdateLightning(refreshSchedule);
         }
 
-        private bool CanRunWeather() => Config != null && !string.IsNullOrEmpty(CurrentPlanet) &&
-            Game.InFlightScene && Clouds.VolumetricClouds.Instance?.CurrentPlanet.SupportsAtmosphereEffects == true;
+        internal bool CanRunWeather()
+        {
+            var environment = Clouds.VolumetricClouds.Instance?.CurrentPlanet;
+            return Config != null && !string.IsNullOrEmpty(CurrentPlanet) && Game.InFlightScene &&
+                environment.HasValue && environment.Value.SupportsAtmosphereEffects &&
+                environment.Value.PlanetName == CurrentPlanet;
+        }
 
         /// <summary>重算环境激活态并按独立开关同步雷电启停。</summary>
         public void RefreshActiveState()
@@ -375,10 +396,13 @@ namespace Volken.Weather
         /// <summary>由 <c>WeatherTicker</c> 每帧驱动。独立于任何渲染器:相机被销毁/替换后天气仍继续跑。</summary>
         public void Tick(float deltaTime)
         {
+            SetActive(CanRunWeather());
             UpdateCameraMetrics(deltaTime);
 
             // 雨挂在场景相机上(随 Flight 场景卸载就没了)→ 每个飞行场景都要按配置重挂;不新增 SceneLoaded 订阅者,由这条每帧门控承担
             RainParticles.SyncToCurrentView();
+
+            RainLensEffect.SyncToCurrentView();
 
             // 子系统各自按自己的配置跑(雷暴节奏由 LightningModule 自己管),这里不喂。
             if (!IsActive) return;

@@ -46,9 +46,9 @@ namespace Volken.Weather
             {
                 try
                 {
-                    weather.SaveCurrentConfig();
+                    bool saved = weather.SaveCurrentConfig();
                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                        Locale.GetString("Volken.UI.WeatherConfigSaved"));
+                        Locale.GetString(saved ? "Volken.UI.WeatherConfigSaved" : "Volken.UI.ErrorSavingConfig"));
                 }
                 catch (Exception ex)
                 {
@@ -73,7 +73,11 @@ namespace Volken.Weather
                             string name = inputDialog.InputText;
                             if (string.IsNullOrWhiteSpace(name)) return;
 
-                            if (!weather.SaveAsNewConfig(name)) return;
+                            if (!weather.SaveAsNewConfig(name))
+                            {
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
+                                return;
+                            }
 
                             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
                                 string.Format(Locale.GetString("Volken.UI.ConfigSavedAs"),
@@ -262,6 +266,36 @@ namespace Volken.Weather
                 () => weather.Config?.rain?.adaptiveDomain ?? true,
                 v => ApplyRain(c => c.rain.adaptiveDomain = v)));
 
+            BuildRainLensGroup(group, weather);
+            parent.Add(group);
+        }
+
+        private static void BuildRainLensGroup(GroupModel parent, VolkenWeather weather)
+        {
+            var group = new GroupModel(Locale.GetString("Volken.UI.RainLens"));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainLensEnabled"),
+                () => weather.Config?.rainLens?.enabled ?? false, v =>
+                {
+                    Set(c => c.rainLens.enabled = v);
+                    RainLensEffect.SyncToCurrentView();
+                }));
+            AddSlider(group, "Volken.UI.RainLensIntensity", () => weather.Config?.rainLens?.intensity ?? 1f,
+                v => Set(c => c.rainLens.intensity = v), 0f, 3f, 2);
+            AddSlider(group, "Volken.UI.RainLensSpawnRate", () => weather.Config?.rainLens?.spawnRate ?? 18f,
+                v => Set(c => c.rainLens.spawnRate = v), 0f, 40f, 0);
+            AddSlider(group, "Volken.UI.RainLensDropSize", () => (weather.Config?.rainLens?.dropSize ?? 0.018f) * 100f,
+                v => Set(c => c.rainLens.dropSize = v / 100f), 0.3f, 3.5f, 2);
+            AddSlider(group, "Volken.UI.RainLensLifetime", () => weather.Config?.rainLens?.lifetime ?? 6f,
+                v => Set(c => c.rainLens.lifetime = v), 0.5f, 20f, 1);
+            AddSlider(group, "Volken.UI.RainLensRefraction", () => weather.Config?.rainLens?.refraction ?? 14f,
+                v => Set(c => c.rainLens.refraction = v), 0f, 30f, 1);
+            AddSlider(group, "Volken.UI.RainLensBlur", () => weather.Config?.rainLens?.blur ?? 1.8f,
+                v => Set(c => c.rainLens.blur = v), 0f, 4f, 1);
+            AddSlider(group, "Volken.UI.RainLensSpeedThreshold", () => weather.Config?.rainLens?.speedThreshold ?? 40f,
+                v => Set(c => c.rainLens.speedThreshold = v), 1f, 500f, 0);
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RainLensShelterCheck"),
+                () => weather.Config?.rainLens?.shelterCheck ?? true,
+                v => Set(c => c.rainLens.shelterCheck = v)));
             parent.Add(group);
         }
 

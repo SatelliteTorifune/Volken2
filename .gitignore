@@ -2,9 +2,13 @@
 /*
 !/Assets/
 !/docs/
+!/tools/
 
 # Local path mapping must never be committed.
 /docs/LOCAL_PATHS.md
+
+# Share only the documentation validator from local tools.
+/tools/*
 
 # Keep existing exclusions inside the allowed directories.
 .idea/
@@ -72,5 +76,7 @@ InitTestScene*.unity*
 !/.gitattributes
 !/.gitignore
 !/README.md
+!/AGENTS.md
+!/tools/check-docs.ps1
 !/Volken2.sln.DotSettings.user
 !/version.txt

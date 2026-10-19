@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Assets.Scripts;
 using Assets.Scripts.Terrain.Rendering;
 using HarmonyLib;
@@ -37,7 +36,7 @@ namespace Volken.Clouds
                 if (_lastError != ex.Message)   // 只在错误信息变化时打一次,避免每帧刷屏
                 {
                     _lastError = ex.Message;
-                    Mod.Log("Volken:WaterReflectionCloudPatch ERROR: " + ex);
+                    Mod.Log("CloudReflection.Render failed: {0}", ex);
                 }
             }
         }
@@ -50,8 +49,6 @@ namespace Volken.Clouds
         private static Mesh _fullscreenTriangle;
         private static readonly Dictionary<CloudLayer, Material> _materials = new Dictionary<CloudLayer, Material>();
         private static readonly List<CloudLayer> _activeLayers = new List<CloudLayer>();
-        private static bool _diagnosed;
-        private static bool _loggedFirst;
 
         // 反射质量(只作用于 clone 材质)
         private const float kReflectionStepScale = 5f;
@@ -59,16 +56,6 @@ namespace Volken.Clouds
 
         public static void Render(WaterReflectionPlaneScript plane, Camera cam)
         {
-            if (!_diagnosed)   // 一次性诊断:确认 postfix 真被调到、参数正常
-            {
-                _diagnosed = true;
-                int layerCount = -1;
-                try { layerCount = Volken.Clouds.VolumetricClouds.Instance != null ? Volken.Clouds.VolumetricClouds.Instance.ActiveLayers.Count() : -1; } catch { }
-                Mod.Log("Volken:CloudReflectionRenderer diag: InFlight=" + Game.InFlightScene +
-                    " targetTexture=" + (cam != null && cam.targetTexture != null ? cam.targetTexture.width + "x" + cam.targetTexture.height : "null") +
-                    " layers=" + layerCount);
-            }
-
             if (!Game.InFlightScene) return;
             if (Volken.Clouds.VolumetricClouds.Instance == null) return;
             if (!ModSettings.Instance.WaterReflection) return;   // 水面反射云开关(ModSettings > Water Reflection,默认关)
@@ -142,11 +129,12 @@ namespace Volken.Clouds
                 if (compositePass < 0) compositePass = mat.FindPass("Composite");
                 if (cloudsPass < 0 || compositePass < 0)
                 {
-                    Mod.Log("Volken:CloudReflectionRenderer pass not found (Clouds=" + cloudsPass + ", Composite=" + compositePass + ")");
+                    Mod.Log("Cloud reflection pass not found (Clouds={0}, Composite={1})", cloudsPass, compositePass);
                     return;
                 }
 
                 layer.SetStaticShaderProperties(mat);   // 与主材质同步(clone 可能落后于配置变更)
+                CloudRenderer.SetCloudWorldProperties(mat, layer);
                 CloudRenderer.SetCloudAmbientProperties(mat);
                 CloudRenderer.SetCloudLightningProperties(mat, true);
                 mat.SetTexture("CloudLightningTex", Texture2D.blackTexture);
@@ -216,13 +204,6 @@ namespace Volken.Clouds
                     RenderTexture.active = prev;
                 }
 
-                if (!_loggedFirst)
-                {
-                    _loggedFirst = true;
-                    Mod.Log("Volken:CloudReflectionRenderer ok: rt=" + rt.width + "x" + rt.height +
-                        " layers=" + activeLayers.Count + " fov=" + cam.fieldOfView + " aspect=" + aspect +
-                        " maxDepth=" + maxDepth + " Clouds=" + cloudsPass + " Composite=" + compositePass);
-                }
             }
         }
 

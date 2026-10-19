@@ -74,6 +74,12 @@ namespace Volken.Clouds
             mat.SetFloat("cloudDensity", config.density);
             mat.SetFloat("cloudAbsorption", config.absorption);
             mat.SetFloat("ambientLight", config.ambientLight);
+            mat.SetFloat("_CloudSunOcclusion", config.sunOcclusionEnabled || config.groundShadowsEnabled ? 1f : 0f);
+            float sunlightStrength = CloudSunOcclusion.Strength(config.sunlightOcclusionStrength, 0.8f);
+            mat.SetFloat("_SunlightOcclusionStrength", config.sunOcclusionEnabled && !config.groundShadowsEnabled ? sunlightStrength : 0f);
+            mat.SetFloat("_AmbientOcclusionStrength", config.sunOcclusionEnabled ? CloudSunOcclusion.Strength(config.ambientOcclusionStrength, 0.5f) : 0f);
+            mat.SetFloat("_GroundShadowStrength", sunlightStrength);
+            mat.SetFloat("_GroundShadowDistance", CloudGroundShadows.Distance(config.groundShadowDistance));
             mat.SetFloat("cloudCoverage", config.coverage);
             mat.SetFloat("cloudScale", 1.0f / Mathf.Max(0.1f, config.shapeScale));
             mat.SetFloat("detailScale", 1.0f / Mathf.Max(0.1f, config.detailScale));

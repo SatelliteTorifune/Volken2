@@ -18,6 +18,11 @@
     <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay.</s>
 
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
+    <s id="Volken.UI.GroundShadowDistance">Ground shadow distance(m)</s>
+    <s id="Volken.UI.GroundShadows">Cloud ground shadows</s>
+    <s id="Volken.UI.SunOcclusion">Overcast scene lighting</s>
+    <s id="Volken.UI.SunlightOcclusionStrength">Direct sunlight occlusion strength</s>
+    <s id="Volken.UI.AmbientOcclusionStrength">Ambient light dimming</s>
 
     <s id="Volken.UI.Weather">Weather</s>
     <s id="Volken.UI.WeatherUnavailable">Weather system unavailable. Reload the flight scene.</s>

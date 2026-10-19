@@ -238,6 +238,26 @@ namespace Volken.Core
             }
         }
 
+        private void AddCloudOcclusionControls(GroupModel group, CloudConfig cfg)
+        {
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.GroundShadows"), () => cfg.groundShadowsEnabled, enabled =>
+            {
+                cfg.groundShadowsEnabled = enabled;
+                VolumetricClouds.Instance.ValueChanged();
+            }));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SunOcclusion"), () => cfg.sunOcclusionEnabled, enabled =>
+            {
+                cfg.sunOcclusionEnabled = enabled;
+                VolumetricClouds.Instance.ValueChanged();
+            }));
+            CreateSlider(group, Locale.GetString("Volken.UI.SunlightOcclusionStrength"), () => cfg.sunlightOcclusionStrength,
+                value => { cfg.sunlightOcclusionStrength = value; VolumetricClouds.Instance.ValueChanged(); }, 0f, 1f, 2);
+            CreateSlider(group, Locale.GetString("Volken.UI.GroundShadowDistance"), () => cfg.groundShadowDistance,
+                value => { cfg.groundShadowDistance = value; VolumetricClouds.Instance.ValueChanged(); }, 1000f, 100000f, 0);
+            CreateSlider(group, Locale.GetString("Volken.UI.AmbientOcclusionStrength"), () => cfg.ambientOcclusionStrength,
+                value => { cfg.ambientOcclusionStrength = value; VolumetricClouds.Instance.ValueChanged(); }, 0f, 1f, 2);
+        }
+
         private void CreateInspectorPanel()
         {
             try
@@ -595,6 +615,7 @@ namespace Volken.Core
                 },
                 new System.Collections.Generic.List<string> { "Additive", "Standard" });
             group.Add(compositeDropdown);
+            AddCloudOcclusionControls(group, cfg);
 
             // 方案 B: 游戏自带云作为全球分布形状(对比用)
             var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),
@@ -800,6 +821,7 @@ namespace Volken.Core
                 },
                 new System.Collections.Generic.List<string> { "Additive", "Standard" });
             group.Add(compositeDropdown);
+            AddCloudOcclusionControls(group, cfg);
 
             // 方案 B/方案 A: 游戏自带云分布 + 区域内密度缩放(与主层一致)
             var stockToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseStockCloudMap"),

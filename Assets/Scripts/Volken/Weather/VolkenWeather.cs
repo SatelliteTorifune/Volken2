@@ -279,7 +279,7 @@ namespace Volken.Weather
             }
             catch (Exception ex)
             {
-                Mod.Diag("VolkenWeather: SaveCurrentConfig error: " + ex.Message);
+                Mod.Log("Failed to save current weather config: {0}", ex);
                 return false;
             }
         }

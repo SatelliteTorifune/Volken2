@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Assets.Scripts;
 using ModApi.Craft;
 using ModApi.Flight.GameView;
@@ -104,13 +103,11 @@ namespace Volken.Weather
 
         public static int PreCullCalls;            // 实例 OnPreCull 累计触发次数
         public static int DrawCalls;               // 发出间接绘制的帧计数(≈ draws/s)
-        public static int LastInstanceCount = -1;  // 最近一次 GPU 回读的 instanceCount(−1 = 尚未回读)
         public static int RecenterCount;           // 换帧原点重定位(TranslateFixed)次数
         public static bool RecenterHooked;         // ModApi 换帧重定位事件是否挂上(挂不上 = 飞远/跃迁后整片雨会跳)
         public static int RecenterEventCount;      // ModApi 换帧事件触发次数(本环境实测不触发,兜底判跳变为主力)
         public static int RecenterJumpCount;       // 兜底判定出的换帧次数(飞行器帧位置跳变)
         public static float LastCraftJump;         // 本帧飞行器帧位置跳变幅度(米)
-        public static int LastRespawns = -1;       // 最近一次回读区间内的重生次数(判回收是否在工作;恒 0 = 粒子从不离域)
         public static Vector3 LastAxisDir;         // 最近一帧雨丝世界系朝向(归一化)
         public static float LastAxisDotFwd;        // 雨丝轴·相机前向(恒 ≈0 = 雨丝被压在屏幕平面里 = 构轴错误)
         public static float LastAxisDotDown;       // 雨丝轴·径向"下"(静止时 ≈1)
@@ -135,16 +132,13 @@ namespace Volken.Weather
         private ComputeBuffer _positions;   // float4 × capacity
         private ComputeBuffer _randomData;  // float4 × capacity
         private ComputeBuffer _collisionFallback;
-        private ComputeBuffer _diag;        // uint × 4:x0 = 本帧重生次数(CPU 每帧复位)
+        private ComputeBuffer _diag;        // 保留 compute 的计数缓冲绑定,不作 CPU 回读。
         private Texture2D _streakTex;       // 程序化柔边雨丝贴图
         private GraphicsBuffer _args;       // 5×uint 间接参数(RenderMeshIndirect 要 GraphicsBuffer)
 
         private static readonly uint[] ArgsReset = { 12, 0, 0, 0, 0 };   // [0] = indexCount(十字四边形 12);建 buffer 时写入一次
-        private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // 诊断计数(回读后清零重启累计)
-        private const float ReadbackInterval = 10f;                  // 手动诊断请求最小间隔(秒)
-        private const float DistInterval = 300f;                     // 落点分布诊断周期(秒;整块回读,一次性成本约 cap×16B)
+        private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // compute 计数缓冲初值
         private const float RespawnPhaseRate = 20f;                  // 重生相位速率(/秒):_phase = floor(_time × 本值)
-        private const float ShaderBuild = 10f;                       // 期望的 shader 版本(与 shader 里 _ShaderVer 对齐)
         private const float AssetRetryInterval = 5f;                 // 资产加载重试间隔(秒)
         private const int AssetMaxRetries = 6;                       // 资产加载最多重试次数(Awake 那一刻资源加载器可能还没就绪)
 
@@ -153,19 +147,13 @@ namespace Volken.Weather
         private int _kernelTranslateFixed = -1;
         private int _kernelFillArgs = -1;
 
-        private float _lastReadbackTime = -999f;
-        private float _lastDistTime = -999f;   // 落点分布诊断(整块回读)的上次时间
-        private float _lastAliveLogTime = -999f;
         private CloudRenderer _cloudRenderer;      // 缓存本相机的云渲染器(每帧 GetComponent 是原生查找)
         private float _cloudProbeTime = -999f;     // 缓存未命中时的重探时间点
         private Vector3 _lastCamPos;
         private bool _hasLastCamPos;
         private Vector3 _lastCamVel;              // 锁存:暂停(dt≈0)时保持最近测得的速度,流线轴不跳回竖直
-        private float _lastDt;                    // 诊断:最近一帧 Time.deltaTime
-        private Vector3 _lastDown;                // 诊断:最近一帧的径向"下"(看 GravityNormal 是否正常)
-        private Vector3 _lastAxisVel;             // 诊断:流线轴/拉伸的速度源(飞行器本体速度,无飞行器时=camVel)
+        private Vector3 _lastAxisVel;             // 流线轴速度源,同时用于换帧跳变判定(无飞行器时用 camVel)。
         private bool _recenterHooked;             // 换帧原点事件是否已挂
-        private Vector3 _lastRecenterDelta;       // 诊断:最后一次换帧平移量
         private Vector3 _pendingRecenterDelta;    // 事件记录的待应用平移(在 Tick 里统一应用)
         private bool _hasPendingRecenter;
         private Vector3 _lastCraftFramePos;       // 兜底判定:飞行器帧位置
@@ -177,9 +165,6 @@ namespace Volken.Weather
         private float _adaptSpeed;                // 平滑后的相机速度(自适应域用;滤掉切视角/换帧的单帧瞬移)
         private bool _adaptiveRadiusWarned;
         private const float AdaptTeleportMeters = 15f;   // 单帧相机位移超过它 = 瞬移,不计入自适应
-        private bool _rndChecked;      // _RandomData 只回读校验一次(验证包里的 compute 有没有写 yzw)            // SELFCHECK 只打一次(自适应扩容会反复重建 buffer)
-        private Vector3 _lastReadbackPos0;        // 诊断:上次回读的 pos[0](算位移 → 判断下落是否在积分)
-        private bool _hasLastReadbackPos0;
 
         private void BuildMesh()   // 十字四边形:0.1×2.5,8 顶点 / 12 三角形(两个交叉面)
         {
@@ -247,14 +232,14 @@ namespace Volken.Weather
             if (_assetsReady) return;
             try
             {
-                _compute = Mod.LoadVolkenAsset<ComputeShader>("Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.compute");
-                _shader = Mod.LoadVolkenAsset<Shader>("Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.shader");
+                _compute = Mod.LoadVolkenAsset<ComputeShader>("Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.compute", false);
+                _shader = Mod.LoadVolkenAsset<Shader>("Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.shader", false);
                 if (_compute == null || _shader == null)
                 {
                     string missing = "compute=" + (_compute != null) + " shader=" + (_shader != null) +
                                      " (检查 ModData.asset._otherAssets 是否含 RainParticles 两个资产并重建 bundle)";
                     if (_isMainView) AssetsStatus = missing;
-                    Mod.Diag("Volken:RainParticles assets missing — " + missing);
+                    Mod.Log("RainParticles assets missing — {0}", missing);
                     return;
                 }
                 _kernelRandomize = _compute.FindKernel("Randomize");
@@ -265,7 +250,7 @@ namespace Volken.Weather
                 {
                     const string kernelsMissing = "kernel FindKernel 失败(Randomize/Positioning/TranslateFixed/FillArgs)";
                     if (_isMainView) AssetsStatus = kernelsMissing;
-                    Mod.Diag("Volken:RainParticles " + kernelsMissing);
+                    Mod.Log("RainParticles {0}", kernelsMissing);
                     return;
                 }
                 _mat = new Material(_shader);
@@ -285,7 +270,7 @@ namespace Volken.Weather
             catch (Exception ex)
             {
                 if (_isMainView) AssetsStatus = "加载异常: " + ex.Message;
-                Mod.LogThrottled("RainParticles.Assets", ex);
+                Mod.Log("RainParticles.Assets failed: {0}", ex);
             }
         }
 
@@ -295,7 +280,6 @@ namespace Volken.Weather
             if (!_assetsReady || _compute == null || _mat == null) return;   // 资产未就绪时静默(修复 Awake 竞态 NRE)
             int cap = Mathf.Clamp(Capacity, 1, Mathf.Max(1, AdaptiveMaxParticles));
             BufferCapacity = cap;
-            if (_isMainView) { LastInstanceCount = -1; LastRespawns = -1; }
             _positions = new ComputeBuffer(cap, 16);                          // float4
             _randomData = new ComputeBuffer(cap, 16);                         // float4
             _collisionFallback = new ComputeBuffer(1, 16);
@@ -349,61 +333,6 @@ namespace Volken.Weather
             if (_collisionFallback != null) { _collisionFallback.Release(); _collisionFallback = null; }
             if (_diag != null) { _diag.Release(); _diag = null; }
             if (_args != null) { _args.Release(); _args = null; }
-        }
-
-        /// <summary>部署自检日志:重点是材质属性 —— **旧 shader 缺 _RotationMatrix 时 SetMatrix 静默无效 → 雨丝朝向全错**(最常被"包里是旧资源"坑到)。</summary>
-        private void LogSelfCheck(int cap)
-        {
-            try
-            {
-                var sb = new StringBuilder();
-                sb.Append("RainParticles SELFCHECK: cap=").Append(cap)
-                  .Append(" domainR=").Append(DomainRadius.ToString("F0"))
-                  .Append(" fallSpeed=").Append(FallSpeed)
-                  .Append(" streakLen=").Append(StreakLength).Append(" thick=").Append(StreakThickness)
-                  .Append(" stretchAmt=").Append(StretchAmount.ToString("F3")).Append(" limit=").Append(StretchLimit)
-                  .Append(" invFade=").Append(InvFade.ToString("F2")).Append(" falloff=").Append(Falloff)
-                  .Append(" stream=").Append(StreamMode ? 1 : 0)
-                  .Append(" group=").Append(ThreadGroupSize);
-                Mod.Diag(sb.ToString());
-
-                // 球域密度:均匀体积分布的期望值(粒子/m³)—— 标定要拿它跟 EVE 0.139/m³ 比
-                float vol = (4f / 3f) * Mathf.PI * DomainRadius * DomainRadius * DomainRadius;
-                Mod.Diag("RainParticles SELFCHECK density: {0:F4} particles/m³ (均匀体积;SP2 参考 0.139/m³ @ 200k/半径70m)",
-                    cap / Mathf.Max(1f, vol));
-
-                Mod.Diag("RainParticles SELFCHECK kernels: Randomize={0} Positioning={1} TranslateFixed={2} FillArgs={3}",
-                    _kernelRandomize, _kernelPositioning, _kernelTranslateFixed, _kernelFillArgs);
-
-                // 版本判据:① shader 读 Properties 里的 _ShaderVer 哨兵(**可靠**)—— _RotationMatrix/_Positions/_FadeAmount/_LinearSceneDepth 只在 HLSL 里声明、不在 Properties 表里,HasProperty 未必可见,拿它判版本会误报"旧 shader";② compute 看 TranslateFixed 内核索引是否 ≥0。
-                string[] wanted = { "_MainTex", "_Emission", "_MainColor", "_InvFade", "_Falloff", "_ShaderVer", "_EdgeFade", "_DistanceFade", "_StreakVariation", "_MinStreakWidthPx" };
-                var miss = new StringBuilder();
-                var have = new StringBuilder();
-                foreach (var p in wanted)
-                {
-                    bool ok = _mat != null && _mat.HasProperty(p);
-                    if (ok) have.Append(p).Append(' '); else miss.Append(p).Append(' ');
-                }
-                float shaderVer = _mat != null && _mat.HasProperty("_ShaderVer") ? _mat.GetFloat("_ShaderVer") : -1f;
-                Mod.Diag("RainParticles SELFCHECK material: shaderVer={0}(期望 {1}) {2} | props ok=[{3}] missing=[{4}] | shaderSupported={5}",
-                    shaderVer, ShaderBuild,
-                    Mathf.Abs(shaderVer - ShaderBuild) < 0.5f ? "新版✓" : "✗包里是旧 shader!",
-                    have.ToString().Trim(), miss.ToString().Trim(),
-                    _shader != null && _shader.isSupported);
-
-                Mod.Diag("RainParticles SELFCHECK mesh: verts={0} tris={1} bounds={2} shader='{3}' tex={4}",
-                    _mesh != null ? _mesh.vertexCount : -1,
-                    _mesh != null ? _mesh.triangles.Length / 3 : -1,
-                    _mesh != null ? _mesh.bounds.size.ToString("F2") : "?",
-                    _shader != null ? _shader.name : "?",
-                    _streakTex != null ? (_streakTex.width + "x" + _streakTex.height + " 程序化柔边") : "white(硬边)");
-
-                Mod.Diag("RainParticles SELFCHECK recenter: hooked={0} (ModApi IGameView.ReferenceFrameRecentered)", _recenterHooked);
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles selfcheck ERROR: " + ex.Message);
-            }
         }
 
         // 挂载(幂等)
@@ -622,44 +551,6 @@ namespace Volken.Weather
             AttachToCurrentView(cam);
         }
 
-        // 状态输出(面板按钮调用)
-
-        /// <summary>把完整状态写进 Player.log(天气面板「把雨状态写入日志」按钮),便于用户直接发日志排查。</summary>
-        public static void DiagStatus()
-        {
-            try
-            {
-                var cam = ResolveViewCamera();
-                if (cam != null) Attach(cam);
-                Mod.Diag("RainParticles STATUS: enabled={0} testRow={1} cap={2} R={3:F0} score={4:F4}/m³ calls={5} draws={6} lastInstanceCount={7} instances={8}",
-                    Enabled, TestRow, Capacity, DomainRadius, DensityPerM3(), PreCullCalls, DrawCalls, LastInstanceCount, Live.Count);
-                Mod.Diag("RainParticles STATUS params: fall={0:F1} len={1:F2} w={2:F3} stretch={3:F3} edge={4:F2} soft={5:F2} falloff={6:F2} bright={7:F2} stream={8} respawnMirror={9}",
-                    FallSpeed, StreakLength, StreakThickness, StretchAmount, EdgeFade, InvFade, Falloff, Brightness, StreamMode, RespawnMirror);
-                Mod.Diag("RainParticles STATUS state: alt={0:F0}m ceil={1} altFade={2:F3} stretchNow={3:F2} axis=({4:F2},{5:F2},{6:F2}) ·fwd={7:F2} down·camUp={8:F2} softDepth={9} assets='{10}'",
-                    LastAltitude, LastCeiling > 0f ? LastCeiling.ToString("F0") : "off", LastAltitudeFade, LastStretch,
-                    LastAxisDir.x, LastAxisDir.y, LastAxisDir.z, LastAxisDotFwd, LastDownDotCamUp, SoftDepthReady, AssetsStatus);
-                Mod.Diag("RainParticles STATUS counters: respawn={0} recenter={1}(ev{2}/jp{3}) craftJump={4:F0}m camSpd={5:F1}m/s",
-                    LastRespawns, RecenterCount, RecenterEventCount, RecenterJumpCount, LastCraftJump, LastCamSpeed);
-                Mod.Diag("RainParticles STATUS ui: {0}", StatsLine());
-                Mod.Diag("RainParticles STATUS effects: collision={0} resolution={1} splashes={2} distance={3:F1}m lifetime={4:F2}s size={5:F2}m density={6:F2} transparency={7:F2}",
-                    CollisionEnabled, CollisionResolution, SplashesEnabled, SplashDistance, SplashLifetime, SplashSize, SplashDensity, Transparency);
-                foreach (var inst in Live)
-                {
-                    if (inst == null || !inst._isMainView || inst._positions == null || inst._args == null) continue;
-                    float now = Time.realtimeSinceStartup;
-                    if (now - inst._lastReadbackTime < ReadbackInterval) continue;
-                    inst._lastReadbackTime = now;
-                    inst.LogSelfCheck(inst._positions.count);
-                    inst.LogSnapshot(TestRow ? 20 : inst._positions.count);
-                    if (SystemInfo.supportsAsyncGPUReadback) inst.RequestReadbacks();
-                }
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles.DiagStatus ERROR: " + ex.Message);
-            }
-        }
-
         public static void SetEnabled(int on)
         {
             bool want = on != 0 && CanRunInCurrentEnvironment();
@@ -785,30 +676,6 @@ namespace Volken.Weather
             return Mathf.Max(1, count) / Mathf.Max(1f, vol);
         }
 
-        /// <summary>UI 状态行(与雷电组同风格:紧凑、纯数值 + 短标签)。</summary>
-        public static string StatsLine()
-        {
-            float radius = AdaptiveRadius > 1f ? AdaptiveRadius : DomainRadius;
-            int count = BufferCapacity > 0 ? BufferCapacity : Capacity;
-            if (!Enabled) return "off — 在天气面板勾选“启用雨”";
-            if (LastAltitudeFade <= 0.001f)
-                return string.Format("suppressed by altitude — alt {0:F0}m ≥ ceiling {1:F0}m(太空/云层之上)  R {2:F0}m  ρ {3:F3}/m³",
-                    LastAltitude, Mathf.Max(1f, LastCeiling), radius, DensityPerM3());
-            if (LastWaterFade <= 0.001f)
-                return string.Format("suppressed underwater — 相机 ASL {0:F0}m(海平面以下不画雨)  R {1:F0}m  ρ {2:F3}/m³",
-                    LastAltitude, radius, DensityPerM3());
-            return string.Format(
-                "GPU sample {0}/{1}  R {2:F0}m{3}  ρ {4:F3}/m³  respawn sample {5}  stretch {6:F2}  屏倾 {7:F0}° 丝宽 {8:F1}px  axis {9}  edge {10:F2}  alt {11:F0}m ceil {12}  fade {13:F2}{14}  rec {15}(ev{16}/jp{17})  cam {18:F0}m/s",
-                LastInstanceCount, count, radius, AdaptiveDomain ? "(自适应)" : "", DensityPerM3(),
-                LastRespawns, LastStretch,
-                LastAxisScreenTilt, LastStreakWidthPx,
-                StreamMode ? "relVel" : "down", EdgeFade, LastAltitude,
-                LastCeiling > 0f ? LastCeiling.ToString("F0") : "off",
-                LastAltitudeFade,
-                LastSubmerged ? string.Format("  水下 {0:F0}%", LastWaterFade * 100f) : "",
-                RecenterCount, RecenterEventCount, RecenterJumpCount, LastCamSpeed);
-        }
-
         /// <summary>世界系朝向 dir → 旋转矩阵(列1 = 雨丝轴 × 拉伸);shader 用 local = M * v.vertex 定位十字四边形,拉伸 = clamp(|dir| * StretchAmount, 1, StretchLimit)。</summary>
         private static Matrix4x4 BuildStreakMatrix(Vector3 dir, out float stretch)
         {
@@ -890,7 +757,6 @@ namespace Volken.Weather
                 _compute.Dispatch(_kernelTranslateFixed, Mathf.CeilToInt(cap / (float)ThreadGroupSize), 1, 1);
                 _collision?.Reset();
                 RecenterCount++;
-                _lastRecenterDelta = delta;
                 _hasLastCamPos = false;   // 那一帧相机位置会突跳,别污染 camVel 诊断
             }
             catch (Exception ex)
@@ -996,12 +862,6 @@ namespace Volken.Weather
                     if (!_assetsReady) EnsureAssets();   // 资产就绪但建 buffer 失败(设备丢失/容量异常)时也要能恢复
                     EnsureBuffers();
                 }
-                if (now - _lastAliveLogTime > 5f)
-                {
-                    _lastAliveLogTime = now;
-                    Mod.Diag("RainParticles: enabled but NOT READY — cam={0} compute={1} positions={2} args={3} retries={4}",
-                        _cam != null, _compute != null, _positions != null, _args != null, _assetRetries);
-                }
                 return;
             }
             try
@@ -1010,7 +870,7 @@ namespace Volken.Weather
             }
             catch (Exception ex)
             {
-                Mod.LogThrottled("RainParticles", ex);
+                Mod.Log("RainParticles failed: {0}", ex);
             }
         }
 
@@ -1020,7 +880,6 @@ namespace Volken.Weather
             Vector3 camUp = _cam.transform.up;
             Vector3 camFwd = _cam.transform.forward;
             float dt = Mathf.Max(0f, Time.deltaTime);
-            _lastDt = dt;
             float now = Time.realtimeSinceStartup;
 
             // 相机速度(**仅诊断**:位置积分与雨丝朝向都不吃 camVel);暂停(dt≈0)时无法测量 → 锁存最近值,心跳不跳 0
@@ -1041,7 +900,6 @@ namespace Volken.Weather
             //  世界(帧)空间是浮点原点 + 绕行星 Y 轴旋转 → 球面赤道处径向"下"≈世界水平,写死世界 (0,-1,0) 会下错方向。
             Vector3 down = (craft.HasScript && craft.Down.sqrMagnitude > 1e-6f) ? craft.Down : Vector3.down;
             down.Normalize();
-            _lastDown = down;
 
             // 流线轴/拉伸的速度源用飞行器本体速度(craft.FrameVelocity)**不用 camVel** —— camVel 在视角旋转(绕飞/转头)时混入切向分量,雨丝朝向会随相机角速度摆动;无飞行器回退 camVel。
             Vector3 axisVel = (craft.HasScript && IsFinite(craft.FrameVelocity)) ? craft.FrameVelocity : camVel;
@@ -1156,7 +1014,7 @@ namespace Volken.Weather
                 {
                     _mat.SetInt("_RainCollisionEnabled", 0);
                     _collision?.Reset();
-                    Mod.LogThrottled("RainCollision.Begin", ex);
+                    Mod.Log("RainCollision.Begin failed: {0}", ex);
                 }
             }
             else if (_collision != null)
@@ -1167,7 +1025,6 @@ namespace Volken.Weather
 
             // 1) 复位实例数(只写 args[1];args[0] = indexCount 建 buffer 时已置好,不必每帧上传整条)
             _args.SetData(ArgsReset, 1, 1, 1);
-            // 注:诊断计数 _diag 不在这里清零 —— 累计到下一次回读(得到精确的"这 10s 重生多少次"),回读回调里再清零。
 
             // 2) Positioning:积分 + 域环绕(TestRow 时覆盖为等距排)
             // 注:SetFloat/SetInt/SetVector 没有 per-kernel 重载(属性全局共享),只传名字。
@@ -1201,7 +1058,7 @@ namespace Volken.Weather
                     collisionActive = false;
                     _mat.SetInt("_RainCollisionEnabled", 0);
                     _collision.Reset();
-                    Mod.LogThrottled("RainCollision.Resolve", ex);
+                    Mod.Log("RainCollision.Resolve failed: {0}", ex);
                 }
             }
 
@@ -1212,8 +1069,9 @@ namespace Volken.Weather
 
             Light sun = StandaloneMode ? RenderSettings.sun : Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight;
             Vector3 lightUp = craft.SeaUp.sqrMagnitude > 0.5f ? craft.SeaUp : -down;
-            Vector4 incidentLight = EvaluateIncidentLight(RenderSettings.ambientLight,
-                sun != null ? sun.color : Color.black, sun != null ? sun.intensity : 0f,
+            Vector3 cloudLight = StandaloneMode ? Vector3.one : Volken.Clouds.CloudSceneLighting.Factors(_cam);
+            Vector4 incidentLight = EvaluateIncidentLight(Volken.Clouds.CloudSceneLighting.AttenuateAmbient(Volken.Clouds.CloudSceneLighting.AmbientBaseline, cloudLight.z),
+                Volken.Clouds.CloudSceneLighting.SunColorBaseline(sun), Volken.Clouds.CloudSceneLighting.SunIntensityBaseline(sun) * cloudLight.y,
                 sun != null && sun.isActiveAndEnabled,
                 sun != null ? Vector3.Dot(lightUp, -sun.transform.forward) : 0f,
                 QualitySettings.activeColorSpace == ColorSpace.Linear);
@@ -1308,223 +1166,5 @@ namespace Volken.Weather
             return Mathf.FloorToInt(Time.time * RespawnPhaseRate);
         }
 
-        /// <summary>GPU 回读:args.instanceCount + 诊断计数 + 前 64 个位置(分布实况)。</summary>
-        private void RequestReadbacks()
-        {
-            float now = Time.realtimeSinceStartup;   // 与调用方的回读节流同一时钟(真实秒;暂停时 Time.time 不走,采样会永远不触发)
-            try
-            {
-                AsyncGPUReadback.Request(_args, OnArgsReadback);
-                AsyncGPUReadback.Request(_positions, Mathf.Min(64, _positions.count) * 16, 0, OnPositionsReadback);
-                if (_diag != null) AsyncGPUReadback.Request(_diag, OnDiagReadback);
-                _collision?.RequestDiagnostics(_cam);
-                if (!_rndChecked && _randomData != null)   // 一次性:验证包里的 compute 到底有没有写 yzw
-                {
-                    _rndChecked = true;
-                    AsyncGPUReadback.Request(_randomData, 16 * Mathf.Min(6, _randomData.count), 0, OnRandomDataReadback);
-                }
-                // 落点分布诊断:必须**整块**回读 —— 随机数量化造成的重复是跨 id 区间的混叠,
-                // 连续 64/4096 粒永远看不出问题(前 64 粒恰好是分辨率最好的一批)。
-                if (now - _lastDistTime > DistInterval && _positions != null && _positions.count >= 64)
-                {
-                    _lastDistTime = now;
-                    AsyncGPUReadback.Request(_positions, _positions.count * 16, 0, OnDistributionReadback);
-                }
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles readback request ERROR: " + ex.Message);
-            }
-        }
-
-        /// <summary>
-        /// 落点分布诊断:整块 positions 回读,统计"落点在 0.1m XZ 格上的唯一率"与最大重复。
-        /// 判据 —— 唯一率 ≥ 0.90 且最大重复 ≤ 8(10 万粒随机分布在 R=50m 圆域内的几何期望 ≈ 0.94)。
-        /// 为什么必须整块:重现"雨滴都落在同一处"的随机数量化是**跨 id 区间的混叠**,连续小样本看不出来。
-        /// 成本:cap×16B 一次性回读 + 一次字典遍历(每 <see cref="DistInterval"/> 秒最多一次)。
-        /// </summary>
-        private void OnDistributionReadback(AsyncGPUReadbackRequest req)
-        {
-            try
-            {
-                if (req.hasError) { Mod.Diag("RainParticles 分布诊断: 回读失败"); return; }
-                var d = req.GetData<Vector4>();
-                int n = d.Length;
-                if (n < 2) return;
-                var seen = new Dictionary<long, int>(n);
-                int maxMult = 0, ge8 = 0, bad = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    float x = d[i].x, z = d[i].z;
-                    if (float.IsNaN(x) || float.IsInfinity(x) || float.IsNaN(z) || float.IsInfinity(z)) { bad++; continue; }
-                    long key = ((long)Mathf.RoundToInt(x * 10f) << 32) ^ (uint)Mathf.RoundToInt(z * 10f);
-                    if (seen.TryGetValue(key, out int c))
-                    {
-                        c++;
-                        seen[key] = c;
-                        if (c > maxMult) maxMult = c;
-                        if (c == 8) ge8++;
-                    }
-                    else seen[key] = 1;
-                }
-                int used = n - bad;
-                float ratio = used > 0 ? (float)seen.Count / used : 0f;
-                Mod.Diag("RainParticles 分布诊断: N={0} 唯一XZ格={1} 唯一率={2:F3} 最大重复={3} 重复≥8 格={4} 坏值={5} time={6:F0}s phase={7} | 判据 唯一率≥0.90 且 最大重复≤8",
-                    n, seen.Count, ratio, maxMult, ge8, bad, Time.time, PhaseNow());
-                if (ratio < 0.9f)
-                {
-                    Mod.Diag("RainParticles 分布诊断: 唯一率偏低 → 重生随机数质量不足(种子/相位要用整数 hash;见 docs/weather.md)");
-                }
-            }
-            catch (Exception ex) { Mod.Log("Volken:RainParticles distribution readback ERROR: " + ex.Message); }
-        }
-
-        private void OnRandomDataReadback(AsyncGPUReadbackRequest req)
-        {
-            try
-            {
-                if (req.hasError) { Mod.Diag("RainParticles random: 回读失败"); return; }
-                var d = req.GetData<Vector4>();
-                bool ok = d.Length > 0;
-                bool cpuUntouched = d.Length > 0;   // yzw 仍等于 CPU 兜底值 → 包里的 compute 没写 yzw
-                for (int i = 0; i < d.Length; i++)
-                {
-                    if (!(d[i].y >= 0f && d[i].y <= 1f && d[i].z >= 0f && d[i].z <= 1f && d[i].w >= 0f && d[i].w <= 1f)) ok = false;
-                    var e = new Vector4(Hash01(i), Hash01(i + 1013), Hash01(i + 2027), Hash01(i + 3041));
-                    if (Mathf.Abs(d[i].y - e.y) > 1e-4f || Mathf.Abs(d[i].z - e.z) > 1e-4f || Mathf.Abs(d[i].w - e.w) > 1e-4f) cpuUntouched = false;
-                }
-                Vector4 a = d.Length > 0 ? d[0] : Vector4.zero;
-                Mod.Diag("RainParticles random: rnd[0]=({0:F2},{1:F2},{2:F2},{3:F2}) n={4} yzw∈[0,1]={5} compute写yzw={6}{7}",
-                    a.x, a.y, a.z, a.w, d.Length, ok, !cpuUntouched,
-                    cpuUntouched ? "  ← 包里的 compute 是旧版(没写 yzw),现由 CPU 兜底值接管;重打包可拿回逐粒随机" : "");
-            }
-            catch (Exception ex) { Mod.Log("Volken:RainParticles random readback ERROR: " + ex.Message); }
-        }
-
-        private void OnDiagReadback(AsyncGPUReadbackRequest req)
-        {
-            try
-            {
-                if (req.hasError) return;
-                var data = req.GetData<uint>();
-                if (data.Length < 1) return;
-                LastRespawns = (int)data[0];
-                Mod.Diag("RainParticles diag: respawnsSincePreviousSample={0}", LastRespawns);
-                if (_diag != null) _diag.SetData(DiagReset);   // 重启累计(数据已拷到 CPU,安全)
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles diag readback ERROR: " + ex.Message);
-            }
-        }
-
-        private void OnArgsReadback(AsyncGPUReadbackRequest req)
-        {
-            try
-            {
-                if (req.hasError)
-                {
-                    Mod.Diag("RainParticles readback ERROR (hasError)");
-                    return;
-                }
-                var data = req.GetData<uint>();
-                if (data.Length >= 5)
-                {
-                    LastInstanceCount = (int)data[1];   // instanceCount
-                    Mod.Diag("RainParticles readback: indexCount={0} instanceCount={1}", data[0], data[1]);
-                }
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles readback ERROR: " + ex.Message);
-            }
-        }
-
-        private void OnPositionsReadback(AsyncGPUReadbackRequest req)
-        {
-            try
-            {
-                if (req.hasError) return;
-                var data = req.GetData<Vector4>();
-                if (data.Length < 3) return;
-                // 位移量:与上次回读的 pos[0] 比,正常下落 10s 应动 ≈150m;恒 0 且 w0 在变 = 粒子没动(查 dt/down),恒 0 且 w0 恒不变 = kernel 没在跑(或游戏暂停)。
-                float pos0Delta = _hasLastReadbackPos0 ? ((Vector3)data[0] - _lastReadbackPos0).magnitude : -1f;
-                _lastReadbackPos0 = data[0];
-                _hasLastReadbackPos0 = true;
-
-                // 球域分布实况:均匀体积分布时 mean/R ≈ 0.75、max≈R;mean/R 明显偏小(≈0.5)且粒子挤在近处 → 半径还是 R*u(中心堆积),分布没生效。
-                Vector3 center = _cam != null ? _cam.transform.position : Vector3.zero;
-                float effR = AdaptiveRadius > 1f ? AdaptiveRadius : DomainRadius;   // 自适应开着时"域半径"是它,不是配置值
-                int n = Mathf.Min(data.Length, 64);
-                float dmin = float.MaxValue, dmax = 0f, dsum = 0f;
-                int near5 = 0, mid25 = 0, beyond = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    float dd = ((Vector3)data[i] - center).magnitude;
-                    dmin = Mathf.Min(dmin, dd); dmax = Mathf.Max(dmax, dd); dsum += dd;
-                    if (dd < effR * 0.5f) near5++;
-                    else if (dd < effR) mid25++;
-                    else beyond++;   // > R = 还没被回收(或回读滞后一帧)
-                }
-                float dmean = dsum / Mathf.Max(1, n);
-
-                Mod.Diag("RainParticles pos[0..2]: ({0:F1},{1:F1},{2:F1}) ({3:F1},{4:F1},{5:F1}) ({6:F1},{7:F1},{8:F1}) testRow={9} pos0Δ={10:F1} w0={11:F1}",
-                    data[0].x, data[0].y, data[0].z,
-                    data[1].x, data[1].y, data[1].z,
-                    data[2].x, data[2].y, data[2].z, TestRow, pos0Delta, data[0].w);
-                Mod.Diag("RainParticles dist[{0}]: min={1:F1} mean={2:F1} max={3:F1} (R={4:F0}, 均匀体积期望 mean/R≈0.75) near<R/2={5} mid={6} beyondR={7} respawn={8}",
-                    n, dmin, dmean, dmax, effR, near5, mid25, beyond, LastRespawns);
-                // w0 与当前 Time.time 对比:w0 远落后 → kernel 没在跑;w0 恒不变但 Time.time 也在冻结 → 游戏暂停
-                Mod.Diag("RainParticles time: kernelW0={0:F1} nowTime={1:F1} delta={2:F1} (delta≈0 = kernel 在跑;越大越滞后)",
-                    data[0].w, Time.time, Time.time - data[0].w);
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainParticles positions readback ERROR: " + ex.Message);
-            }
-        }
-
-        private void LogSnapshot(int amount)
-        {
-            var sb = new StringBuilder();
-            sb.Append("RainParticles: calls=").Append(PreCullCalls)
-              .Append(" draws=").Append(DrawCalls)
-              .Append(" cap=").Append(BufferCapacity > 0 ? BufferCapacity : Capacity)
-              .Append(" amount=").Append(amount)
-              .Append(" testRow=").Append(TestRow)
-              .Append(" domainR=").Append((AdaptiveRadius > 1f ? AdaptiveRadius : DomainRadius).ToString("F0"))
-              .Append(" camSpd=").Append(LastCamSpeed.ToString("F1"))
-              .Append(" adaptSpd=").Append(_adaptSpeed.ToString("F1"))
-              .Append(" craftSpd=").Append(_lastAxisVel.magnitude.ToString("F1"))
-              .Append(" dt=").Append(_lastDt.ToString("F4"))
-              .Append(" down=(").Append(_lastDown.x.ToString("F2")).Append(',').Append(_lastDown.y.ToString("F2")).Append(',').Append(_lastDown.z.ToString("F2")).Append(')')
-              .Append(" stretch=").Append(LastStretch.ToString("F2"))
-              .Append(" stream=").Append(StreamMode ? 1 : 0)
-              .Append(" alt=").Append(LastAltitude.ToString("F0")).Append("m/ceil=").Append(LastCeiling.ToString("F0"))
-              .Append(" altFade=").Append(LastAltitudeFade.ToString("F3"))
-              .Append(" underwater=").Append(LastSubmerged ? "YES" : "no")
-              .Append(" waterFade=").Append(LastWaterFade.ToString("F2"))
-              .Append(" seaR=").Append(_mat != null ? _mat.GetFloat("_SeaRadius").ToString("F0") : "?")
-              .Append(" rec=").Append(RecenterCount)
-              .Append("(ev").Append(RecenterEventCount).Append("/jp").Append(RecenterJumpCount).Append(')')
-              .Append("/").Append(_lastRecenterDelta.magnitude.ToString("F0"))
-              .Append(" craftJump=").Append(LastCraftJump.ToString("F0"))
-              .Append(" soft=").Append(SoftDepthReady ? InvFade.ToString("F1") : "off")
-              .Append(" collision=").Append(CollisionEnabled ? (_collision != null ? _collision.Status : "idle") : "off")
-              .Append(" splashes=").Append(SplashesEnabled ? "on" : "off")
-              .Append(" transparency=").Append(Transparency.ToString("F2"))
-              .Append(" readback=").Append(LastInstanceCount)
-              .Append(" time=").Append(Time.time.ToString("F0")).Append("s phase=").Append(PhaseNow())
-              .Append(" assets='").Append(AssetsStatus).Append('\'')
-              .Append(" cam='").Append(_cam != null ? _cam.name : "?").Append('\'');
-            Mod.Diag(sb.ToString());
-
-            // 第二行:朝向自检。·fwd 恒 ≈0 = 轴被压在屏幕平面里(错误);世界系构轴下随视角变化,垂直俯视时 |·fwd|→1(雨丝与视线平行 = 点状,不糊屏)。
-            //   screenTilt = 雨丝在屏幕上的倾角(0 = 竖直向下);streak px = 10m 处的屏幕长宽(宽 < 1px = 亚像素走样,会看成断续的斜线)。
-            Mod.Diag("RainParticles axis: dir=({0:F2},{1:F2},{2:F2}) stretch={3:F2} ·fwd={4:F2} ·down={5:F2} down·camUp={6:F2} screenTilt={7:F1}° px(长@10m={8:F0} 宽@10m={9:F1} 宽@50m={10:F1};宽<1 = 亚像素断点) edge={11:F2} shaderVer={12}",
-                LastAxisDir.x, LastAxisDir.y, LastAxisDir.z, LastStretch, LastAxisDotFwd, LastAxisDotDown,
-                LastDownDotCamUp, LastAxisScreenTilt, LastStreakLengthPx, LastStreakWidthPx, LastStreakWidthPx50, EdgeFade,
-                _mat != null ? _mat.GetFloat("_ShaderVer").ToString("F0") : "?");
-        }
     }
 }

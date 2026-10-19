@@ -190,7 +190,6 @@ namespace Volken.Weather
             public float windDirection = 45f;
             public float anisotropy = 0.35f;
             public float colorR = 0.72f, colorG = 0.78f, colorB = 0.85f;
-            public bool diagnostics = true;
             public int debugMode = 0;
 
             /// <summary>按太阳方向与本相机径向上方的夹角增强晨昏密度,日出日落两侧对等,最多两倍。</summary>
@@ -226,7 +225,6 @@ namespace Volken.Weather
                 windDirection = s.windDirection;
                 anisotropy = s.anisotropy;
                 colorR = s.colorR; colorG = s.colorG; colorB = s.colorB;
-                diagnostics = s.diagnostics;
                 debugMode = s.debugMode;
                 dawnFog = s.dawnFog;
                 baseHeight = s.baseHeight;
@@ -366,10 +364,9 @@ namespace Volken.Weather
         public void UpgradeUneditedDefaults()
         {
             EnsureSections();
-            int upgraded = 0;
-            if (Mathf.Abs(rain.streakWidth - 0.05f) < 1e-4f) { rain.streakWidth = 0.1f; upgraded++; }
-            if (Mathf.Abs(rain.amount - 20000f) < 1f) { rain.amount = 100000f; upgraded++; }
-            if (Mathf.Abs(rain.stretchLimit) < 1e-4f) { rain.stretchLimit = 3.5f; upgraded++; }   // 旧存档无此字段
+            if (Mathf.Abs(rain.streakWidth - 0.05f) < 1e-4f) { rain.streakWidth = 0.1f; }
+            if (Mathf.Abs(rain.amount - 20000f) < 1f) { rain.amount = 100000f; }
+            if (Mathf.Abs(rain.stretchLimit) < 1e-4f) { rain.stretchLimit = 3.5f; }   // 旧存档无此字段
             if (Mathf.Abs(rainLens.spawnRate - 14f) < 1e-4f && Mathf.Abs(rainLens.dropSize - 0.012f) < 1e-6f &&
                 Mathf.Abs(rainLens.refraction - 8f) < 1e-4f && Mathf.Abs(rainLens.blur - 1.2f) < 1e-4f)
             {
@@ -377,11 +374,6 @@ namespace Volken.Weather
                 rainLens.dropSize = 0.018f;
                 rainLens.refraction = 14f;
                 rainLens.blur = 1.8f;
-                upgraded++;
-            }
-            if (upgraded > 0)
-            {
-                Mod.Diag("VolkenWeatherConfig: 默认值升级 {0} 项(仅升级仍保持旧默认的雨 / 镜头水珠参数)", upgraded);
             }
         }
 
@@ -573,7 +565,7 @@ namespace Volken.Weather
             }
             catch (Exception e)
             {
-                Mod.Diag($"Failed to save weather config '{configName}': {e.Message}");
+                Mod.Log("Failed to save weather config '{0}': {1}", configName, e.Message);
                 return false;
             }
             finally

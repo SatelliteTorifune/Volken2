@@ -154,12 +154,12 @@ namespace Volken.Weather
             else if (_loadAttempts >= MaxLoadAttempts)
             {
                 AssetsStatus += "(试了 " + MaxLoadAttempts + " 次)";
-                Mod.Log("Volken:RainAudio 没加载到全部雨声素材 —— " +
+                Mod.Log("RainAudio 没加载到全部雨声素材 —— " +
                         "检查 ModData.asset._otherAssets 是否含 6 个 volkenRain-*.wav,然后重建 asset bundle;当前: " + AssetsStatus);
             }
             else
             {
-                Mod.Diag("Volken:RainAudio 素材未齐({0},第 {1} 次尝试)→ {2}s 后重试", AssetsStatus, _loadAttempts, LoadRetryInterval);
+                Mod.Log("Volken:RainAudio 素材未齐({0},第 {1} 次尝试)→ {2}s 后重试", AssetsStatus, _loadAttempts, LoadRetryInterval);
             }
         }
 
@@ -223,7 +223,7 @@ namespace Volken.Weather
             }
             catch (Exception ex)
             {
-                Mod.LogThrottled("RainAudio", ex);
+                Mod.Log("RainAudio failed: {0}", ex);
             }
         }
 
@@ -425,7 +425,6 @@ namespace Volken.Weather
             // 掉帧把排程窗口整个错过 → 重来(宁可一次极短断音,也不要永久静音)
             if (g.PendingIndex < 0 && now > boundary + 0.1)
             {
-                Mod.Diag("RainAudio: 排程掉队(now={0:F2}s boundary={1:F2}s)→ 重启段", now, boundary);
                 StartSegment(g, now + StartLead);
             }
         }
@@ -599,37 +598,5 @@ namespace Volken.Weather
             StopCount++;
         }
 
-        /// <summary>面板状态行(紧凑:数值 + 短标签)。</summary>
-        public static string StatsLine()
-        {
-            if (!AssetsReady) return "雨声未加载 — " + AssetsStatus + "(检查 bundle 里的 6 个 wav)";
-            if (!Enabled) return "雨声已关闭(音频总开关)";
-            if (LastPaused) return "雨声已暂停(游戏暂停中)";
-            if (LastFade <= 0.001f) return string.Format("雨声静音  vol {0:F2}  ({1})", LastMaster, AssetsStatus);
-
-            return string.Format(
-                "vol {0:F2}  小雨 {1:F2} / 暴雨 {2:F2}  混合 {3:F2}  淡入淡出 {4:F2}  {5}",
-                LastMaster, LastLightVolume, LastHeavyVolume, LastIntensity, LastFade, AssetsStatus);
-        }
-
-        /// <summary>把完整状态写进 Player.log。</summary>
-        public static void DiagStatus()
-        {
-            try
-            {
-                Mod.Diag("RainAudio STATUS: enabled={0} paused={1} assets='{2}' gate={3} fade={4:F2} master={5:F2} mix={6:F2}(target {7:F2}) light={8:F2} heavy={9:F2} segments={10} clipChanges={11} stops={12}",
-                    Enabled, LastPaused, AssetsStatus, LastGateOpen, LastFade, LastMaster, LastIntensity,
-                    LastTargetIntensity, LastLightVolume, LastHeavyVolume, SegmentCount, ClipChanges, StopCount);
-                Mod.Diag("RainAudio input: RainParticles enabled={0} volume={1:F2} strength={2:F2} capacity={3} altFade={4:F3} standalone={5} | fadeIn={6:F1}s fadeOut={7:F1}s smooth={8:F1}/s gain={9:F2} repeats={10} crossfade={11:F1}s",
-                    RainParticles.Enabled, RainParticles.Volume, RainParticles.Strength, RainParticles.Capacity,
-                    RainParticles.LastAltitudeFade, RainParticles.StandaloneMode,
-                    FadeInTime, FadeOutTime, IntensitySmooth, IntensityGain, RepeatsPerClip, CrossfadeTime);
-                Mod.Diag("RainAudio ui: {0}", StatsLine());
-            }
-            catch (Exception ex)
-            {
-                Mod.Log("Volken:RainAudio.DiagStatus ERROR: " + ex.Message);
-            }
-        }
     }
 }

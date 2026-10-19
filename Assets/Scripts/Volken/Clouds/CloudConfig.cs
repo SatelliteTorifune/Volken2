@@ -24,6 +24,11 @@ namespace Volken.Clouds
 
         #region parameter
         public CompositeMode compositeMode = CompositeMode.Additive;
+        public bool sunOcclusionEnabled = false;
+        public bool groundShadowsEnabled = false;
+        public float groundShadowDistance = 20000f;
+        public float sunlightOcclusionStrength = 0.8f;
+        public float ambientOcclusionStrength = 0.5f;
         public bool enabled;
         public float density;
         public float absorption;
@@ -405,6 +410,11 @@ namespace Volken.Clouds
         public void CopyFrom(CloudConfig source)
         {
             this.compositeMode = source.compositeMode;
+            this.sunOcclusionEnabled = source.sunOcclusionEnabled;
+            this.groundShadowsEnabled = source.groundShadowsEnabled;
+            this.groundShadowDistance = source.groundShadowDistance;
+            this.sunlightOcclusionStrength = source.sunlightOcclusionStrength;
+            this.ambientOcclusionStrength = source.ambientOcclusionStrength;
             this.enabled = source.enabled;
             this.density = source.density;
             this.absorption = source.absorption;

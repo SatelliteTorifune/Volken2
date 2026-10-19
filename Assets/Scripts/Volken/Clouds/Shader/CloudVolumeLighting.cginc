@@ -53,6 +53,9 @@ float cloudDensity;
 float cloudAbsorption;
 float ambientLight;
 float4 _CloudAmbientColor;
+float4 _CloudSolarColor;
+float _CloudSunOcclusion;
+float _SunlightOcclusionStrength, _AmbientOcclusionStrength;
 float cloudCoverage;
 float cloudScale;
 float detailScale;
@@ -382,6 +385,25 @@ float2 SampleLightRay(float3 pos, float2 noiseLod) {
     }
 
     return float2(d, intersect.y - max(0.0, intersect.x));
+}
+
+// 完整球壳光程的固定预算查询;不使用视线 LOD、环境亮度下限或 12km 光程截断。
+float CloudSunTransmittance(float3 pos, float3 direction)
+{
+    float2 shell = RaySphereIntersect(pos, direction, surfaceRadius + maxCloudHeight);
+    float start = max(0.0, shell.x), end = shell.y;
+    float2 ground = RaySphereIntersect(pos, direction, surfaceRadius);
+    if (ground.x > 0.0) end = min(end, ground.x);
+    if (end <= start || cloudAbsorption <= 0.0 || cloudDensity <= 0.0) return 1.0;
+    float segment = (end - start) / 96.0;
+    float tau = 0.0;
+    [loop] for (int j = 0; j < 96; j++)
+    {
+        float3 samplePos = pos + direction * (start + (j + 0.5) * segment);
+        tau += max(0.0, SampleDensity(samplePos, 1.0, float2(0, 0))) * segment * cloudAbsorption;
+        if (tau >= 20.0) break;
+    }
+    return exp(-min(tau, 20.0));
 }
 
 // 33³ 格点上的有限光程消光;与体积密度共用固定 mip 0。

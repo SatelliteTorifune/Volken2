@@ -1,6 +1,6 @@
 # 云渲染现状
 
-> 核对日期：2026-10-14。源码标识与历史验证摘要见 [开发与验证](development.md)，游戏待验收项见 [待办](backlog.md)。
+> 核对日期：2026-10-15。源码标识与历史验证摘要见 [开发与验证](development.md)，游戏待验收项见 [待办](backlog.md)。
 
 ## 文件与资源所有权
 
@@ -15,6 +15,7 @@
 | [FarCameraScript.cs](../Assets/Scripts/Volken/Clouds/FarCameraScript.cs) / [SceneDepth.cs](../Assets/Scripts/Volken/Clouds/SceneDepth.cs) | 远相机 CommandBuffer 与独立深度资源 |
 | [CloudReflectionRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudReflectionRenderer.cs) | 补入游戏水面反射的体积云 |
 | [CloudLightningCache.cs](../Assets/Scripts/Volken/Clouds/CloudLightningCache.cs) | 世界空间雷光光学厚度图集 |
+| [CloudGroundShadows.cs](../Assets/Scripts/Volken/Clouds/CloudGroundShadows.cs) | 每相机逐接收点太阳透射率与原生屏幕阴影接入 |
 
 `CloudRenderer` 的 `[ImageEffectOpaque]` 必须保留：先处理不透明场景，再绘制原生透明物体。近远线性场景深度供云合成、雾和本相机雨软粒子；低清深度供体积步进。无有效云层时仍可生成天气需要的深度，附加相机不能借用无关主相机的远深度。
 
@@ -28,6 +29,20 @@
 - 单段光照使用 Beer 解析权重；很小光学厚度用展开式避免除零。`Upscale` 可对积分后的 RGB / 透射率做 3×3 足迹重建，拒绝场景后方邻点，并保留中心命中距离；这不等于新增射线样本或消除底层周期。
 
 默认光样本不要混淆：`CloudConfig.CreateDefault()` 为 25，`CreateAnotherDefault()` 为 5；`VolumetricClouds` 实际初始化的附加层默认关闭，使用独立 `CreateExtraDefaultConfig()`，光样本为 10。已保存 XML 的值优先于这些默认值。
+
+## 阳光遮蔽
+
+[CloudSunOcclusion.cs](../Assets/Scripts/Volken/Clouds/CloudSunOcclusion.cs) 按每相机位置向太阳及 8 个余弦加权半球方向查询完整密度，每条光程固定 96 个中点、固定 mip 0，覆盖完整可见球壳，不受旧 12km 光照预算截断。9×1 浮点纹理乘法合并启用层，常规每 0.1 秒更新；每相机最多一个在途回读，视线朝向 / FOV 不参与查询。重定位、位移、太阳变化与滑条递增的 `ShaderRevision` 仅请求刷新，保留最后完成值，不因超时清成全亮；层 / 配置 / 材质 / 预设身份、模式切换、离场、环境抑制或资源失败才清结果，旧回读排空后才能再提交。不支持异步回读时整体照明保持恒等。
+
+每层 `sunOcclusionEnabled`（阴天整体照明）和 `groundShadowsEnabled`（局部云影）均默认 false，旧 XML 不启用。直射 / 环境强度默认 0.8 / 0.5，消费时限制 0~1，非有限值回退默认；每层倍率为 `lerp(1,T,strength)`，多层相乘。局部云影启用时同层不再整体衰减直射，环境整体衰减仍仅由阴天开关控制；两种模式都查询原始太阳 T 供耀斑使用。面板开启任一模式同步选 Standard，之后仍可显式选 Additive；天气不修改这些云参数。
+
+[CloudSceneLighting.cs](../Assets/Scripts/Volken/Clouds/CloudSceneLighting.cs) 在相机绘制期间调整游戏太阳方向光、地形昼夜色和环境光，绘制后恢复；远相机使用所属近相机查询，PIP 独立查询，未接入的嵌套反射使用原照明基线。Gamma / Linear 均按实际输出空间处理环境颜色与 BIRP 灯光强度模式，保留日食 alpha；雨 / 雾消费基线与本相机倍率，避免重复衰减，云体不整体乘相机遮蔽量。
+
+局部云影从本相机原生深度重建地表 / 机体接收点，再沿太阳方向用同一完整密度作 96 点积分；查询图每轴至多四分之一屏幕、最长边 256，RGBA 保存逐层相乘透射率和覆写的接收深度，按深度双边重建。`LightEvent.AfterScreenspaceMask` 的独立 query / apply CommandBuffer 原地乘入原生阴影，只衰减直射，保留环境、自发光和实体投影；必须显式绑定本相机 view / 逆 VP / 位置，事件中的 Unity 相机全局量可能已被阴影绘制覆盖，也不能在同一 CB 切走 RT 后用 `CurrentActive` 恢复原阴影目标。空的 ShadowsOnly caster 全片元丢弃，仅确保无真实 caster 时也生成 mask。资源、材质和 caster 按实际近 / 远 / PIP 相机独立，退出作用域移除命令并禁用 caster。
+
+`groundShadowDistance` 默认 20000 米，消费限 1000~100000，非有限值回退默认，末 20% 平滑退场。PreCull 临时扩大原生阴影距离，并同步相机 far、投影及剔除矩阵；禁止保留旧投影 / 剔除矩阵，否则大范围下原生 caster 可能全部被剔除。PreRender 恢复原 far 和自动 / 自定义矩阵状态，绘制裁剪与标准深度沿用原投影；中断与退出也恢复，已绘制的外层相机从嵌套返回时不能再扩 far。扩展时 2/4 级的前 N−1 级覆盖完整旧有效范围 `min(原阴影距离, 原相机 far)`，末级承担新增距离；比例扣除相机 near，避免远相机浪费内级范围，不需扩展时保留原分割，绘制后恢复原距离和分割。需 Forward、原生太阳多级阴影及接收阴影材质；单级返回 `single-cascade` 保留原生投影，不隐式升档。游戏关闭阴影、太阳 cookie、无接收变体的轨道地表不支持。合并旧级联会降低部分实体影精度，扩大剔除会增加候选几何；游戏开销、特殊自定义剔除可见性及最终画质仍待验收。
+
+开启任一模式的层使用视线纯 Beer 消光，关闭旧地表阴影写入 alpha，Standard 不再用近景距离淡化真实透射率；体积 / 反射 / 轨道太阳项消费游戏太阳 RGB、强度和启用状态，轨道深夜门控仍保留。整体照明仍是相机位置近似，半球 8 条查询不等同精确天空积分；云内环境遮蔽见 [待办](backlog.md#已知缺口)。
 
 ## 时序与镜头稳定性
 
@@ -55,7 +70,7 @@
 | Additive | 只增加云 RGB，不用云透射率压暗背景；厚云后方星空仍可能透出 |
 | Standard | 使用云透射率衰减合成时已有背景；最终星空遮挡还取决于游戏绘制顺序 |
 
-雾先作用于背景，再按体积命中 / 轨道壳距离处理云贡献；不能重复雾化背景。不同表示的深度不先平均后查雾。当前 Standard 无雾合成仍有 `nearThreshold` 经验修正。
+雾先作用于背景，再按体积命中 / 轨道壳距离处理云贡献；不能重复雾化背景。不同表示的深度不先平均后查雾。未启用阳光遮蔽的 Standard 仍有 `nearThreshold` 经验修正。
 
 ## 雷光与水面反射
 

@@ -36,7 +36,7 @@
 
 `rain.transparency` 范围 0~1：0 保留原 alpha，1 完全透明，只影响雨滴 / 水花视觉，不改变雨声或共享环境淡出。雨限高和水下淡出看雨自身配置，不读 `maxCloudHeight`。
 
-【决策：2026-10-14】雨滴先接受游戏环境 / 太阳光，再加 `brightness` 自发光。0 表示无独立自发光；颜色空间复用 `FogLighting.WorkingColor`，不设环境光下限。太阳项消费启用状态、强度、RGB、alpha 中的行星遮挡和局部径向高度。未采样地形 / 云影或局部灯光。
+雨滴先接受游戏环境 / 太阳光，再加 `brightness` 自发光。0 表示无独立自发光；颜色空间复用 `FogLighting.WorkingColor`，不设环境光下限。太阳项消费启用状态、强度、RGB、alpha 中的行星遮挡和局部径向高度，并消费 [云阳光遮蔽](clouds.md#阳光遮蔽) 的本相机直射 / 环境倍率；未采样逐雨滴云影、地形遮蔽或局部灯光。
 
 首轮把入射光乘法扩展到水花，用户反馈溅落消失，**两个水花 shader 及 `RainCollision.Draw` 光照参数已回退**。水花保留原 RGB / 雾显示路径，自发光滑块只控制雨滴，不能把水花也写成当前已接受新雨滴光照。
 
@@ -66,7 +66,7 @@
 
 | 入口 | 职责 |
 |---|---|
-| [FogRenderer.cs](../Assets/Scripts/Volken/Weather/Fog/FogRenderer.cs) | 每个 CloudRenderer 持有的独立雾资源、准备 / 合成 / 日志 |
+| [FogRenderer.cs](../Assets/Scripts/Volken/Weather/Fog/FogRenderer.cs) | 每个 CloudRenderer 持有的独立雾资源、准备与合成 |
 | [FogLighting.cs](../Assets/Scripts/Volken/Weather/Fog/FogLighting.cs) | 颜色空间、环境与太阳散射计算 |
 | [FogCommon.cginc](../Assets/Scripts/Volken/Weather/Fog/Shader/FogCommon.cginc) | 背景、云、自有透明物体共用查询 |
 | [HeightFog.shader](../Assets/Scripts/Volken/Weather/Fog/Shader/HeightFog.shader) / [VolumetricFog.compute](../Assets/Scripts/Volken/Weather/Fog/Shader/VolumetricFog.compute) | 薄雾查询纹理与体积列积分 |
@@ -75,11 +75,11 @@
 
 体积雾使用每相机累计 3D RT，噪声固定行星坐标，CPU 双精度取周期余数，风使用排除暂停的时间。同开时合并密度一次积分；两类纹理互斥持有。体积无时序历史，低档可能有网格 / Z 分段。雾从纹理 UV 重建射线，使用 `GL.GetGPUProjectionMatrix(..., false)`，不能照云的 `true` 一刀切。
 
-环境 RGB 与太阳 RGB 独立，无固定 0.03 环境下限。Linear 项目先转换输入色；太阳消费 enabled、intensity、RGB 和遮挡，环境光尊重游戏昼夜结果，不再额外统一压暗。黑环境无太阳时散射为零，密度对应的透射衰减仍在。
+环境 RGB 与太阳 RGB 独立，无固定 0.03 环境下限。Linear 项目先转换输入色；太阳消费 enabled、intensity、RGB 和遮挡，环境光尊重游戏昼夜结果。两项分别消费 [云阳光遮蔽](clouds.md#阳光遮蔽) 的本相机倍率，不重复使用已衰减的相机照明。黑环境无太阳时散射为零，密度对应的透射衰减仍在。
 
 雾受场景、大气、水下、范围、零密度 / 不透明度门控，正交相机不支持。自有雨、水花、闪电已接入相机匹配的雾查询；原生透明水、玻璃、折射和反射雾尚未适配。云雾使用首个云命中 / 壳面距离近似，不是云内逐步联合积分。
 
-雾滑块由下一帧读取，不反复刷新雷电启停；雾字段随天气预设 XML 一起保存。`SaveToFile` / `SaveCurrentConfig` 返回实际保存结果，完整写入临时文件后替换旧预设；写入失败保留旧文件、输出不受 DevMode 限制的错误，面板显示失败。另存为只有写入成功才更新预设名 / 列表 / 行星登记，避免显示成功却未落盘。默认每 5 秒记录雾状态 / 深度 / 光照 / 帧时间，`fog.diagnostics=false` 可关摘要；GPU 回读仅显式开发请求，游戏面板没有诊断入口。
+雾滑块由下一帧读取，不反复刷新雷电启停；雾字段随天气预设 XML 一起保存。`SaveToFile` / `SaveCurrentConfig` 返回实际保存结果，完整写入临时文件后替换旧预设；写入失败保留旧文件，面板显示失败。另存为只有写入成功才更新预设名 / 列表 / 行星登记，避免显示成功却未落盘。发布日志边界统一见 [当前工具与诊断](development.md#当前工具与诊断)。
 
 ## 闪电与雷声
 

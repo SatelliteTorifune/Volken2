@@ -11,7 +11,6 @@ namespace Volken.Weather
     /// <remarks>面板修改当前天气配置实例;保存才落盘,效果参数由各子系统独立消费。</remarks>
     public static class WeatherPanel
     {
-        internal static int FogEditCount { get; private set; }
 
         /// <summary>往检查器里追加天气分组(无参数:换配置不需要重建面板)。</summary>
         public static void Build(InspectorModel inspector)
@@ -346,8 +345,6 @@ namespace Volken.Weather
             AddFogSlider(group, weather, "FogColorG", f => f.colorG, (f,v) => f.colorG=v, 0, 1, 2);
             AddFogSlider(group, weather, "FogColorB", f => f.colorB, (f,v) => f.colorB=v, 0, 1, 2);
             parent.Add(group);
-            Mod.Diag("Fog UI ready: build=3 controls=enabled diagnostics=hidden presets=height/volume/both configReady={0} weatherActive={1}",
-                weather.Config?.fog != null, weather.IsActive);
         }
 
         private static void ApplyFog(Action<VolkenWeatherConfig.FogSection> mutate)
@@ -356,7 +353,6 @@ namespace Volken.Weather
             if (weather?.Config?.fog == null) return;
             mutate(weather.Config.fog);
             weather.Config.ClampAll();
-            FogEditCount++;
             // FogRenderer consumes this configuration on the next render; rain/thunder state is independent.
         }
 
@@ -378,9 +374,8 @@ namespace Volken.Weather
                 f.startDistance=0; f.maxDistance=30000; f.maxOpacity=0.95f; f.quality=1;
                 f.noiseScale=800; f.coverage=0.65f; f.contrast=1.5f; f.windSpeed=5; f.windDirection=45;
                 f.colorR=0.72f; f.colorG=0.78f; f.colorB=0.85f; f.colorBlend=0.5f;
-                f.anisotropy=0.35f; f.dawnFog=false; f.diagnostics=true; f.debugMode=0;
+                f.anisotropy=0.35f; f.dawnFog=false; f.debugMode=0;
             });
-            Mod.Diag("Fog preset: height={0} volume={1} weatherActive={2} planet='{3}'",thin,volume,weather.IsActive,weather.CurrentPlanet);
             Game.Instance.FlightScene.FlightSceneUI.ShowMessage(Locale.GetString("Volken.UI.FogPresetApplied"));
         }
 

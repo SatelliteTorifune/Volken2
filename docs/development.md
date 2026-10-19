@@ -18,17 +18,13 @@
 
 | 入口 | 使用范围 |
 |---|---|
-| `Mod.Log` | 受 `DevMode` 控制的开发输出 |
-| `Mod.Diag` / `Mod.LogThrottled` | 手动诊断、必要告警和节流异常 |
-| `RainParticles.DiagStatus()` | 开发代码显式请求雨资源、shader 标识及运行状态；最小采样间隔约 10 秒 |
-| `FogRenderer.DiagnoseAll()` | 开发代码显式请求雾状态及下次有效绘制的异步 GPU 检查 |
-| `CloudVisibilityDiagnostics` | 开发日志开启时主相机每 5 秒同帧云 / 深度 / MV 采样 |
-| `orbitDebugMode` | 开发 XML 分屏 / 轨道诊断；详细轨道日志还需 `DevMode` |
-| `fog.debugMode` / `fog.diagnostics` | XML 开发视图与摘要控制，排查后恢复 debug=0 |
+| `Mod.Log` | 项目唯一的日志接口；资源缺失、配置保存失败、初始化故障和逐帧异常均走此接口，全部受 `DevMode` 控制，默认静默；Unity 底层日志调用仅位于该方法内部 |
+| `orbitDebugMode` | XML 开发分屏；不输出轨道参数、投影或覆盖率日志 |
+| `fog.debugMode` | XML 开发视图，排查后恢复 debug=0 |
 
-游戏效果面板没有手动诊断按钮。雨 / 雨声常驻心跳、逐次雷声记录和雨方向周期回读已清理，当前云 / 雾的受控诊断仍存在。
+游戏效果面板没有手动诊断按钮。项目不再提供独立诊断 / 节流日志接口、时间戳字典、雨 / 雨声 / 雨碰撞 / 雾状态转储、诊断 GPU 回读或雾周期帧计时。旧 XML 的 `fog.diagnostics` 节点由反序列化忽略；雨 compute 的计数缓冲仍按原 shader 契约绑定，不再 CPU 回读。
 
-当前源码标识集中列在这里：云 `build=12 shader=12 lightning=2`，噪声 `VolkenWorleyFBM noiseMips=8/8`，雨 shader 10，镜头水珠 shader 2，雾 `code=3 shader=3`。这些是源码期望值，部署后必须读实际日志核对。
+当前源码标识集中列在这里：云 shader 14 / lightning 2，噪声 `VolkenWorleyFBM` 且两张 128³ 纹理各 8 级 mip，雨 shader 10，镜头水珠 shader 2，雾 shader 3。旧云 `build=17` 和雾 `code=3` 仅是已删除诊断的标签，不再用于识别运行包；部署版本以模组元数据和实际包内程序集 / 资源核对。
 
 游戏日志路径为 `<USERPROFILE>/AppData/LocalLow/Jundroo/SimpleRockets 2/Player.log`；shader 编译还查 Unity `Editor.log`。真实路径按被忽略的 [LOCAL_PATHS.md](LOCAL_PATHS.md) 解析。先排除暂停，诊断空间要与症状一致；同时记录配置、运行态、触发计数和资源标识。连续三轮无可信改善时换诊断方向。
 
@@ -38,7 +34,7 @@
 
 | 范围 / 日期 | 保留的证据 | 实际限制 |
 |---|---|---|
-| 云、雷光、轨道夜光回退 / 2026-10-14 | `.utmp/lightning-validation/result-orbit-rollback-linear.txt`：Linear 356 项通过 | 正式 shader + 核心源码独立运行；游戏昼夜 / 镜头待验收 |
+| 云阳光遮蔽 / 局部投影 / 2026-10-15 | `.utmp/cloud-native-shadow-validation/result-formal-fullsync-{Gamma,Linear}.txt` 各 256 机体 / 薄翼配置通过；`result-formal-fullsync-range-sweep-Linear.txt` 800 距离扫描无丢影；`.utmp/cloud-native-shadow-design-probe/result-after-formal-fullsync-{Gamma,Linear}-all.txt` 各 621 世界点近远差为 0、64 契约通过，`result-no-expansion-{Gamma,Linear}.txt` 各 128 状态检查；`.utmp/cloud-occlusion-validation/result-native-shadow-regression-{Gamma,Linear}.txt` 各 248 项；C# 编译 0 错误 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop；CloseFit / StableFit、0/1/2/4 级、原生 50~2000m、云影 20/100km，采地面排除机体自身；4 级原生影像素最低保留 99.46%，2 级最低 77.46%，单级恒等。扫描含 EVA near=0.06，会有额外粗影；覆盖投影 / 剔除同步、原绘制矩阵 / 标准深度、嵌套恢复。SDK / 行星为替身，特殊手动剔除只验字段恢复；build 16 游戏截图已证实原生影消失，build 17 待游戏画质及额外几何提交耗时复测 |
 | 雨滴光照 / 水花显示回退 / 2026-10-14 | `.utmp/rain-splash-regression/`：Gamma / Linear 各 62 项专项 + 53 项水面检查，即各 115 项通过 | 恢复水花原显示的对照检查；不能替代游戏水面观感 |
 | 天气行星门控 / 预设同步 / 2026-10-15 | `.utmp/planet-gate-validation/result.txt`：49 项通过；当前源码复跑 `.utmp/weather-preset-validation/result.txt`：36 项通过；完整 C# 工程编译 0 错误 | Unity 2022.3.62f3 / D3D11；实际环境解析、SOI 订阅、天气 / 雨 / 雨声 / 雷电 / 水珠生命周期与预设同步，游戏 SDK、云渲染和音频素材为替身；XML 写工作区，未验游戏部署 |
 | 雾配置保存 / 2026-10-14 | `.utmp/fog-persistence-validation/result.txt`：99 项通过，Unity 2022.3.62f3；加入生成工程遗漏的新源码后编译 0 错误 | 实际面板回调、全部雾字段 XML 往返、锁定 / 只读 / 无效路径失败与旧文件保护；游戏 / UI SDK 和镜头效果消费者为替身，XML 写工作区，未验游戏部署 |
@@ -60,7 +56,7 @@
 
 测性能要固定构建、行星、镜头路径、分辨率、画质、预设、PIP 数与帧率限制，一次只改一项；预热后每档至少采样 30 秒、重复 3 轮，记录平均 / P50 / P95 / P99、Main / Render / GPU、GC 和实际 DrawCall。雷击另外记录生长 / 闪光 / 消退尖峰。
 
-Profiler 的 `CloudRenderInfo` 只是配置摘要；Fog perf 是混合负载整帧统计，CPU submit 是提交时间，均非云 / 雾专属 GPU 毫秒。timing=-1 表示不可用，不能当 0。未拆模块的 FPS 差不能全部归因于一个效果。
+Profiler 的 `CloudRenderInfo` 只是配置摘要。未拆模块的 FPS 差不能全部归因于一个效果；提交 CPU 时间与模块 GPU 时间要分别测量。
 
 “云不可见且自带分布不可用”的历史故障曾由第三方 `MultiPlayerUI.OnSceneLoaded` NRE 中断事件链引起。排查先看日志中的第一个异常；安装目录不要同时保留 `Volken.sr2-mod` 和 `Volken-R.sr2-mod`。当前是否有第三方冲突需重新核实。
 

@@ -16,31 +16,31 @@ namespace Assets.Scripts
     /// <summary>本 mod 的 GameMod 单例。</summary>
     public class Mod : ModApi.Mods.GameMod
     {
-        
+
         private Mod() : base()
         {
         }
 
         public int frontRenderQueue = 3000;
         public int backRenderQueue = 3000;
-        
+
         public static Mod Instance { get; } = GetModInstance<Mod>();
 
         private GameObject VolkenUI;
         public GameObject ForceSettingScriptLoadGameObject;
-        
+
         /// <summary>mod 版本(取自 ModInfo.Version)。</summary>
         public Version ModVersion { get; private set; }
-        
+
         public override void OnModLoaded()
         {
             base.OnModInitialized();
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
-            
+
             SetUpGo<VolkenUserInterface>(ref VolkenUI,"VolkenUI");
             SetUpGo<ForceSetting>(ref ForceSettingScriptLoadGameObject,"ForceSettingObject");
-            
+
             // 初始化顺序是硬要求:Clouds 负责解析行星环境并广播 PlanetChanged,
             // 必须先于 VolkenWeather(后者订阅它)。
             VolumetricClouds.Initialize();
@@ -55,6 +55,7 @@ namespace Assets.Scripts
 
             // 更新检查(本地模式:LatestVersionUrl 未配置时仅打日志,不弹窗)
             new ModUpdater().CheckForUpdate();
+            VolkenFileSetUp.CreateDefaultConfig();
         }
 
         private void SetUpGo<T>(ref GameObject GO,string name) where T : MonoBehaviour
@@ -70,10 +71,10 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
-            
+
         }
-        
-        
+
+
         /// <summary>开发命令 <c>VolkenForceRefresh</c>:强制重跑一次行星解析。</summary>
         private void ForceRefresh()
         {
@@ -88,57 +89,20 @@ namespace Assets.Scripts
         #region LOG
         public static void Log(string format, params object[] args)
         {
+            bool enabled;
+            try { enabled = ModSettings.Instance?.DevMode?.Value == true; }
+            catch { return; }
+            if (!enabled) return;
             try
             {
-                if (ModSettings.Instance == null || !ModSettings.Instance.DevMode) return;
-                Debug.unityLogger.LogFormat(LogType.Log, "[Volken]"+format, args);
+                if (args == null || args.Length == 0) Debug.unityLogger.Log(LogType.Log, "[Volken]" + format);
+                else Debug.unityLogger.LogFormat(LogType.Log, "[Volken]" + format, args);
             }
             catch
             {
                 Debug.LogWarning("[Volken] Log formatting failed.");
             }
         }
-        #endregion
-
-        #region DIAG LOG (always on)
-
-        /// <summary>诊断日志的前缀。用它在 Player.log 里一眼过滤出天气系统的排查信息。</summary>
-        public const string DiagTag = "[VolkenDiag]";
-
-        /// <summary>手动诊断与必要告警,不受 <c>DevMode</c> 影响;常规开发输出使用 Log。</summary>
-        public static void Diag(string format, params object[] args)
-        {
-            try
-            {
-                Debug.unityLogger.LogFormat(LogType.Log, DiagTag + format, args);
-            }
-            catch
-            {
-                Debug.Log(DiagTag + "(diag format failed)");
-            }
-        }
-
-        #endregion
-
-        #region THROTTLED LOG
-
-        // 每帧路径上的异常必须节流,否则 Player.log 被冲爆、看不到第一现场。
-        private static readonly System.Collections.Generic.Dictionary<string, float> _lastThrottledLog =
-            new System.Collections.Generic.Dictionary<string, float>();
-
-        /// <summary>节流日志(同一 key 5 秒一次)。</summary>
-        public static void LogThrottled(string key, Exception ex)
-        {
-            try
-            {
-                float now = Time.realtimeSinceStartup;
-                if (_lastThrottledLog.TryGetValue(key, out float last) && now - last < 5f) return;
-                _lastThrottledLog[key] = now;
-            }
-            catch { }
-            Diag($"[{key}] {ex}");
-        }
-
         #endregion
 
         #region ASSET LOADING
@@ -151,23 +115,7 @@ namespace Assets.Scripts
         /// <param name="required">true = 缺失时打日志(默认)。</param>
         public static T LoadVolkenAsset<T>(string path, bool required = true) where T : UnityEngine.Object
         {
-            // 编辑器(含 Play 预览)先用 AssetDatabase:别先碰 Instance.ResourceLoader,
-            // 否则可能触发游戏侧半初始化,刷出一堆无关报错。路径格式两边一致,共用同一常量。
-#if UNITY_EDITOR
-            try
-            {
-                var editorAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
-                if (editorAsset != null)
-                {
-                    return editorAsset;
-                }
-            }
-            catch
-            {
-            }
-#endif
 
-            // ② 游戏内:走 mod 资源加载器(sr2-mod 包里的 asset bundle)
             try
             {
                 var asset = Instance.ResourceLoader.LoadAsset<T>(path);
@@ -180,7 +128,7 @@ namespace Assets.Scripts
             {
             }
 
-            if (required) Log($"LoadVolkenAsset: '{path}' not found (rebuild the asset bundle?)");
+            if (required) Log("Required asset '{0}' not found (rebuild the asset bundle?)", path);
             return null;
         }
 

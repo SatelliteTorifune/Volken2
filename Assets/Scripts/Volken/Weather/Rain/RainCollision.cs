@@ -31,9 +31,6 @@ namespace Volken.Weather
         private int _prepare, _resolve, _clear;
         private bool _reset = true;
         private float _retryAt, _captureRetryAt;
-        private int _generation;
-        private float _lastFade, _seaAltitude, _depthFar;
-        private bool _hasWater;
         private int _taggedMask, _physicalMask;
         internal bool DepthRendered { get; private set; }
         internal string Status => _compute == null ? "missing-compute" :
@@ -55,7 +52,6 @@ namespace Volken.Weather
                     var asset = Mod.LoadVolkenAsset<ComputeShader>(AssetRoot + "RainCollision.compute");
                     if (asset == null)
                     {
-                        Mod.Diag("RainCollision assets: missing RainCollision.compute; rebuild and reload the mod bundle");
                         return false;
                     }
                     _compute = UnityEngine.Object.Instantiate(asset);
@@ -77,16 +73,13 @@ namespace Volken.Weather
                     if (waterShader != null && waterShader.isSupported)
                         _waterSplashMaterial = new Material(waterShader) { hideFlags = HideFlags.HideAndDontSave };
                 }
-                Mod.Diag("RainCollision assets: compute={0} depthShader={1} splashShader={2} RFloat={3} waterShader={4}",
-                    _compute != null, _depthShader != null && _depthShader.isSupported,
-                    _splashMaterial != null, SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat), _waterSplashMaterial != null);
                 return true;
             }
             catch (Exception ex)
             {
                 if (_compute != null) Destroy(_compute);
                 _compute = null;
-                Mod.LogThrottled("RainCollision.Assets", ex);
+                Mod.Log("RainCollision.Assets failed: {0}", ex);
                 return false;
             }
         }
@@ -163,7 +156,6 @@ namespace Volken.Weather
                     _capture.clearFlags = CameraClearFlags.SolidColor;
                 }
                 float far = radius * 2f + 10f;
-                _depthFar = far;
                 _capture.backgroundColor = new Color(far, far, far, far);
                 _capture.nearClipPlane = 0.1f;
                 _capture.farClipPlane = far;
@@ -202,7 +194,7 @@ namespace Volken.Weather
             catch (Exception ex)
             {
                 _captureRetryAt = Time.realtimeSinceStartup + 5f;
-                Mod.LogThrottled("RainCollision.Capture", ex);
+                Mod.Log("RainCollision.Capture failed: {0}", ex);
             }
         }
 
@@ -234,8 +226,6 @@ namespace Volken.Weather
             _compute.SetFloat("_FallSpeed", RainParticles.FallSpeed);
             _compute.SetInt("_HasWater", hasWater && !float.IsNaN(seaAltitude) && !float.IsInfinity(seaAltitude) ? 1 : 0);
             _compute.SetFloat("_SeaAltitude", seaAltitude);
-            _seaAltitude = seaAltitude;
-            _hasWater = hasWater && !float.IsNaN(seaAltitude) && !float.IsInfinity(seaAltitude);
             _compute.SetFloat("_SeaRadius", seaRadius);
             _compute.SetVector("_SeaUp", seaUp);
             _compute.SetFloat("_SplashDistance", Mathf.Clamp(RainParticles.SplashDistance, 1f, 50f));
@@ -263,7 +253,6 @@ namespace Volken.Weather
 
         internal void Draw(Camera camera, float fade, RenderTexture sceneDepth = null)
         {
-            _lastFade = fade;
             if (!RainParticles.SplashesEnabled || _splashes == null || fade <= 0f) return;
             if (_splashMaterial != null) DrawSplashes(camera, _splashMaterial, _mesh, _args, fade);
             if (_waterSplashMaterial == null) return;
@@ -290,51 +279,8 @@ namespace Volken.Weather
             Graphics.RenderMeshIndirect(parameters, mesh, args);
         }
 
-        // Requested by the diagnostics button; no automatic or synchronous GPU readback.
-        internal void RequestDiagnostics(Camera camera)
-        {
-            Mod.Diag("RainCollision state: status={0} camera='{1}' depth={2} splashes={3} fade={4:F2} distance={5:F1}m density={6:F2} sea={7} ASL={8:F1}m",
-                Status, camera.name, DepthRendered, RainParticles.SplashesEnabled, _lastFade,
-                RainParticles.SplashDistance, RainParticles.SplashDensity, _hasWater, _seaAltitude);
-            Mod.Diag("RainCollision capture: taggedMask=0x{0:X8} physicalMask=0x{1:X8} mode=physical-untagged-v2", _taggedMask, _physicalMask);
-            if (_counters == null || !SystemInfo.supportsAsyncGPUReadback) return;
-            int generation = _generation;
-            string cameraName = camera.name;
-            AsyncGPUReadback.Request(_counters, request =>
-            {
-                if (generation != _generation) return;
-                if (request.hasError) { Mod.Diag("RainCollision counters: readback failed"); return; }
-                var values = request.GetData<uint>();
-                Mod.Diag("RainCollision impacts: camera='{0}' requestedThisFrame={1} poolCursor={2}", cameraName, values[1], values[0]);
-            });
-            AsyncGPUReadback.Request(_splashes, request =>
-            {
-                if (generation != _generation) return;
-                if (request.hasError) { Mod.Diag("RainCollision splashes: readback failed"); return; }
-                var values = request.GetData<Vector4>();
-                int alive = 0;
-                for (int i = 0; i < values.Length; i++) if (values[i].w >= 0f) alive++;
-                Mod.Diag("RainCollision splashes: camera='{0}' alive={1}/{2}", cameraName, alive, SplashCapacity);
-            });
-            if (!DepthRendered || _depth == null) return;
-            float far = _depthFar;
-            AsyncGPUReadback.Request(_depth, 0, request =>
-            {
-                if (generation != _generation) return;
-                if (request.hasError) { Mod.Diag("RainCollision depth: readback failed"); return; }
-                var values = request.GetData<float>();
-                int covered = 0;
-                float nearest = far;
-                for (int i = 0; i < values.Length; i++)
-                    if (values[i] > 0f && values[i] < far - 0.05f) { covered++; nearest = Mathf.Min(nearest, values[i]); }
-                Mod.Diag("RainCollision depth: camera='{0}' covered={1}/{2} nearest={3:F2}m far={4:F1}m",
-                    cameraName, covered, values.Length, nearest, far);
-            });
-        }
-
         private void ReleaseBuffers()
         {
-            _generation++; // Ignore diagnostic callbacks from a disposed or resized instance.
             _previous?.Release(); _previous = null;
             _surfaces?.Release(); _surfaces = null;
             _splashes?.Release(); _splashes = null;

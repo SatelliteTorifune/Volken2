@@ -1,4 +1,5 @@
 using System;
+using Assets.Scripts;
 using UnityEngine;
 
 namespace Volken.Tests
@@ -27,7 +28,7 @@ namespace Volken.Tests
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogWarning("[VolkenTests] bootstrap spawn failed: " + ex.Message);
+                Mod.Log("[VolkenTests] bootstrap spawn failed: " + ex.Message);
             }
         }
 
@@ -51,7 +52,7 @@ namespace Volken.Tests
                 }
                 catch (Exception ex)
                 {
-                    UnityEngine.Debug.LogWarning("[VolkenTests] profiler create: " + ex.Message);
+                    Mod.Log("[VolkenTests] profiler create: " + ex.Message);
                 }
                 _profilerCreated = true;   // 失败也别每帧重试刷屏
             }
@@ -59,7 +60,6 @@ namespace Volken.Tests
             if (!_registered)
             {
                 _registered = true;
-                UnityEngine.Debug.Log("[VolkenTests] 开发工具就绪(性能剖析覆盖层)");
             }
             return true;
         }

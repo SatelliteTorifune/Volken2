@@ -4,9 +4,15 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 12
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 14
+        [HideInInspector] _CloudSunOcclusion("Cloud sun occlusion", Float) = 0
+        [HideInInspector] _SunlightOcclusionStrength("Sunlight occlusion strength", Float) = 0.8
+        [HideInInspector] _AmbientOcclusionStrength("Ambient occlusion strength", Float) = 0.5
+        [HideInInspector] _GroundShadowStrength("Ground shadow strength", Float) = 0.8
+        [HideInInspector] _GroundShadowDistance("Ground shadow distance", Float) = 20000
         [HideInInspector] _CloudLightningRevision("Cloud lightning revision", Float) = 2
         [HideInInspector] _CloudAmbientColor("Cloud ambient incident light", Vector) = (0,0,0,0)
+        [HideInInspector] _CloudSolarColor("Cloud solar incident light", Vector) = (1,1,1,0)
 
         // 运行时纹理显式登记,供材质复制、绑定与属性检查共用。
         CloudShapeTex("CloudShapeTex", 3D) = "" {}
@@ -329,14 +335,16 @@ Shader "Hidden/Clouds"
                         
                         float3 solarRadiance = BeersPowder(lightSample.x, 0.0) * (1.0 - amb)
                             * exp(-lightSample.y * scatterCoeff) * phaseValue;
+                        if (_CloudSunOcclusion > 0.5) solarRadiance *= max(0.0, _CloudSolarColor.rgb);
 
                         float densityStep = density * localStepSize;
-                        lightEnergy += densityStep * SegmentScatteringWeight(densityStep, amb)
+                        float extinctionAmbient = _CloudSunOcclusion > 0.5 ? 0.0 : amb;
+                        lightEnergy += densityStep * SegmentScatteringWeight(densityStep, extinctionAmbient)
                             * transmittance * (solarRadiance + ambientRadiance);
                         [branch] if (_LightningSamples >= 2 && _LightningPositionRange.w > 0.0)
                             lightningEnergy += max(0.0, cloudAbsorption) * densityStep * SegmentScatteringWeight(densityStep, 0.0)
                                 * transmittance * SampleLightningRadiance(rayPos, noiseLod);
-                        transmittance *= Beer(density * localStepSize, amb);
+                        transmittance *= Beer(density * localStepSize, extinctionAmbient);
                         
                         // break when visibility reaches threshold to avoid unnecessary samples
                         if (transmittance < 0.01) {
@@ -359,7 +367,7 @@ Shader "Hidden/Clouds"
                 float shadowTransmittance = 1.0;
                 // calculate shadows for solid surfaces
                 // 反射路径没有地表/场景遮蔽,跳过地表阴影(否则反射云会被整体压暗 50%)。
-                if ((surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
+                if (_CloudSunOcclusion < 0.5 && (surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
                     // offset sample point to avoid precision artifacts
                     shadowTransmittance = 0.5 + 0.5 * Beer(SampleLightRay(camPos + (maxRayDist - 50.0) * viewDir,
                         noiseLod).x, ambientLight);
@@ -368,6 +376,7 @@ Shader "Hidden/Clouds"
 
                 float atmoBlend = exp(-atmoBlendFactor * (cloudSurfaceDist - startRayDist));
                 float4 raymarchOutput = float4(atmoBlend * lightEnergy * cloudColor.rgb, min(1.0, transmittance + 1.0 - atmoBlend));
+                if (_CloudSunOcclusion > 0.5) raymarchOutput.a = lerp(1.0, transmittance, atmoBlend);
 
                 // 运动矢量(云空间重投影):云面点 本帧屏幕位置 → 上一帧屏幕位置。
                 // KSA 结构:本 pass 纯 raymarch(每帧全量,低清),时序混合/重投影移到 Upscale pass。
@@ -395,6 +404,150 @@ Shader "Hidden/Clouds"
                 return o;
 
             }
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "SunOcclusion"
+            Blend DstColor Zero
+            CGPROGRAM
+            #pragma target 4.0
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            #include "CloudVolumeLighting.cginc"
+            float3 _OcclusionOrigin, _OcclusionUp;
+            struct v2f { float4 pos : SV_POSITION; };
+            v2f vert(float4 vertex : POSITION) { v2f o; o.pos = vertex; return o; }
+            float4 frag(v2f i) : SV_Target
+            {
+                int ray = (int)i.pos.x;
+                float3 direction = -lightDir;
+                if (ray > 0)
+                {
+                    float3 up = normalize(_OcclusionUp);
+                    float3 axis = abs(up.y) < 0.99 ? float3(0,1,0) : float3(1,0,0);
+                    float3 tangent = normalize(cross(axis, up)), bitangent = cross(up, tangent);
+                    float mu = sqrt((ray - 0.5) / 8.0), phi = (ray - 1) * 2.39996323;
+                    direction = up * mu + sqrt(1.0 - mu * mu) * (tangent * cos(phi) + bitangent * sin(phi));
+                }
+                float t = CloudSunTransmittance(_OcclusionOrigin, direction);
+                return float4(t, lerp(1.0, t, _SunlightOcclusionStrength), lerp(1.0, t, _AmbientOcclusionStrength), 1);
+            }
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "GroundShadowQuery"
+            Blend DstColor Zero, One Zero
+            CGPROGRAM
+            #pragma target 4.0
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            #include "CloudVolumeLighting.cginc"
+            float4x4 _GroundShadowInverseVP, _GroundShadowView;
+            float3 _GroundShadowCameraPosition;
+            float4 _GroundShadowSize;
+            float _GroundShadowStrength, _GroundShadowDistance;
+            struct v2f { float4 pos : SV_POSITION; };
+            v2f vert(float4 vertex : POSITION) { v2f o; o.pos = vertex; return o; }
+            float4 frag(v2f i) : SV_Target
+            {
+                float2 uv = i.pos.xy * _GroundShadowSize.zw;
+                float raw = tex2Dlod(_CameraDepthTexture, float4(uv,0,0)).r;
+                #if defined(UNITY_REVERSED_Z)
+                if (raw <= 0) return float4(1,1,1,1e20);
+                #else
+                if (raw >= 1) return float4(1,1,1,1e20);
+                raw = lerp(UNITY_NEAR_CLIP_VALUE, 1, raw);
+                #endif
+                float2 clip = uv * 2 - 1;
+                #if UNITY_UV_STARTS_AT_TOP
+                clip.y = -clip.y;
+                #endif
+                float4 world = mul(_GroundShadowInverseVP, float4(clip, raw, 1));
+                float3 position = world.xyz / world.w;
+                float fade = 1 - smoothstep(_GroundShadowDistance * 0.8, _GroundShadowDistance, distance(position,_GroundShadowCameraPosition));
+                float t = lerp(1, CloudSunTransmittance(position, -lightDir), _GroundShadowStrength * fade);
+                float depth = -mul(_GroundShadowView, float4(position,1)).z;
+                return float4(t,t,t,depth);
+            }
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "GroundShadowApply"
+            Blend DstColor Zero
+            ColorMask RGB
+            CGPROGRAM
+            #pragma target 4.0
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            sampler2D _CameraDepthTexture, _VolkenGroundShadowTex;
+            float4 _GroundShadowSize;
+            float4x4 _GroundShadowInverseVP, _GroundShadowView;
+            struct v2f { float4 pos : SV_POSITION; float4 screen : TEXCOORD0; };
+            v2f vert(float4 vertex : POSITION)
+            {
+                v2f o; o.pos = vertex;
+                o.screen = float4(vertex.xy * 0.5 + 0.5,0,1);
+                #if UNITY_UV_STARTS_AT_TOP
+                o.screen.y = 1 - o.screen.y;
+                #endif
+                return o;
+            }
+            float4 frag(v2f i) : SV_Target
+            {
+                float2 uv = i.screen.xy / i.screen.w;
+                float raw = tex2D(_CameraDepthTexture,uv).r;
+                #if defined(UNITY_REVERSED_Z)
+                if (raw <= 0) return 1;
+                #else
+                if (raw >= 1) return 1;
+                raw = lerp(UNITY_NEAR_CLIP_VALUE,1,raw);
+                #endif
+                float2 clip = uv * 2 - 1;
+                #if UNITY_UV_STARTS_AT_TOP
+                clip.y = -clip.y;
+                #endif
+                float4 world = mul(_GroundShadowInverseVP,float4(clip,raw,1));
+                float depth = -mul(_GroundShadowView,float4(world.xyz/world.w,1)).z;
+                float2 grid = uv * _GroundShadowSize.xy - 0.5;
+                float2 baseUv = (floor(grid) + 0.5) * _GroundShadowSize.zw;
+                float2 f = frac(grid);
+                float sum = 0, weightSum = 0;
+                [unroll] for (int y=0; y<2; y++)
+                [unroll] for (int x=0; x<2; x++)
+                {
+                    float4 sample = tex2Dlod(_VolkenGroundShadowTex,float4(baseUv + float2(x,y)*_GroundShadowSize.zw,0,0));
+                    float w = (x ? f.x : 1-f.x) * (y ? f.y : 1-f.y);
+                    w *= exp(-abs(sample.a-depth) / max(1,depth * 0.02));
+                    sum += sample.r * w; weightSum += w;
+                }
+                float t = weightSum > 1e-5 ? sum / weightSum : 1;
+                return float4(t,t,t,1);
+            }
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "GroundShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+            ZWrite On ZTest LEqual ColorMask 0
+            CGPROGRAM
+            #pragma target 3.0
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            struct v2f { float4 pos : SV_POSITION; };
+            v2f vert(float4 vertex : POSITION) { v2f o; o.pos = UnityObjectToClipPos(vertex); return o; }
+            float4 frag(v2f i) : SV_Target { clip(-1); return 0; }
             ENDCG
         }
 
@@ -625,6 +778,8 @@ Shader "Hidden/Clouds"
             float cloudDensity;
             float cloudAbsorption;       // Beer 吸收系数(与体积云 transmittance 积累同源)
             float ambientLight;
+            float _CloudSunOcclusion;
+            float4 _CloudSolarColor;
             float4 cloudColor;
             float3 lightDir;
             float4 phaseParams;
@@ -899,6 +1054,7 @@ Shader "Hidden/Clouds"
                 // (1.0-ndl) 加权仅当 ndl→0 时亮(背光轮廓),夜侧被 dayFactor 压到 0。
                 col += cloudColor.rgb * phaseValue * coverage
                      * pow(saturate(1.0 - ndl), 3.0) * dayFactor * 0.5 * orbitBrightness;
+                if (_CloudSunOcclusion > 0.5) col *= max(0.0, _CloudSolarColor.rgb);
 
                 // 与体积云和 Composite 一致:alpha 表示透射率。
                 return float4(col, 1.0 - coverage);
@@ -957,6 +1113,7 @@ Shader "Hidden/Clouds"
             float surfaceRadius;
             float _NearThreshold;
             float _CompositeMode;  // 0.0 = Additive (零干扰), 1.0 = Standard (物理遮挡)
+            float _CloudSunOcclusion;
             float _OrbitFade;      // 海拔淡入因子:0 = 纯体积云, 1 = 纯 2D 轨道云
             float _OrbitDebugMode; // 调试:>0.5 → 左右分屏(左=体积云,右=2D 轨道云/覆盖足迹)
             
@@ -996,7 +1153,7 @@ Shader "Hidden/Clouds"
                     if (_CompositeMode<0.5)
                         return float4(source.rgb+lerp(volClouds.rgb*vf.a,orbitClouds.rgb*of.a,blend),source.a);
                     bool near = sceneDepth>0 && sceneDepth<_NearThreshold;
-                    float factor = near ? lerp(0.2,1,smoothstep(0,_NearThreshold,sceneDepth)) : saturate(sceneDepth/5000);
+                    float factor = _CloudSunOcclusion > 0.5 ? 1.0 : (near ? lerp(0.2,1,smoothstep(0,_NearThreshold,sceneDepth)) : saturate(sceneDepth/5000));
                     float vt = lerp(1,volClouds.a,factor);
                     float ot = lerp(1,orbitClouds.a,factor);
                     float3 vc = vf.a*volClouds.rgb*factor+(1-vt)*vf.rgb;
@@ -1012,6 +1169,8 @@ Shader "Hidden/Clouds"
                 }
 
                 // === Standard Mode (物理遮挡) ===
+                if (_CloudSunOcclusion > 0.5)
+                    return float4(source.rgb * clouds.a + clouds.rgb, source.a);
                 float nearThreshold = _NearThreshold;
                 if (sceneDepth > 0.0 && sceneDepth < nearThreshold)
                 {

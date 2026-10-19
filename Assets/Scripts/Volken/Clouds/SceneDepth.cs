@@ -13,7 +13,8 @@ namespace Volken.Clouds
             {
                 _retry = Time.realtimeSinceStartup + 5f;
                 _shader = Mod.LoadVolkenAsset<Shader>("Assets/Scripts/Volken/Clouds/Shader/SceneDepth.shader", false);
-                Mod.Diag("Fog depth asset: {0}", _shader != null && _shader.isSupported ? "ready" : "missing/unsupported; rebuild bundle");
+                if (_shader == null || !_shader.isSupported)
+                    Mod.Log("Scene depth shader missing or unsupported; rebuild and reload the mod bundle");
             }
             return _shader != null && _shader.isSupported
                 ? new Material(_shader) { hideFlags = HideFlags.HideAndDontSave } : null;

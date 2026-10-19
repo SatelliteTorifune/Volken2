@@ -18,6 +18,11 @@
     <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层。</s>
 
     <s id="Volken.UI.CloudSettings">云层设置</s>
+    <s id="Volken.UI.GroundShadowDistance">云影距离(米)</s>
+    <s id="Volken.UI.GroundShadows">云层地面阴影</s>
+    <s id="Volken.UI.SunOcclusion">阴天整体照明</s>
+    <s id="Volken.UI.SunlightOcclusionStrength">直射光遮蔽强度</s>
+    <s id="Volken.UI.AmbientOcclusionStrength">环境光减弱强度</s>
 
     <s id="Volken.UI.Weather">天气</s>
     <s id="Volken.UI.WeatherUnavailable">天气系统未初始化，请重新进入飞行场景。</s>

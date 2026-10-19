@@ -93,7 +93,7 @@ namespace Volken.Weather
             float dt = Mathf.Clamp(now - _lastTime, 0f, 0.1f);
             _lastTime = now;
             try { Simulate(dt, now, weather, settings); }
-            catch (Exception ex) { ClearState(); Mod.LogThrottled("RainLens.Simulate", ex); }
+            catch (Exception ex) { ClearState(); Mod.Log("RainLens.Simulate failed: {0}", ex); }
         }
 
         private void Simulate(float dt, float now, VolkenWeather weather, VolkenWeatherConfig.RainLensSection settings)
@@ -236,7 +236,7 @@ namespace Volken.Weather
                 _material.SetFloat(BlurId, settings.blur);
                 Graphics.Blit(source, destination, _material, 1);
             }
-            catch (Exception ex) { Mod.LogThrottled("RainLens.Render", ex); Graphics.Blit(source, destination); }
+            catch (Exception ex) { Mod.Log("RainLens.Render failed: {0}", ex); Graphics.Blit(source, destination); }
             finally { RenderTexture.active = previous; }
         }
 

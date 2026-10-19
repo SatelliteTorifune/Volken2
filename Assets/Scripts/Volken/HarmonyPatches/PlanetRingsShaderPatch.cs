@@ -1,4 +1,5 @@
 using System.Reflection;
+using Assets.Scripts;
 using HarmonyLib;
 using UnityEngine;
 using Assets.Scripts.Flight.GameView.Planet;
@@ -25,7 +26,7 @@ namespace Volken.HarmonyPatches
 
             if (_frontMaterialField == null || _backMaterialField == null || _initializeMaterialMethod == null)
             {
-                UnityEngine.Debug.LogError("[YourMod] Failed to find PlanetRingsScript fields/methods via reflection!");
+                Mod.Log("Failed to find PlanetRingsScript fields/methods via reflection!");
                 return;
             }
 
@@ -33,7 +34,7 @@ namespace Volken.HarmonyPatches
             _fixedShader = Shader.Find("Jundroo/PlanetRingShader_Fixed");
             if (_fixedShader == null)
             {
-                UnityEngine.Debug.LogError("[YourMod] Cannot find shader 'Jundroo/PlanetRingShader_Fixed'! Check name and asset placement.");
+                Mod.Log("Cannot find shader 'Jundroo/PlanetRingShader_Fixed'! Check name and asset placement.");
                 return;
             }
 
@@ -45,7 +46,7 @@ namespace Volken.HarmonyPatches
             }
             else
             {
-                UnityEngine.Debug.LogError("[YourMod] PlanetRingsScript.Start method not found!");
+                Mod.Log("PlanetRingsScript.Start method not found!");
             }
         }
 
@@ -63,7 +64,6 @@ namespace Volken.HarmonyPatches
                 // 关键：重新调用原版 InitializeMaterial 来恢复纹理和参数
                 _initializeMaterialMethod.Invoke(__instance, new object[] { frontMat });
                 changed = true;
-                UnityEngine.Debug.Log("[YourMod] Front ring material shader replaced and reinitialized.");
             }
 
             if (backMat != null && backMat.shader != _fixedShader)
@@ -71,7 +71,6 @@ namespace Volken.HarmonyPatches
                 backMat.shader = _fixedShader;
                 _initializeMaterialMethod.Invoke(__instance, new object[] { backMat });
                 changed = true;
-                UnityEngine.Debug.Log("[YourMod] Back ring material shader replaced and reinitialized.");
             }
 
             if (changed)

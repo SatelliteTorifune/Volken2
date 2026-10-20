@@ -34,6 +34,7 @@
 
 | 范围 / 日期 | 保留的证据 | 实际限制 |
 |---|---|---|
+| 云合成 / 历史资源 | 2026-10-20：`.utmp/cloud-history-validation/result-{Gamma,Linear}.txt` 各 39 场景 / 303 帧对照 / 7180 检查通过，RGBA 最大差为 0；N>0 个时序层历史复制由 3N 降至 N+1，无消费者为 0；C# 编译 0 错误。2026-10-19 首尾直连：`.utmp/cloud-composite-validation/result-{Gamma,Linear}.txt` 各 171 场景 / 1538 检查，像素差为 0，同尺寸普通输出无雾少 2 次复制、有雾少 1 次，异常后无临时纹理遗留 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop；时序验证用完整正式 CloudLayerView、抽取的正式历史方法与云 shader，采样输入 / 配置 / 游戏环境为替身，未运行完整 raymarch 或游戏相机回调；覆盖单 / 多层、TSS / 残影 / 无历史、重置 / 轨道 / 重建、多相机、同帧重复绘制与 NaN 隔离，缺席层 / 深度丢失 / 异常恢复按冷启动参考对照。合成验证另覆盖实际相机回调、雾 / 雷光 / 轨道、HDR / AA / 缩放 / 编码 / 别名；均未验游戏部署或 FPS |
 | 云阳光遮蔽 / 局部投影 / 2026-10-15 | `.utmp/cloud-native-shadow-validation/result-formal-fullsync-{Gamma,Linear}.txt` 各 256 机体 / 薄翼配置通过；`result-formal-fullsync-range-sweep-Linear.txt` 800 距离扫描无丢影；`.utmp/cloud-native-shadow-design-probe/result-after-formal-fullsync-{Gamma,Linear}-all.txt` 各 621 世界点近远差为 0、64 契约通过，`result-no-expansion-{Gamma,Linear}.txt` 各 128 状态检查；`.utmp/cloud-occlusion-validation/result-native-shadow-regression-{Gamma,Linear}.txt` 各 248 项；C# 编译 0 错误 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop；CloseFit / StableFit、0/1/2/4 级、原生 50~2000m、云影 20/100km，采地面排除机体自身；4 级原生影像素最低保留 99.46%，2 级最低 77.46%，单级恒等。扫描含 EVA near=0.06，会有额外粗影；覆盖投影 / 剔除同步、原绘制矩阵 / 标准深度、嵌套恢复。SDK / 行星为替身，特殊手动剔除只验字段恢复；build 16 游戏截图已证实原生影消失，build 17 待游戏画质及额外几何提交耗时复测 |
 | 雨滴光照 / 水花显示回退 / 2026-10-14 | `.utmp/rain-splash-regression/`：Gamma / Linear 各 62 项专项 + 53 项水面检查，即各 115 项通过 | 恢复水花原显示的对照检查；不能替代游戏水面观感 |
 | 天气行星门控 / 预设同步 / 2026-10-15 | `.utmp/planet-gate-validation/result.txt`：49 项通过；当前源码复跑 `.utmp/weather-preset-validation/result.txt`：36 项通过；完整 C# 工程编译 0 错误 | Unity 2022.3.62f3 / D3D11；实际环境解析、SOI 订阅、天气 / 雨 / 雨声 / 雷电 / 水珠生命周期与预设同步，游戏 SDK、云渲染和音频素材为替身；XML 写工作区，未验游戏部署 |
@@ -42,8 +43,7 @@
 | 镜头水珠 / 2026-10-14 | `.utmp/rain-lens-visibility/result-{Gamma,Linear}.txt`：各 97 项通过；C# 编译 0 错误。1280 / 1920 灰背景、旧尺寸 / 折射参数下 shader 2 平均对比差为首版 3.57~3.59 倍 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop，正式模拟 / 渲染 / shader / 天气驱动；覆盖默认升级 / 自定义保留、低对比辨识及原生命周期 / 光学回归，游戏 API 替身；不代表游戏感知改善倍数或性能验收 |
 | 雾夜间光照 / 2026-10-09 | `Build/FogNight/fog-gpu-summary.txt`：161 项通过 | 独立 BIRP GPU / 配置检查，正式编辑器探针已删除 |
 | 无标签雨碰撞 / 2026-10-08 | 历史 135 项 GPU 检查通过；用户确认当时水花可见性修复 | 不覆盖后续水面 shader、光照或完整复杂材质矩阵 |
-| 雨方向 / 2026-10-11 | 游戏 34 组构轴：符号反射误差 0，预期角差最大 0.17°；用户确认改善 | 表面锁定、variation=0、roll=0；不覆盖移动帧、重定位和 PIP |
-| 重生 hash / 2026-10-04 | 历史游戏落点唯一率 0.932、最大重复 5 | 固定测试规模 / 统计格；不能当所有密度下的保证 |
+| 雨方向 / 重生 | 2026-10-11 游戏 34 组构轴：符号反射误差 0，预期角差最大 0.17°，用户确认改善；2026-10-04 重生 hash 落点唯一率 0.932、最大重复 5 | 方向仅表面锁定、variation=0、roll=0，不覆盖移动帧、重定位和 PIP；hash 为固定规模 / 统计格，不保证所有密度 |
 
 上述修复当时均有相应编译记录；不要把历史“0 错误”写成本次编译结果，也不要承诺既有警告数永远固定。专用方向日志已清理，旧文档原文可从 Git 历史恢复。
 

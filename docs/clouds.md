@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| [CloudRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudRenderer.cs) | 每相机远近深度、raymarch、TSS、雾与逐层合成；提供 `LinearSceneDepth` |
+| [CloudRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudRenderer.cs) | 每相机远近深度与场景深度历史、raymarch、TSS、雾与逐层合成；提供 `LinearSceneDepth` |
 | [CloudLayer.cs](../Assets/Scripts/Volken/Clouds/CloudLayer.cs) | 每层配置、材质、噪声、风偏移和静态参数修订 |
 | [CloudLayerView.cs](../Assets/Scripts/Volken/Clouds/CloudLayerView.cs) | 每相机 × 每云层的 RT、运动数据和历史 |
 | [Clouds.shader](../Assets/Scripts/Volken/Clouds/Shader/Clouds.shader) | 体积云、轨道壳面、上采样、合成与雷光遮光缓存生成 |
@@ -51,7 +51,8 @@
 - 云颜色 alpha 表示透射率，无云为 `(0,0,0,1)`；RFloat 云距离读取 R 通道。
 - 云距离和 MV 采用同一 Point 格点。真实零位移不能向邻点借非零运动数据；MV 的 B 保存当前云点在上一相机空间的预期距离。
 - 历史云面校验比较历史距离与上述预期上一距离，沿用越界、场景遮挡和运动权重；不能直接与本帧距离比较。
-- TSS 关闭且 `historyBlend<=0` 时不读历史，也不执行三次全清历史写回。有历史消费者时仍保留颜色、场景深度和云距离历史。
+- TSS 关闭且 `historyBlend<=0` 时不读写历史。参与时序的颜色结果在下一次绘制前与历史纹理交换；云距离仍逐层按原 Point 格点写回全清纹理。同一相机所有层完成上采样后只写一次共享场景深度，N>0 个参与层每帧有 N+1 次历史复制；相机之间不共享。
+- 每层记录所用场景深度快照版本；层缺席、资源重建或版本不匹配时，在运动矩阵更新前清该层历史。冷启动绑定零场景深度，层重置不清其他层的共享快照；渲染异常使本相机所有层历史失效，防止部分写回污染下一帧。
 - 静态参数修改递增层修订，每相机 `PrepareFrame` 按修订或绘制中断清历史。材质与 MRT 数组按层 / 相机复用，合成使用对应层材质。
 - 重投影使用 `GL.GetGPUProjectionMatrix(..., true)`。浮动原点事件订阅 `IGameView.ReferenceFrameRecentered(IReferenceFrame, Vector3d, Vector3d)`；位置和速度变化均不超过 0.001 时忽略通知，实际变化或非有限输入仍清历史。
 
@@ -70,7 +71,7 @@
 | Additive | 只增加云 RGB，不用云透射率压暗背景；厚云后方星空仍可能透出 |
 | Standard | 使用云透射率衰减合成时已有背景；最终星空遮挡还取决于游戏绘制顺序 |
 
-雾先作用于背景，再按体积命中 / 轨道壳距离处理云贡献；不能重复雾化背景。不同表示的深度不先平均后查雾。未启用阳光遮蔽的 Standard 仍有 `nearThreshold` 经验修正。
+逐层合成在无雾时直接读取场景，末层可直写同尺寸、同编码且无 MSAA 的输出；屏幕输出仅同屏幕尺寸时直写，缩放、格式转换或输入输出别名仍经临时纹理。借用的相机输入 / 输出不由云释放。雾先作用于背景一次，再按体积命中 / 轨道壳距离处理云贡献；不能重复雾化背景，不同表示的深度不先平均后查雾。未启用阳光遮蔽的 Standard 仍有 `nearThreshold` 经验修正。
 
 ## 雷光与水面反射
 

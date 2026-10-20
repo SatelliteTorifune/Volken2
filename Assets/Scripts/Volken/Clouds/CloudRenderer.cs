@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 /*
     云渲染主流程:合并远近相机深度 → 逐层低清 raymarch(+ 云面深度/MV 的 MRT)→ 全清时序上采样 → 逐层合成。
-     每个 CloudRenderer 实例 = 一台相机,每相机状态全在 CloudLayerView;farDepthSource = 这台相机的远相机。
+     每个 CloudRenderer 实例 = 一台相机,场景深度由相机持有,云历史由 CloudLayerView 持有。
      风/自转是全球共享量,每帧只能推进一次(AdvanceGlobalCloudState),多相机下推两次 = 云速翻倍。
      [ImageEffectOpaque] 必须保留:云要在不透明之后、透明之前合成,否则会盖住水面/玻璃/UI。
 */
@@ -20,6 +20,8 @@ namespace Volken.Clouds
         // 本相机独享的共享深度 RT
         private RenderTexture combinedDepthTex;
         private RenderTexture lowResDepthTex;
+        private RenderTexture historyDepthTex;
+        private long _historyDepthVersion;
         private Camera cam;
         private Material _sceneDepthMaterial;
         private Volken.Weather.FogRenderer _fog;
@@ -218,6 +220,72 @@ namespace Volken.Clouds
             lowResDepthTex.Create();
         }
 
+        private static bool NeedsTemporalHistory(CloudLayerView view) =>
+            view.orbitFade < 0.999f && (view.layer.config.useTemporalUpscale || view.layer.config.historyBlend > 0f);
+
+        private void PrepareCloudHistory(int renderW, int renderH)
+        {
+            bool needsHistory = false;
+            foreach (var view in _activeViews)
+                if (NeedsTemporalHistory(view)) { needsHistory = true; break; }
+
+            if (needsHistory && (historyDepthTex == null || !historyDepthTex.IsCreated() ||
+                historyDepthTex.width != renderW || historyDepthTex.height != renderH))
+            {
+                if (historyDepthTex != null)
+                {
+                    historyDepthTex.Release();
+                    Destroy(historyDepthTex);
+                }
+                historyDepthTex = new RenderTexture(renderW, renderH, 0, RenderTextureFormat.RFloat);
+                historyDepthTex.name = "CloudSceneDepthHistory";
+                historyDepthTex.Create();
+                _historyDepthVersion++;
+            }
+
+            foreach (var view in _activeViews)
+            {
+                if (NeedsTemporalHistory(view)) view.PrepareHistory(_historyDepthVersion);
+                else view.historyDepthVersion = -1;
+            }
+        }
+
+        // 所有层先读取上一快照,再一次性写回本相机深度;云距离保持原全清 Point 格点。
+        private void UpscaleClouds(Material matRef)
+        {
+            int upscalePass = matRef.FindPass("Upscale");
+            bool writeHistory = false;
+            foreach (var view in _activeViews)
+            {
+                if (view.orbitFade >= 0.999f) continue;
+                var mat = view.layer.material;
+                mat.SetTexture("CloudDepthTex", view.cloudDepthTex);
+                mat.SetTexture("CloudMVTex", view.cloudMVTex);
+                mat.SetTexture("CombinedDepthTex", combinedDepthTex);
+                mat.SetTexture("HistoryTex", view.historyTex);
+                mat.SetTexture("HistoryDepthTex", view.historyDepthVersion == _historyDepthVersion && historyDepthTex != null
+                    ? (Texture)historyDepthTex : Texture2D.blackTexture);
+                mat.SetTexture("HistoryCloudDepthTex", view.historyCloudDepthTex);
+                Graphics.Blit(view.cloudTex, view.upscaledCloudTex, mat, upscalePass);
+                if (NeedsTemporalHistory(view))
+                {
+                    Graphics.Blit(view.cloudDepthTex, view.historyCloudDepthTex);
+                    writeHistory = true;
+                }
+            }
+            if (!writeHistory) return;
+            Graphics.Blit(combinedDepthTex, historyDepthTex);
+            _historyDepthVersion++;
+            foreach (var view in _activeViews)
+                if (NeedsTemporalHistory(view)) view.historyDepthVersion = _historyDepthVersion;
+        }
+
+        private void InvalidateCloudHistory()
+        {
+            _historyDepthVersion++;
+            foreach (var view in _views.Values) view.ClearHistory();
+        }
+
         private void ReleaseAllRenderTextures()
         {
             if (combinedDepthTex != null)
@@ -232,6 +300,13 @@ namespace Volken.Clouds
                 Destroy(lowResDepthTex);
                 lowResDepthTex = null;
             }
+            if (historyDepthTex != null)
+            {
+                historyDepthTex.Release();
+                Destroy(historyDepthTex);
+                historyDepthTex = null;
+            }
+            _historyDepthVersion++;
 
             foreach (var view in _views.Values)
             {
@@ -625,6 +700,7 @@ namespace Volken.Clouds
                     var v = GetView(activeLayers[i]);
                     if (v != null) _activeViews.Add(v);
                 }
+                PrepareCloudHistory(renderW, renderH);
 
                 AdvanceGlobalCloudState();   // 全球风/自转:本帧只推进一次
 
@@ -677,41 +753,35 @@ namespace Volken.Clouds
                     }
                 }
 
-                // 上采样走 Blit;运动数据只使用同一云面的格点。
-                int upscalePass = matRef.FindPass("Upscale");
-                foreach (var layer in activeLayers)
-                {
-                    var view = GetView(layer);
-                    if (view == null) continue;
-                    if (view.orbitFade >= 0.999f) continue;   // 高空纯 2D:体积时序链路整条跳过
-
-                    var mat = layer.material;
-                    mat.SetTexture("CloudDepthTex", view.cloudDepthTex);
-                    mat.SetTexture("CloudMVTex", view.cloudMVTex);
-                    mat.SetTexture("CombinedDepthTex", combinedDepthTex);
-                    mat.SetTexture("HistoryTex", view.historyTex);
-                    mat.SetTexture("HistoryDepthTex", view.historyDepthTex);
-                    mat.SetTexture("HistoryCloudDepthTex", view.historyCloudDepthTex);
-                    Graphics.Blit(view.cloudTex, view.upscaledCloudTex, mat, upscalePass);
-
-                    // 时序写回:上采样结果 → 历史(下一帧在 Upscale 里按 MV 重投影采样);云面距离历史供下一帧 cloudGate 校验
-                    if (layer.config.useTemporalUpscale || layer.config.historyBlend > 0f)
-                    {
-                        Graphics.Blit(view.upscaledCloudTex, view.historyTex);
-                        Graphics.Blit(combinedDepthTex, view.historyDepthTex);
-                        Graphics.Blit(view.cloudDepthTex, view.historyCloudDepthTex);
-                    }
-                }
+                UpscaleClouds(matRef);
 
                 // 逐层链式合成,每层按其 compositeMode 混合
-                int compositePass = matRef.FindPass("Composite");
-                result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
-                _fog.Render(source, result, combinedDepthTex);
-
-                foreach (var layer in activeLayers)
+                if (_activeViews.Count == 0)
                 {
-                    var view = GetView(layer);
-                    if (view == null) continue;
+                    _fog.Render(source, destination, combinedDepthTex);
+                    return;
+                }
+                int compositePass = matRef.FindPass("Composite");
+                RenderTexture compositeSource = source;
+                if (fogActive)
+                {
+                    result = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
+                    _fog.Render(source, result, combinedDepthTex);
+                    compositeSource = result;
+                }
+
+                var compositeDescriptor = new RenderTextureDescriptor(renderW, renderH, source.format, 0)
+                {
+                    sRGB = QualitySettings.activeColorSpace == ColorSpace.Linear
+                };
+                bool canWriteDestination = destination == null
+                    ? renderW == Screen.width && renderH == Screen.height
+                    : destination.width == renderW && destination.height == renderH &&
+                      destination.graphicsFormat == compositeDescriptor.graphicsFormat && destination.antiAliasing == 1;
+                for (int i = 0; i < _activeViews.Count; i++)
+                {
+                    var view = _activeViews[i];
+                    var layer = view.layer;
                     var compositeMat = layer.material;
                     compositeMat.SetTexture("UpscaledCloudTex", view.upscaledCloudTex);
                     compositeMat.SetTexture("CloudLightningTex", view.lightningTex != null && view.orbitFade < 0.999f && compositeMat.GetInt("_LightningSamples") >= 2
@@ -727,19 +797,23 @@ namespace Volken.Clouds
                     // 交叉淡入因子:orbit pass 不可用 → 强制 0(纯体积云,等同未开启本特性)
                     compositeMat.SetFloat("_OrbitFade", view.orbitFade);
 
-                    compositeTemp = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
-                    Graphics.Blit(result, compositeTemp, compositeMat, compositePass);
-                    RenderTexture.ReleaseTemporary(result);
+                    // 仅同尺寸、同编码的最终目标可直写;别名目标仍经临时纹理,保留缩放与格式转换顺序。
+                    bool directOutput = i == _activeViews.Count - 1 && canWriteDestination && compositeSource != destination;
+                    if (!directOutput) compositeTemp = RenderTexture.GetTemporary(renderW, renderH, 0, source.format);
+                    Graphics.Blit(compositeSource, directOutput ? destination : compositeTemp, compositeMat, compositePass);
+                    if (result != null) RenderTexture.ReleaseTemporary(result);
                     result = compositeTemp;
                     compositeTemp = null;
+                    compositeSource = result;
                 }
 
-                Graphics.Blit(result, destination);
+                if (result != null) Graphics.Blit(result, destination);
             }
             catch (Exception e)
             {
                 Mod.Log("CloudRenderer.Render failed: {0}", e);
                 Volken.Weather.FogRenderer.ClearGlobals();
+                InvalidateCloudHistory();
                 try { Graphics.Blit(source, destination); } catch { }
             }
             finally

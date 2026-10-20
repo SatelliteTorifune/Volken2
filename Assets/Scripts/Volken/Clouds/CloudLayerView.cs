@@ -20,9 +20,9 @@ namespace Volken.Clouds
         public readonly RenderBuffer[] lightningTargets = new RenderBuffer[4];
         public RenderTexture lightningTex;         // 当前帧云内雷光,不进入基础云颜色历史。
         internal readonly CloudLightningCache lightningCache = new CloudLightningCache();
-        public RenderTexture upscaledCloudTex;      // 全清上采样结果
+        public RenderTexture upscaledCloudTex;      // 全清本帧结果;下次时序绘制前与 historyTex 交换
         public RenderTexture historyTex;            // 全清历史颜色
-        public RenderTexture historyDepthTex;       // 全清场景深度历史
+        internal long historyDepthVersion = -1;    // 颜色 / 云距离对应的本相机场景深度快照
         public RenderTexture historyCloudDepthTex;  // 全清云面距离历史
         public RenderTexture orbitCloudTex;         // 轨道云(2D 壳着色)输出,Composite 按 _OrbitFade 混合
 
@@ -54,7 +54,7 @@ namespace Volken.Clouds
 
         public bool IsCreated => Ready(cloudTex) && Ready(cloudDepthTex) && Ready(cloudMVTex) &&
             Ready(upscaledCloudTex) && Ready(historyTex) &&
-            Ready(historyDepthTex) && Ready(historyCloudDepthTex) && Ready(orbitCloudTex) &&
+            Ready(historyCloudDepthTex) && Ready(orbitCloudTex) &&
             (!currentLightningEnabled || Ready(lightningTex));
 
         private static bool Ready(RenderTexture rt) => rt != null && rt.IsCreated();
@@ -119,7 +119,6 @@ namespace Volken.Clouds
 
             upscaledCloudTex = CreateRT(renderW, renderH, currentColorFormat, "UpscaledCloudTex" + layer.layerIndex);
             historyTex = CreateRT(renderW, renderH, currentColorFormat, "HistoryTex" + layer.layerIndex);
-            historyDepthTex = CreateRT(renderW, renderH, RenderTextureFormat.RFloat, "HistoryDepthTex" + layer.layerIndex);
             historyCloudDepthTex = CreateRT(renderW, renderH, RenderTextureFormat.RFloat, "HistoryCloudDepthTex" + layer.layerIndex);
             historyCloudDepthTex.filterMode = FilterMode.Point;
 
@@ -144,24 +143,37 @@ namespace Volken.Clouds
             ReleaseRT(ref cloudTex);
             ReleaseRT(ref upscaledCloudTex);
             ReleaseRT(ref historyTex);
-            ReleaseRT(ref historyDepthTex);
             ReleaseRT(ref cloudDepthTex);
             ReleaseRT(ref historyCloudDepthTex);
             ReleaseRT(ref cloudMVTex);
             ReleaseRT(ref lightningTex);
             lightningCache.Dispose();
             ReleaseRT(ref orbitCloudTex);
+            historyDepthVersion = -1;
         }
 
-        // 清空时序历史(颜色/场景深度/云面距离)→ Upscale 的 validHist 全 0 → 全走本帧新鲜 raymarch
+        // 必须在本帧运动矩阵更新前调用;缺席共享快照的层不能混用旧颜色与新深度。
+        internal void PrepareHistory(long depthVersion)
+        {
+            if (historyDepthVersion != depthVersion)
+            {
+                ClearHistory();
+                return;
+            }
+            var previousHistory = historyTex;
+            historyTex = upscaledCloudTex;
+            upscaledCloudTex = previousHistory;
+        }
+
+        // 云面距离清零即可拒绝该层历史;不能清除其他层仍在使用的共享场景深度。
         public void ClearHistory()
         {
             lightningCache.Invalidate();
             frameNumber = 0;
             prevCloudAngle = float.NaN;
+            historyDepthVersion = -1;
             var prevActive = RenderTexture.active;
             ClearRT(historyTex);
-            ClearRT(historyDepthTex);
             ClearRT(historyCloudDepthTex);
             RenderTexture.active = prevActive;
         }

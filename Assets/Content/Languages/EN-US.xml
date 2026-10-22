@@ -16,6 +16,8 @@
     <s id="Volken.ModSettings.ExtraCameraRainDesc">Show rain on additional cameras.</s>
     <s id="Volken.ModSettings.ShowProfiler">Profiler Overlay</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">Show the in-game performance profiler overlay.</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfig">Restore Default Presets</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfigDesc">Copy the bundled default cloud and weather presets into UserData on startup when they are missing. Takes effect on the next launch.</s>
 
     <s id="Volken.UI.CloudSettings">Cloud Settings</s>
     <s id="Volken.UI.GroundShadowDistance">Ground shadow distance(m)</s>
@@ -63,7 +65,6 @@
     <s id="Volken.UI.RainCeilingBand">Altitude limit fade fraction</s>
     <s id="Volken.UI.RainUnderwaterGate">Hide rain underwater</s>
     <s id="Volken.UI.RainUnderwaterFade">Underwater fade depth (m)</s>
-    <s id="Volken.UI.RainRespawnMirror">Mirror respawn</s>
     <s id="Volken.UI.RainAmount">Particle Amount</s>
     <s id="Volken.UI.RainDomainRadius">Domain Radius (m)</s>
     <s id="Volken.UI.RainAdaptiveDomain">Adaptive Domain Radius</s>
@@ -187,6 +188,10 @@
     <s id="Volken.UI.HistoryBlend">History Blend</s>
     <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
+    <s id="Volken.UI.SolarCacheEnabled">Solar Light Cache (Experimental)</s>
+    <s id="Volken.UI.EmptySpaceSkippingEnabled">Conservative Empty Space Skipping</s>
+    <s id="Volken.UI.SolarCacheResolution">Solar Cache Grid Resolution</s>
+    <s id="Volken.UI.SolarCacheExtent">Solar Cache Coverage Width (m)</s>
 
     <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
     <s id="Volken.UI.OrbitClouds">Orbit clouds</s>

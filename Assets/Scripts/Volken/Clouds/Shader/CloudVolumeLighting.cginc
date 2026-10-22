@@ -378,8 +378,15 @@ float2 SampleLightRay(float3 pos, float2 noiseLod) {
 
     float d = 0.0;
 
+    // FXC can miscompile the nested dynamic loop in the cache variant; 50 is the runtime sample limit.
+    #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
+    [unroll(50)]
+    for (int i = 0; i < 50; i++) {
+        if (i >= lightSamples) break;
+    #else
     [loop]
     for (int i = 0; i < lightSamples; i++) {
+    #endif
         rayPos += step * rayDir;
         d += step * max(0.0, SampleDensityCheap(rayPos, noiseLod));
     }

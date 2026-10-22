@@ -24,7 +24,7 @@
 
 游戏效果面板没有手动诊断按钮。项目不再提供独立诊断 / 节流日志接口、时间戳字典、雨 / 雨声 / 雨碰撞 / 雾状态转储、诊断 GPU 回读或雾周期帧计时。旧 XML 的 `fog.diagnostics` 节点由反序列化忽略；雨 compute 的计数缓冲仍按原 shader 契约绑定，不再 CPU 回读。
 
-当前源码标识集中列在这里：云 shader 14 / lightning 2，噪声 `VolkenWorleyFBM` 且两张 128³ 纹理各 8 级 mip，雨 shader 10，镜头水珠 shader 2，雾 shader 3。旧云 `build=17` 和雾 `code=3` 仅是已删除诊断的标签，不再用于识别运行包；部署版本以模组元数据和实际包内程序集 / 资源核对。
+当前源码标识集中列在这里：云 shader 15 / lightning 2，噪声 `VolkenWorleyFBM` 且两张 128³ 纹理各 8 级 mip，雨 shader 10，镜头水珠 shader 2，雾 shader 3。旧云 `build=17` 和雾 `code=3` 仅是已删除诊断的标签，不再用于识别运行包；部署版本以模组元数据和实际包内程序集 / 资源核对。
 
 游戏日志路径为 `<USERPROFILE>/AppData/LocalLow/Jundroo/SimpleRockets 2/Player.log`；shader 编译还查 Unity `Editor.log`。真实路径按被忽略的 [LOCAL_PATHS.md](LOCAL_PATHS.md) 解析。先排除暂停，诊断空间要与症状一致；同时记录配置、运行态、触发计数和资源标识。连续三轮无可信改善时换诊断方向。
 
@@ -34,12 +34,12 @@
 
 | 范围 / 日期 | 保留的证据 | 实际限制 |
 |---|---|---|
+| 云采样 / 太阳缓存 / 2026-10-20 | `.utmp/cloud-core-validation/result-{Gamma,Linear}.txt` 各 91 场景通过；旧路径及仅跳空像素差 0，缓存保持透射率 / 距离 / MV / 雷光；81 条子格薄云查询均直算回退。Linear 明暗 36 场景最大 RGB 差 0.001518、RMS 0.000166；配置 65 项、空区 640000 高度点 / 1080 射线通过；C# 编译 0 错误 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop，正式云 shader / 缓存类，噪声 / SDK 为替身；含 1/2/5/25/50 光样本、8/24/64 格网、刷新 / 重建 / PIP；320×180 四 MRT、24³ / 24km，各档 30 秒×3；采样+构建 GPU 均值旧 / 跳空 / 缓存 / 组合=0.307/0.326/0.191/0.210ms，组合 P99 较高；仅独立场景，未验游戏 FPS |
 | 云合成 / 历史资源 | 2026-10-20：`.utmp/cloud-history-validation/result-{Gamma,Linear}.txt` 各 39 场景 / 303 帧对照 / 7180 检查通过，RGBA 最大差为 0；N>0 个时序层历史复制由 3N 降至 N+1，无消费者为 0；C# 编译 0 错误。2026-10-19 首尾直连：`.utmp/cloud-composite-validation/result-{Gamma,Linear}.txt` 各 171 场景 / 1538 检查，像素差为 0，同尺寸普通输出无雾少 2 次复制、有雾少 1 次，异常后无临时纹理遗留 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop；时序验证用完整正式 CloudLayerView、抽取的正式历史方法与云 shader，采样输入 / 配置 / 游戏环境为替身，未运行完整 raymarch 或游戏相机回调；覆盖单 / 多层、TSS / 残影 / 无历史、重置 / 轨道 / 重建、多相机、同帧重复绘制与 NaN 隔离，缺席层 / 深度丢失 / 异常恢复按冷启动参考对照。合成验证另覆盖实际相机回调、雾 / 雷光 / 轨道、HDR / AA / 缩放 / 编码 / 别名；均未验游戏部署或 FPS |
 | 云阳光遮蔽 / 局部投影 / 2026-10-15 | `.utmp/cloud-native-shadow-validation/result-formal-fullsync-{Gamma,Linear}.txt` 各 256 机体 / 薄翼配置通过；`result-formal-fullsync-range-sweep-Linear.txt` 800 距离扫描无丢影；`.utmp/cloud-native-shadow-design-probe/result-after-formal-fullsync-{Gamma,Linear}-all.txt` 各 621 世界点近远差为 0、64 契约通过，`result-no-expansion-{Gamma,Linear}.txt` 各 128 状态检查；`.utmp/cloud-occlusion-validation/result-native-shadow-regression-{Gamma,Linear}.txt` 各 248 项；C# 编译 0 错误 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop；CloseFit / StableFit、0/1/2/4 级、原生 50~2000m、云影 20/100km，采地面排除机体自身；4 级原生影像素最低保留 99.46%，2 级最低 77.46%，单级恒等。扫描含 EVA near=0.06，会有额外粗影；覆盖投影 / 剔除同步、原绘制矩阵 / 标准深度、嵌套恢复。SDK / 行星为替身，特殊手动剔除只验字段恢复；build 16 游戏截图已证实原生影消失，build 17 待游戏画质及额外几何提交耗时复测 |
 | 雨滴光照 / 水花显示回退 / 2026-10-14 | `.utmp/rain-splash-regression/`：Gamma / Linear 各 62 项专项 + 53 项水面检查，即各 115 项通过 | 恢复水花原显示的对照检查；不能替代游戏水面观感 |
 | 天气行星门控 / 预设同步 / 2026-10-15 | `.utmp/planet-gate-validation/result.txt`：49 项通过；当前源码复跑 `.utmp/weather-preset-validation/result.txt`：36 项通过；完整 C# 工程编译 0 错误 | Unity 2022.3.62f3 / D3D11；实际环境解析、SOI 订阅、天气 / 雨 / 雨声 / 雷电 / 水珠生命周期与预设同步，游戏 SDK、云渲染和音频素材为替身；XML 写工作区，未验游戏部署 |
 | 雾配置保存 / 2026-10-14 | `.utmp/fog-persistence-validation/result.txt`：99 项通过，Unity 2022.3.62f3；加入生成工程遗漏的新源码后编译 0 错误 | 实际面板回调、全部雾字段 XML 往返、锁定 / 只读 / 无效路径失败与旧文件保护；游戏 / UI SDK 和镜头效果消费者为替身，XML 写工作区，未验游戏部署 |
-| 删除兜底声速 / 2026-10-14 | `.utmp/lightning-validation/result-thunder-removal.txt`：63 项通过 | 核心方法和配置验证，音频排程被截获，未做游戏听感测试 |
 | 镜头水珠 / 2026-10-14 | `.utmp/rain-lens-visibility/result-{Gamma,Linear}.txt`：各 97 项通过；C# 编译 0 错误。1280 / 1920 灰背景、旧尺寸 / 折射参数下 shader 2 平均对比差为首版 3.57~3.59 倍 | Unity 2022.3.62f3 / D3D11 / RTX 5060 Laptop，正式模拟 / 渲染 / shader / 天气驱动；覆盖默认升级 / 自定义保留、低对比辨识及原生命周期 / 光学回归，游戏 API 替身；不代表游戏感知改善倍数或性能验收 |
 | 雾夜间光照 / 2026-10-09 | `Build/FogNight/fog-gpu-summary.txt`：161 项通过 | 独立 BIRP GPU / 配置检查，正式编辑器探针已删除 |
 | 无标签雨碰撞 / 2026-10-08 | 历史 135 项 GPU 检查通过；用户确认当时水花可见性修复 | 不覆盖后续水面 shader、光照或完整复杂材质矩阵 |

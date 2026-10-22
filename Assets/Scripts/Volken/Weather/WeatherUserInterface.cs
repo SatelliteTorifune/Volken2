@@ -9,7 +9,7 @@ namespace Volken.Weather
     
     /// <summary>天气根组直接提供预设管理,下设雨 / 雾 / 雷参数组。</summary>
     /// <remarks>面板修改当前天气配置实例;保存才落盘,效果参数由各子系统独立消费。</remarks>
-    public static class WeatherPanel
+    public static class WeatherUserInterface
     {
 
         /// <summary>往检查器里追加天气分组(无参数:换配置不需要重建面板)。</summary>

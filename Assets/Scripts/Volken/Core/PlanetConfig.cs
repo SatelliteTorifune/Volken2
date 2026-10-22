@@ -82,8 +82,16 @@ namespace Volken.Core
             return Path.Combine(GetConfigFolderPath(), configName + ".xml");
         }
 
-        public void SaveToFile(string configName)
+        /// <summary>先写临时文件再原子替换;失败返回 false 并保留旧文件。**绝不先截断原文件**。</summary>
+        public bool SaveToFile(string configName)
         {
+            if (!ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Planet config save rejected: invalid name '{0}'", configName);
+                return false;
+            }
+
+            string temporaryPath = null;
             try
             {
                 string filePath = GetConfigPath(configName);
@@ -95,62 +103,107 @@ namespace Volken.Core
                 }
 
                 XmlSerializer serializer = new XmlSerializer(typeof(PlanetConfigList));
-                using (FileStream stream = new FileStream(filePath, FileMode.Create))
+                temporaryPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     serializer.Serialize(stream, this);
+                    stream.Flush(true);
                 }
+                if (File.Exists(filePath)) File.Replace(temporaryPath, filePath, null);
+                else File.Move(temporaryPath, filePath);
                 Mod.Log($"Planet config '{configName}' saved to: {filePath}");
+                return true;
             }
             catch (Exception e)
             {
-                Mod.Log("Saving failed+" + e);
+                Mod.Log($"Saving planet config '{configName}' failed: {e}");
+                return false;
+            }
+            finally
+            {
+                if (temporaryPath != null && File.Exists(temporaryPath))
+                {
+                    try { File.Delete(temporaryPath); }
+                    catch (Exception e) { Mod.Log($"Planet config temporary file cleanup failed: {e.Message}"); }
+                }
             }
         }
 
         public static PlanetConfigList LoadFromFile(string configName)
         {
-            string filePath = GetConfigPath(configName);
+            string filePath;
+            try
+            {
+                filePath = GetConfigPath(configName);
+            }
+            catch (Exception e)
+            {
+                Mod.Log($"Failed to resolve planet config path '{configName}': {e.Message}");
+                return new PlanetConfigList();
+            }
 
+            // 缺失 = 首次安装:创建默认清单并落盘(这是唯一会写盘的读取路径)
             if (!File.Exists(filePath))
             {
                 return CreateDefault();
             }
 
+            PlanetConfigList config;
             try
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(PlanetConfigList));
-                using (FileStream stream = new FileStream(filePath, FileMode.Open))
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    PlanetConfigList config = serializer.Deserialize(stream) as PlanetConfigList;
-                    if (config == null) return CreateDefault();
-                    if (config.configList == null) config.configList = new List<PlanetConfig>();
-
-                    // 迁移旧内联 <Weather> 节点:写成独立预设文件(不覆盖已存在的),然后置 null。
-                    foreach (var pc in config.configList)
-                    {
-                        if (pc?.LegacyWeather == null) continue;
-
-                        string presetName = string.IsNullOrEmpty(pc.WeatherConfigName)
-                            ? VolkenWeatherConfig.DefaultConfigName
-                            : pc.WeatherConfigName;
-                        pc.LegacyWeather.EnsureSections();
-                        pc.LegacyWeather.ClampAll();
-
-                        if (!File.Exists(VolkenWeatherConfig.GetConfigPath(pc.PlanetName, presetName)))
-                        {
-                            pc.LegacyWeather.SaveToFile(pc.PlanetName, presetName);
-                            Mod.Log($"Volken: migrated inline weather of '{pc.PlanetName}' -> weather preset '{presetName}'");
-                        }
-                        pc.WeatherConfigName = presetName;
-                        pc.LegacyWeather = null;
-                    }
-                    return config;
+                    config = serializer.Deserialize(stream) as PlanetConfigList;
                 }
             }
             catch (Exception e)
             {
-                Mod.Log($"Failed to load planet config '{configName}': {e.Message}. Using default.");
-                return CreateDefault();
+                // 坏文件只隔离、不覆盖:清空玩家的行星绑定比丢一份读不了的清单更糟
+                Mod.Log($"Failed to load planet config '{configName}': {e.Message}. Quarantining the file; using empty in-memory list.");
+                ConfigFileNames.TryQuarantine(filePath);
+                return new PlanetConfigList();
+            }
+
+            if (config == null)
+            {
+                Mod.Log($"Planet config '{configName}' deserialized to null. Quarantining the file.");
+                ConfigFileNames.TryQuarantine(filePath);
+                return new PlanetConfigList();
+            }
+            if (config.configList == null) config.configList = new List<PlanetConfig>();
+
+            // 迁移旧内联 <Weather> 节点:失败只记日志,不能把整份清单判成损坏
+            MigrateLegacyWeather(config, configName);
+            return config;
+        }
+
+        private static void MigrateLegacyWeather(PlanetConfigList config, string configName)
+        {
+            foreach (var pc in config.configList)
+            {
+                if (pc?.LegacyWeather == null) continue;
+
+                try
+                {
+                    string presetName = string.IsNullOrEmpty(pc.WeatherConfigName)
+                        ? VolkenWeatherConfig.DefaultConfigName
+                        : pc.WeatherConfigName;
+                    pc.LegacyWeather.EnsureSections();
+                    pc.LegacyWeather.ClampAll();
+
+                    if (!File.Exists(VolkenWeatherConfig.GetConfigPath(pc.PlanetName, presetName)))
+                    {
+                        pc.LegacyWeather.SaveToFile(pc.PlanetName, presetName);
+                        Mod.Log($"Volken: migrated inline weather of '{pc.PlanetName}' -> weather preset '{presetName}'");
+                    }
+                    pc.WeatherConfigName = presetName;
+                    pc.LegacyWeather = null;
+                }
+                catch (Exception e)
+                {
+                    Mod.Log($"Volken: failed to migrate inline weather of '{configName}': {e.Message}");
+                }
             }
         }
 

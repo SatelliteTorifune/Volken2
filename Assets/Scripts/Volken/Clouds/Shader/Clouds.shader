@@ -4,7 +4,7 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 14
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 15
         [HideInInspector] _CloudSunOcclusion("Cloud sun occlusion", Float) = 0
         [HideInInspector] _SunlightOcclusionStrength("Sunlight occlusion strength", Float) = 0.8
         [HideInInspector] _AmbientOcclusionStrength("Ambient occlusion strength", Float) = 0.5
@@ -28,6 +28,9 @@ Shader "Hidden/Clouds"
         CloudMVTex("Cloud motion and previous distance", 2D) = "" {}
         CloudLightningTex("Current cloud lightning", 2D) = "black" {}
         _LightningShadowTex("Lightning optical depth atlas", 2D) = "black" {}
+        _CloudSolarCacheTex("Solar optical depth atlas", 2D) = "black" {}
+        [HideInInspector] _CloudSolarCacheEnabled("Solar cache available", Float) = 0
+        [HideInInspector] _CloudEmptySpaceEnabled("Conservative empty space", Float) = 0
         HistoryCloudDepthTex("HistoryCloudDepthTex", 2D) = "" {}
         UpscaledCloudTex("UpscaledCloudTex", 2D) = "" {}
         OrbitCloudTex("OrbitCloudTex", 2D) = "" {}
@@ -171,6 +174,10 @@ Shader "Hidden/Clouds"
 
             CGPROGRAM
 
+            #pragma multi_compile_local __ VOLKEN_CLOUD_SOLAR_CACHE
+            #pragma multi_compile_local __ VOLKEN_CLOUD_EMPTY_SPACE
+            #pragma target 4.0 VOLKEN_CLOUD_SOLAR_CACHE
+            #pragma target 4.0 VOLKEN_CLOUD_EMPTY_SPACE
             #pragma vertex vert
             #pragma fragment frag
 
@@ -221,6 +228,12 @@ Shader "Hidden/Clouds"
             }
 
             #include "CloudVolumeLighting.cginc"
+            #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
+            #include "CloudSolarCache.cginc"
+            #endif
+            #if defined(VOLKEN_CLOUD_EMPTY_SPACE)
+            #include "CloudEmptySpace.cginc"
+            #endif
 
             struct CloudOut
             {
@@ -311,6 +324,10 @@ Shader "Hidden/Clouds"
                 
                 [loop]
                 while(rayDist < maxRayDist && iter < 350) {
+                    #if defined(VOLKEN_CLOUD_EMPTY_SPACE)
+                    [branch] if (CloudTrySkipEmptyInterval(camPos, viewDir, maxRayDist,
+                        rayDist, localStepSize, stepSizeMultiplier, emptySamples, iter)) continue;
+                    #endif
                     rayPos = camPos + rayDist * viewDir;
                     // get full or partial density sample at the current ray position and interpolate at the transition
                     density = (stepSizeMultiplier == 1.0 && rayDist < detailCutoffDist)
@@ -331,7 +348,20 @@ Shader "Hidden/Clouds"
 
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
+                        #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
+                        float2 cachedSample = 0.0;
+                        float cacheWeight = 0.0;
+                        [branch] if (_CloudSolarCacheEnabled > 0.5)
+                            TrySampleCachedLightRay(rayPos, noiseLod, cachedSample, cacheWeight);
+                        float2 lightSample = cachedSample;
+                        [branch] if (cacheWeight < 1.0)
+                        {
+                            lightSample = SampleLightRay(rayPos, noiseLod);
+                            if (cacheWeight > 0.0) lightSample = lerp(lightSample, cachedSample, cacheWeight);
+                        }
+                        #else
                         float2 lightSample = SampleLightRay(rayPos, noiseLod);
+                        #endif
                         
                         float3 solarRadiance = BeersPowder(lightSample.x, 0.0) * (1.0 - amb)
                             * exp(-lightSample.y * scatterCoeff) * phaseValue;
@@ -1239,6 +1269,28 @@ Shader "Hidden/Clouds"
             float4 frag(v2f i) : SV_Target
             {
                 return float4(UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv).rgb, 0.0);
+            }
+            ENDCG
+        }
+        Pass
+        {
+            Name "SolarCache"
+            CGPROGRAM
+            #pragma target 4.0
+            #pragma vertex vert_img
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            #include "CloudVolumeLighting.cginc"
+            #include "CloudSolarCache.cginc"
+            float2 frag(v2f_img i) : SV_Target
+            {
+                float2 pixel = floor(i.uv * _CloudSolarCacheLayout.zw);
+                float size = _CloudSolarCacheLayout.x;
+                float2 tile = floor(pixel / size);
+                float slice = tile.x + _CloudSolarCacheLayout.y * tile.y;
+                if (slice >= size) return float2(0.0, -1.0);
+                float3 node = float3(pixel - tile * size, slice);
+                return BuildCloudSolarCache(_CloudSolarCacheMin.xyz + node / _CloudSolarCacheMin.w);
             }
             ENDCG
         }

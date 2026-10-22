@@ -4,7 +4,7 @@
 
 ## 配置与入口
 
-配置类为 [VolkenWeatherConfig](../Assets/Scripts/Volken/Weather/VolkenWeatherConfig.cs)，驱动为 [VolkenWeather](../Assets/Scripts/Volken/Weather/VolkenWeather.cs)，面板为 [WeatherPanel](../Assets/Scripts/Volken/Weather/WeatherPanel.cs)。雨、雾、雷电默认关闭，按独立 `enabled` 和大气 / 场景条件运行；空 `OverallSection` 仅用于旧 XML 兼容。
+配置类为 [VolkenWeatherConfig](../Assets/Scripts/Volken/Weather/VolkenWeatherConfig.cs)，驱动为 [VolkenWeather](../Assets/Scripts/Volken/Weather/VolkenWeather.cs)，面板为 [WeatherUserInterface](../Assets/Scripts/Volken/Weather/WeatherUserInterface.cs)。雨、雾、雷电默认关闭，按独立 `enabled` 和大气 / 场景条件运行；空 `OverallSection` 仅用于旧 XML 兼容。
 
 天气运行要求当前行星快照支持大气效果且与所用预设的行星一致；无大气、恒星、缺行星数据和离场均抑制运行，不改用户 `enabled`。雨的挂载、参数应用、toggle、每帧同步与绘制共用此门控，主视图 / PIP 一并停雨并清掉旧水花历史，雨声门控关闭；雷电排程和镜头水珠随环境停用，手动落雷也不能绕过。回到有大气行星按其预设自动恢复；显式 `StandaloneMode` 保留独立预览。跨场景 SOI 订阅归属见 [架构](architecture.md#生命周期与模块边界)。
 
@@ -14,7 +14,7 @@
 
 - `ApplyPreset` 替换 `Config` 后调用 `RainParticles.ApplyConfig` 与 `SyncToCurrentView`，立即同步开关、容量、几何、雨声输入和所有存活相机实例；相机暂缺时由正常 tick 重试挂载。
 - 启用中的雷电切预设通过 `refreshSchedule=true` 停止旧等待并抽取新间隔，只重排下一次落雷，保留正在播放的闪电及待播雷声。
-- 普通状态刷新不反复重排；另存为只保存名称 / 文件，同名切换和缺失文件仍被拒绝。恢复默认同样应用雨参数和雷电启停。
+- 普通状态刷新不反复重排；另存为只保存名称 / 文件，非法名 / 重名被拒绝，同名切换和缺失文件仍被拒绝。恢复默认同样应用雨参数和雷电启停。
 - `PlanetConfigLoaded` 在配置与运行态一致后发出。跨场景加载 / 保存语义见 [架构](architecture.md#配置与预设)。
 
 修复前游戏日志曾出现已加载 `rain=True`、运行仍 `rainEnabled=False`，以及保存 amount=100000、运行仍为 50000；这是遗漏雨参数应用的证据。雷电切换后等待旧间隔不等于永久停雷。

@@ -5,6 +5,7 @@ using ModApi.Craft;
 using ModApi.Flight.Sim;
 using UnityEngine;
 using Volken.Clouds;
+using Volken.Core;
 
 namespace Volken.Weather
 {
@@ -156,12 +157,13 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>按天气预设名装载配置。进新行星 / 换预设都走这里。</summary>
-        public void ApplyPreset(string planetName, string configName)
+        /// <summary>按天气预设名装载配置。进新行星 / 换预设都走这里。返回 false = 预设文件存在但损坏(已隔离为 <c>.broken</c>,
+        /// 实际生效的是内存默认值),调用方据此提示"加载失败"而不是误报成功。</summary>
+        public bool ApplyPreset(string planetName, string configName)
         {
             if (string.IsNullOrEmpty(planetName))
             {
-                return;
+                return false;
             }
             if (string.IsNullOrEmpty(configName))
             {
@@ -173,14 +175,16 @@ namespace Volken.Weather
             RefreshPresetList(planetName);
 
             VolkenWeatherConfig cfg;
+            bool loadFailed;
             try
             {
-                cfg = VolkenWeatherConfig.LoadFromFile(planetName, configName);
+                cfg = VolkenWeatherConfig.LoadFromFile(planetName, configName, out loadFailed);
             }
             catch (Exception ex)
             {
                 Mod.Log($"VolkenWeather: load preset '{configName}' for {planetName} failed: {ex.Message}");
                 cfg = VolkenWeatherConfig.CreateDefault();
+                loadFailed = true;
             }
             Config = cfg;
 
@@ -192,10 +196,13 @@ namespace Volken.Weather
             RainLensEffect.ClearCurrent();
 
             Mod.Log($"VolkenWeather: planet={planetName} preset={configName} active={IsActive} " +
-                    $"rain={cfg.rain.enabled} fog={cfg.fog.enabled} lightning={cfg.lightning.enabled}");
+                    $"rain={cfg.rain.enabled} fog={cfg.fog.enabled} lightning={cfg.lightning.enabled}" +
+                    (loadFailed ? " (load failed -> quarantined)" : ""));
 
             try { PlanetConfigLoaded?.Invoke(planetName); }
             catch (Exception ex) { Mod.Log("VolkenWeather: PlanetConfigLoaded handler threw: " + ex.Message); }
+
+            return !loadFailed;
         }
 
         // 天气预设的独立管理(与云层预设无关)
@@ -230,16 +237,24 @@ namespace Volken.Weather
                 return false;
             }
 
-            ApplyPreset(CurrentPlanet, configName);
+            bool loaded = ApplyPreset(CurrentPlanet, configName);
             RegisterPresetName();
-            return true;
+            return loaded;
         }
 
-        /// <summary>把当前天气参数另存为新预设(玩家给名字)并切到它。纯天气操作,不碰云。</summary>
+        /// <summary>把当前天气参数另存为新预设(玩家给名字)并切到它。纯天气操作,不碰云。
+        /// 名字非法或已存在时拒绝(后者请用"保存"),避免静默覆盖既有预设。</summary>
         public bool SaveAsNewConfig(string newName)
         {
-            if (string.IsNullOrEmpty(CurrentPlanet) || Config == null || string.IsNullOrWhiteSpace(newName))
+            if (string.IsNullOrEmpty(CurrentPlanet) || Config == null || !ConfigFileNames.IsValid(newName))
             {
+                return false;
+            }
+
+            // 另存为不覆盖既有预设:同名覆盖走"保存当前"
+            if (VolkenWeatherConfig.Exists(CurrentPlanet, newName))
+            {
+                Mod.Log($"VolkenWeather: 天气预设 '{newName}' 已存在 → 另存为拒绝覆盖(请用保存当前配置)");
                 return false;
             }
 

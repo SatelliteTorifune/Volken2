@@ -99,7 +99,11 @@ namespace Volken.Clouds
             CloudSceneLighting.Unregister(this);
             _sunOcclusion.Dispose();
             _groundShadows.Dispose();
-            foreach (var view in _views.Values) view.ClearHistory();
+            foreach (var view in _views.Values)
+            {
+                view.ClearHistory();
+                view.solarCache.Dispose();
+            }
             Volken.Weather.FogRenderer.ClearGlobals();
             _fog?.Dispose();
             _fog = null;
@@ -113,6 +117,7 @@ namespace Volken.Clouds
             foreach (var view in _views.Values)
             {
                 view.ClearHistory();
+                view.solarCache.Dispose();
             }
         }
 
@@ -615,6 +620,8 @@ namespace Volken.Clouds
                 var activeLayers = _activeLayers;
                 var gameCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera;
                 if (cam != gameCamera?.NearCamera && !ModSettings.Instance.ExtraCameraClouds.Value) activeLayers.Clear();
+                foreach (var pair in _views)
+                    if (!activeLayers.Contains(pair.Key)) pair.Value.solarCache.Dispose();
                 if (_sceneDepthMaterial == null) _sceneDepthMaterial = SceneDepth.CreateMaterial();
                 if (_sceneDepthMaterial == null)
                 {
@@ -728,9 +735,17 @@ namespace Volken.Clouds
                     if (view == null) continue;
                     // 重投影与相机参数按每相机每层设置,风 / 自转已全局推进一次。
                     SetLayerDynamicProperties(layer, view, renderW, renderH);
-                    if (view.orbitFade >= 0.999f) continue;   // 高空纯 2D:跳过体积 raymarch(性能大头)
+                    if (view.orbitFade >= 0.999f)
+                    {
+                        CloudSolarCache.Disable(layer.material);
+                        view.solarCache.Dispose();
+                        continue;
+                    }
 
                     layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
+                    CloudEmptySpace.Configure(layer.material, layer, layer.config.emptySpaceSkippingEnabled);
+                    view.solarCache.Prepare(layer.material, layer.config, cam.transform.position);
+                    CloudSolarCache.SelectVariant(layer.material);
                     if (view.currentLightningEnabled) view.lightningCache.Prepare(layer.material);
                     // MRT:颜色 + 云面距离 + 运动数据(RG=UV 位移,B=上一相机云距离×1e-5)。
                     Graphics.SetRenderTarget(view.currentLightningEnabled ? view.lightningTargets : view.cloudTargets, view.cloudTex.depthBuffer);

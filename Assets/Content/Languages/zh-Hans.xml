@@ -16,6 +16,8 @@
     <s id="Volken.ModSettings.ExtraCameraRainDesc">在附加相机中显示雨。</s>
     <s id="Volken.ModSettings.ShowProfiler">性能分析器覆盖层</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">显示游戏内性能分析器覆盖层。</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfig">恢复默认预设</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfigDesc">启动时把随包默认云 / 天气预设补回 UserData（缺失时）。下次启动生效。</s>
 
     <s id="Volken.UI.CloudSettings">云层设置</s>
     <s id="Volken.UI.GroundShadowDistance">云影距离(米)</s>
@@ -187,6 +189,10 @@
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样</s>
     <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
+    <s id="Volken.UI.SolarCacheEnabled">太阳光照缓存(实验)</s>
+    <s id="Volken.UI.EmptySpaceSkippingEnabled">保守空区跳过</s>
+    <s id="Volken.UI.SolarCacheResolution">太阳缓存格网分辨率</s>
+    <s id="Volken.UI.SolarCacheExtent">太阳缓存覆盖边长(米)</s>
 
     <!-- 轨道云(2D 壳着色 + 过渡带交叉淡入) -->
     <s id="Volken.UI.OrbitClouds">轨道云</s>

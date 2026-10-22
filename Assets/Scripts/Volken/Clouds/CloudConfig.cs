@@ -134,6 +134,10 @@ namespace Volken.Clouds
         public float stepSizeFalloff;
         public int numLightSamplePoints;
         public float lightMarchDistance = 12000f;   // 光照步进总距离(米);lightStepSize = lightMarchDistance / numLightSamplePoints
+        public bool solarCacheEnabled = false;
+        public bool emptySpaceSkippingEnabled = false;
+        public int solarCacheResolution = 24;
+        public float solarCacheExtent = 24000f; // 世界空间覆盖立方体边长(米)。
         public float blueNoiseStrength;
         public float historyBlend;
         public float historyDepthThreshold = 0.05f;
@@ -188,6 +192,14 @@ namespace Volken.Clouds
 
         #endregion
 
+        public void ClampAccelerationSettings()
+        {
+            solarCacheResolution = Mathf.Clamp(solarCacheResolution, 8, 64);
+            if (float.IsNaN(solarCacheExtent) || float.IsInfinity(solarCacheExtent))
+                solarCacheExtent = 24000f;
+            solarCacheExtent = Mathf.Clamp(solarCacheExtent, 1000f, 100000f);
+        }
+
         public static string GetConfigFolderPath(string planetName)
         {
             string folderPath = Application.persistentDataPath + CONFIG_FOLDER+planetName;
@@ -198,9 +210,29 @@ namespace Volken.Clouds
             return folderPath;
         }
 
+        /// <summary>取预设文件路径;**预设名非法时抛 <see cref="ArgumentException"/>,绝不把名字拼进路径**(防路径穿越)。</summary>
         public static string GetConfigPath(string planetName, string configName)
         {
+            if (!ConfigFileNames.IsValid(configName))
+            {
+                throw new ArgumentException("Invalid cloud config name: " + configName, nameof(configName));
+            }
             return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
+        }
+
+        /// <summary>这份预设是否**真实存在**;不建目录、不写盘、非法名直接 false。</summary>
+        public static bool Exists(string planetName, string configName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName)) return false;
+                string path = Path.Combine(Application.persistentDataPath + CONFIG_FOLDER, planetName, configName + ".xml");
+                return File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static List<string> GetAllConfigNames(string planetName)
@@ -216,10 +248,19 @@ namespace Volken.Clouds
             return configNames;
         }
 
-        public void SaveToFile(string planetName,string configName)
+        /// <summary>先写临时文件再原子替换;预设名非法 / 写盘失败返回 false 并保留旧文件(与天气预设同一约定)。</summary>
+        public bool SaveToFile(string planetName,string configName)
         {
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Cloud config save rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                return false;
+            }
+
+            string temporaryPath = null;
             try
             {
+                ClampAccelerationSettings();
                 string filePath = GetConfigPath(planetName,configName);
                 string directory = Path.GetDirectoryName(filePath);
 
@@ -229,26 +270,66 @@ namespace Volken.Clouds
                 }
 
                 XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
-                using (FileStream stream = new FileStream(filePath, FileMode.Create))
+                temporaryPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     serializer.Serialize(stream, this);
+                    stream.Flush(true);
                 }
+                if (File.Exists(filePath)) File.Replace(temporaryPath, filePath, null);
+                else File.Move(temporaryPath, filePath);
                 Mod.Log($"Cloud config '{configName}' saved to: {filePath}");
+                return true;
             }
             catch (System.Exception e)
             {
                 Mod.Log($"Failed to save cloud config '{configName}': {e.Message}");
+                return false;
+            }
+            finally
+            {
+                if (temporaryPath != null && File.Exists(temporaryPath))
+                {
+                    try { File.Delete(temporaryPath); }
+                    catch (Exception e) { Mod.Log($"Cloud config temporary file cleanup failed: {e.Message}"); }
+                }
             }
         }
 
         public static CloudConfig LoadFromFile(string planetName,string configName)
         {
-            string filePath = GetConfigPath(planetName, configName);
+            return LoadFromFile(planetName, configName, out _);
+        }
+
+        /// <summary>读预设;文件不存在 → 建一份默认并落盘(与天气预设同约定)。<paramref name="loadFailed"/> = 文件存在但无法读取
+        /// (已把坏文件改名为 <c>.broken</c> 保留现场,返回值只是内存默认值,调用方不应把它当作"加载成功")。</summary>
+        public static CloudConfig LoadFromFile(string planetName, string configName, out bool loadFailed)
+        {
+            loadFailed = false;
+
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Cloud config load rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                loadFailed = true;
+                return CreateDefault();
+            }
+
+            string filePath;
+            try
+            {
+                filePath = GetConfigPath(planetName, configName);
+            }
+            catch (Exception e)
+            {
+                Mod.Log("Cloud config path failed for '{0}': {1}", configName, e.Message);
+                loadFailed = true;
+                return CreateDefault();
+            }
 
             if (!File.Exists(filePath))
             {
                 Mod.Log($"Config file '{configName}' not found at {filePath}. Creating default config.");
-                CloudConfig defaultConfig = CreateDefault();
+                CloudConfig defaultConfig = CreateNone();
                 defaultConfig.SaveToFile(planetName,configName);
                 return defaultConfig;
             }
@@ -256,9 +337,10 @@ namespace Volken.Clouds
             try
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(CloudConfig));
-                using (FileStream stream = new FileStream(filePath, FileMode.Open))
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     CloudConfig config = serializer.Deserialize(stream) as CloudConfig;
+                    if (config == null) throw new InvalidDataException("deserialized config is null");
 
                     // 旧配置只有 Vector2(x,y) 层参数,z/w 默认为 0。
                     // 若 z/w 全为 0 视为旧配置:关掉 Layer3/4 强度,并把 spreads 补为 1(避免 shader 除零)。
@@ -269,20 +351,22 @@ namespace Volken.Clouds
                         if (config.layerSpreads.w == 0f) config.layerSpreads.w = 1f;
                     }
 
+                    config.ClampAccelerationSettings();
                     Mod.Log($"Cloud config '{configName}' loaded from: {filePath}");
                     return config;
                 }
             }
             catch (System.Exception e)
             {
-                Mod.Log($"Failed to load cloud config '{configName}': {e.Message}. Using default config.");
+                Mod.Log($"Failed to load cloud config '{configName}': {e.Message}. Quarantining the file and using in-memory default.");
+                ConfigFileNames.TryQuarantine(filePath);
+                loadFailed = true;
                 return CreateDefault();
             }
         }
 
-        public static CloudConfig CreateDefault()
+        public static CloudConfig CreateNone()
         {
-            // 默认参数来源:UserData/VolkenConfig/Droo/NewDefault.xml(调校基准)
             return new CloudConfig
             {
                 compositeMode = CompositeMode.Additive,
@@ -311,6 +395,10 @@ namespace Volken.Clouds
                 stepSizeFalloff = 0.6731564f,
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
+                solarCacheEnabled = false,
+                emptySpaceSkippingEnabled = false,
+                solarCacheResolution = 24,
+                solarCacheExtent = 24000f,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
@@ -343,9 +431,74 @@ namespace Volken.Clouds
                 orbitDebugMode = 0f,
             };
         }
+        public static CloudConfig CreateDefault()
+        {
+            return new CloudConfig
+            {
+                compositeMode = CompositeMode.Additive,
+                enabled = true,
+                density = 0.05f,
+                absorption = 0.361036152f,
+                ambientLight = 0.17901662f,
+                coverage = -0.28f,
+                shapeScale = 10182.4346f,
+                detailScale = 25000.0f,
+                detailStrength = 1f,
+                phaseParameters = new Vector4(0.75f, -0.75f, 0.5f, 0.5f),
+                offset = new Vector3(0.894878447f, 0.9375299f, 0.950234532f),
+                windSpeed = -0.002515155f,
+                windDirection = 174f,
+                globalRotationAngular = 0f,
+                scatterStrength = 0.3f,
+                atmoBlendFactor = 0.3628809f,
+                cloudColor = Color.white,
+                layerHeights = new Vector4(1671.05261f, 4717.10547f, 0f, 0f),
+                layerSpreads = new Vector4(670.0831f, 5000f, 1f, 1f),
+                layerStrengths = new Vector4(0.300554f, 2f, 0f, 0f),
+                maxCloudHeight = 11238.2275f,
+                resolutionScale = 1f,
+                stepSize = 300f,
+                stepSizeFalloff = 0.6731564f,
+                numLightSamplePoints = 25,
+                lightMarchDistance = 12000f,
+                solarCacheEnabled = false,
+                emptySpaceSkippingEnabled = false,
+                solarCacheResolution = 24,
+                solarCacheExtent = 24000f,
+                blueNoiseStrength = 0f,
+                historyBlend = 0f,
+                historyDepthThreshold = 0.05f,
+                scatterPower = 1.04046762f,
+                multiScatterBlend = 1f,
+                ambientScatterStrength = 2f,
+                customWavelengths = new Vector3(680f, 550f, 450f),
+                silverLiningIntensity = 3f,
+                forwardScatteringBias = 0.85f,
+                nearThreshold = 100000f,
+                useTemporalUpscale = true,
+                upscaleX = 3,
+                upscaleY = 3,
+                useStockCloudMap = false,
+                stockMapStrength = 1f,
+                stockMaskInfluence = 1f,
+                stockAlignSign = 1f,
+                stockAlignAngleOffset = 0f,
+                stockMapLayer = 3,
+                stockDensityScale = 1f,
+                useOrbitClouds = true,
+                orbitTransitionStartAltitude = 25000f,
+                orbitTransitionEndAltitude = 100000f,
+                orbitSampleAltitude = 0f,
+                orbitDensityBoost = 1f,
+                orbitBrightness = 0.7f,
+                orbitReliefStrength = 1.5f,
+                orbitDetailStrength = 0.4f,
+                orbitResolutionScale = 0.5f,
+                orbitDebugMode = 0f,
+            };
+        }
         public static CloudConfig CreateAnotherDefault()
         {
-            // 默认参数来源:UserData/VolkenConfig/Droo/AnotherNewDefault.xml(调校基准)
             return new CloudConfig
             {
                 compositeMode = CompositeMode.Additive,
@@ -374,6 +527,10 @@ namespace Volken.Clouds
                 stepSizeFalloff = 1.52126586f,
                 numLightSamplePoints = 5,
                 lightMarchDistance = 12000f,
+                solarCacheEnabled = false,
+                emptySpaceSkippingEnabled = false,
+                solarCacheResolution = 24,
+                solarCacheExtent = 24000f,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
@@ -440,6 +597,10 @@ namespace Volken.Clouds
             this.stepSizeFalloff = source.stepSizeFalloff;
             this.numLightSamplePoints = source.numLightSamplePoints;
             this.lightMarchDistance = source.lightMarchDistance;
+            this.solarCacheEnabled = source.solarCacheEnabled;
+            this.emptySpaceSkippingEnabled = source.emptySpaceSkippingEnabled;
+            this.solarCacheResolution = source.solarCacheResolution;
+            this.solarCacheExtent = source.solarCacheExtent;
             this.blueNoiseStrength = source.blueNoiseStrength;
             this.historyBlend = source.historyBlend;
             this.historyDepthThreshold = source.historyDepthThreshold;
@@ -470,6 +631,7 @@ namespace Volken.Clouds
             this.orbitDetailStrength = source.orbitDetailStrength;
             this.orbitResolutionScale = source.orbitResolutionScale;
             this.orbitDebugMode = source.orbitDebugMode;
+            ClampAccelerationSettings();
         }
 
     }

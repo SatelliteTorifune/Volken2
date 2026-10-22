@@ -296,7 +296,7 @@ namespace Volken.Core
                 }
 
                 // —— 玩家只有一个"调这颗行星观感"的地方。
-                WeatherPanel.Build(inspectorModel);
+                WeatherUserInterface.Build(inspectorModel);
 
                 // Create the panel
                 inspectorPanel = Game.Instance.UserInterface.CreateInspectorPanel(inspectorModel,
@@ -331,11 +331,13 @@ namespace Volken.Core
                 {
                     try
                     {
-                        mainLayer.config.SaveToFile(
+                        bool saved = mainLayer.config.SaveToFile(
                             Game.Instance.FlightScene.CraftNode.Parent.Name,
                             mainLayer.currentConfigName);
                         Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                            string.Format(Locale.GetString("Volken.UI.ConfigSaved"), mainLayer.currentConfigName));
+                            saved
+                                ? string.Format(Locale.GetString("Volken.UI.ConfigSaved"), mainLayer.currentConfigName)
+                                : Locale.GetString("Volken.UI.ErrorSavingConfig"));
                     }
                     catch (Exception ex)
                     {
@@ -358,31 +360,39 @@ namespace Volken.Core
                         {
                             try
                             {
-                                string name = inputDialog.InputText;
-                                if (!string.IsNullOrWhiteSpace(name))
+                                string name = inputDialog.InputText?.Trim();
+                                // 预设名会变成文件名:非法名/已存在都拒绝,避免路径穿越与静默覆盖
+                                if (string.IsNullOrEmpty(name)) return;
+                                string planet = Game.Instance.FlightScene.CraftNode.Parent.Name;
+                                if (!ConfigFileNames.IsValid(name) || CloudConfig.Exists(planet, name))
                                 {
-                                    mainLayer.config.SaveToFile(
-                                        Game.Instance.FlightScene.CraftNode.Parent.Name, name);
-                                    mainLayer.currentConfigName = name;
-                                    VolumetricClouds.Instance.AddConfig(name);
-                                    if (VolumetricClouds.Instance.planetConfigList.ExistsInConfig(
-                                        Game.Instance.FlightScene.CraftNode.Parent.Name))
-                                    {
-                                        VolumetricClouds.Instance.planetConfigList.SetConfig(
-                                            Game.Instance.FlightScene.CraftNode.Parent.Name, name);
-                                    }
-                                    else
-                                    {
-                                        VolumetricClouds.Instance.planetConfigList.AddConfig(
-                                            Game.Instance.FlightScene.CraftNode.Parent.Name, name);
-                                    }
-                                    VolumetricClouds.Instance.RefreshConfigList();
-                                    inspectorPanel.Visible = false;
-                                    RebuildInspectorPanel();
                                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                                        string.Format(Locale.GetString("Volken.UI.ConfigSavedAs"),
-                                            Game.Instance.FlightScene.CraftNode.Parent.Name, name));
+                                        Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
+                                    return;
                                 }
+
+                                if (!mainLayer.config.SaveToFile(planet, name))
+                                {
+                                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                        Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
+                                    return;
+                                }
+
+                                mainLayer.currentConfigName = name;
+                                VolumetricClouds.Instance.AddConfig(name);
+                                if (VolumetricClouds.Instance.planetConfigList.ExistsInConfig(planet))
+                                {
+                                    VolumetricClouds.Instance.planetConfigList.SetConfig(planet, name);
+                                }
+                                else
+                                {
+                                    VolumetricClouds.Instance.planetConfigList.AddConfig(planet, name);
+                                }
+                                VolumetricClouds.Instance.RefreshConfigList();
+                                inspectorPanel.Visible = false;
+                                RebuildInspectorPanel();
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                    string.Format(Locale.GetString("Volken.UI.ConfigSavedAs"), planet, name));
                             }
                             catch (Exception ex)
                             {
@@ -414,7 +424,15 @@ namespace Volken.Core
                         {
                             // 只换云层预设 —— 天气预设是**独立**的另一套名字,这里不碰
                             var loadedConfig = CloudConfig.LoadFromFile(
-                                Game.Instance.FlightScene.CraftNode.Parent.Name, newConfig);
+                                Game.Instance.FlightScene.CraftNode.Parent.Name, newConfig, out bool loadFailed);
+                            if (loadFailed)
+                            {
+                                // 坏文件已被隔离成 .broken,不把内存默认值当成"加载成功"
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                    Locale.GetString("Volken.UI.ErrorLoadingConfig"));
+                                return;
+                            }
+
                             mainLayer.config.CopyFrom(loadedConfig);
                             mainLayer.currentConfigName = newConfig;
                             VolumetricClouds.Instance.ValueChanged();
@@ -498,7 +516,12 @@ namespace Volken.Core
                     try
                     {
                         string name = layer.currentConfigName ?? "Default";
-                        layer.config.SaveToFile(planet, name);
+                        if (!layer.config.SaveToFile(planet, name))
+                        {
+                            Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                Locale.GetString("Volken.UI.ErrorSavingConfig"));
+                            return;
+                        }
                         VolumetricClouds.Instance.RefreshConfigList();
                         if (!VolumetricClouds.Instance.planetConfigList.ExistsInConfig(planet))
                             VolumetricClouds.Instance.planetConfigList.AddConfig(planet, "Default", name);
@@ -524,20 +547,30 @@ namespace Volken.Core
                         {
                             try
                             {
-                                string name = inputDialog.InputText;
-                                if (!string.IsNullOrWhiteSpace(name))
+                                string name = inputDialog.InputText?.Trim();
+                                if (string.IsNullOrEmpty(name)) return;
+                                if (!ConfigFileNames.IsValid(name) || CloudConfig.Exists(planet, name))
                                 {
-                                    layer.config.SaveToFile(planet, name);
-                                    layer.currentConfigName = name;
-                                    VolumetricClouds.Instance.RefreshConfigList();
-                                    if (!VolumetricClouds.Instance.planetConfigList.ExistsInConfig(planet))
-                                        VolumetricClouds.Instance.planetConfigList.AddConfig(planet, "Default", name);
-                                    else
-                                        VolumetricClouds.Instance.planetConfigList.SetConfig(planet, name, 1);
                                     Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
-                                        string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSavedAs"), title, name));
-                                    RebuildInspectorPanel();
+                                        Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
+                                    return;
                                 }
+                                if (!layer.config.SaveToFile(planet, name))
+                                {
+                                    Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                        Locale.GetString("Volken.UI.ErrorSavingNewConfig"));
+                                    return;
+                                }
+
+                                layer.currentConfigName = name;
+                                VolumetricClouds.Instance.RefreshConfigList();
+                                if (!VolumetricClouds.Instance.planetConfigList.ExistsInConfig(planet))
+                                    VolumetricClouds.Instance.planetConfigList.AddConfig(planet, "Default", name);
+                                else
+                                    VolumetricClouds.Instance.planetConfigList.SetConfig(planet, name, 1);
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                    string.Format(Locale.GetString("Volken.UI.ExtraLayerConfigSavedAs"), title, name));
+                                RebuildInspectorPanel();
                             }
                             catch (Exception ex) { Mod.Log("Volken: Error saving: " + ex); }
                             finally { inputDialog?.Close(); }
@@ -556,7 +589,14 @@ namespace Volken.Core
                     {
                         if (!string.IsNullOrWhiteSpace(newConfig))
                         {
-                            var loaded = CloudConfig.LoadFromFile(planet, newConfig);
+                            var loaded = CloudConfig.LoadFromFile(planet, newConfig, out bool loadFailed);
+                            if (loadFailed)
+                            {
+                                Game.Instance.FlightScene.FlightSceneUI.ShowMessage(
+                                    Locale.GetString("Volken.UI.ErrorLoadingConfig"));
+                                return;
+                            }
+
                             layer.config.CopyFrom(loaded);
                             layer.currentConfigName = newConfig;
                             VolumetricClouds.Instance.ValueChanged();
@@ -777,6 +817,7 @@ namespace Volken.Core
                 s => { cfg.blueNoiseStrength = s; VolumetricClouds.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
                 s => { cfg.historyBlend = s; VolumetricClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+            CreateCloudAccelerationControls(qualityGroup, cfg);
             group.Add(qualityGroup);
 
             // 轨道云(2D 壳着色 + 过渡带交叉淡入)
@@ -984,6 +1025,7 @@ namespace Volken.Core
                 s => { cfg.blueNoiseStrength = s; VolumetricClouds.Instance.ValueChanged(); }, 0.0f, 10.0f, 1);
             CreateSlider(qualityGroup, Locale.GetString("Volken.UI.HistoryBlend"), () => cfg.historyBlend,
                 s => { cfg.historyBlend = s; VolumetricClouds.Instance.ValueChanged(); }, 0.0f, 0.99f, 2);
+            CreateCloudAccelerationControls(qualityGroup, cfg);
             group.Add(qualityGroup);
 
             // 轨道云(2D 壳着色 + 过渡带交叉淡入)
@@ -992,6 +1034,36 @@ namespace Volken.Core
             group.Add(orbitGroup);
 
             inspectorModel.Add(group);
+        }
+
+        private static void CreateCloudAccelerationControls(GroupModel group, CloudConfig cfg)
+        {
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SolarCacheEnabled"),
+                () => cfg.solarCacheEnabled, s =>
+                {
+                    cfg.solarCacheEnabled = s;
+                    VolumetricClouds.Instance.ValueChanged();
+                }));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.EmptySpaceSkippingEnabled"),
+                () => cfg.emptySpaceSkippingEnabled, s =>
+                {
+                    cfg.emptySpaceSkippingEnabled = s;
+                    VolumetricClouds.Instance.ValueChanged();
+                }));
+            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheResolution"), () => cfg.solarCacheResolution,
+                s =>
+                {
+                    cfg.solarCacheResolution = Mathf.RoundToInt(s);
+                    cfg.ClampAccelerationSettings();
+                    VolumetricClouds.Instance.ValueChanged();
+                }, 8, 64, 0, true);
+            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheExtent"), () => cfg.solarCacheExtent,
+                s =>
+                {
+                    cfg.solarCacheExtent = s;
+                    cfg.ClampAccelerationSettings();
+                    VolumetricClouds.Instance.ValueChanged();
+                }, 1000f, 100000f, 0);
         }
 
         /// <summary>轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。默认关闭 → 零回归。</summary>

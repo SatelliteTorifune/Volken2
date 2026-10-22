@@ -30,6 +30,7 @@ namespace Volken.Weather
         private readonly List<AudioClip> _farClips = new List<AudioClip>();    // 落点远:延迟起峰、长隆隆
 
         private AudioSource[] _thunderVoices;
+        private GameObject[] _thunderVoiceObjects;   // 每通道独立 GameObject:AudioSource 的 3D 定位跟 Transform 走,共用 host 会把在播雷声一起搬走
         private int _nextVoice;
         private float _lastThunderTime = -999f;
 
@@ -96,9 +97,15 @@ namespace Volken.Weather
             try
             {
                 _thunderVoices = new AudioSource[ThunderVoices];
+                _thunderVoiceObjects = new GameObject[ThunderVoices];
                 for (int i = 0; i < ThunderVoices; i++)
                 {
-                    var src = gameObject.AddComponent<AudioSource>();
+                    // 每通道一个子 GameObject:src.transform.position = 落点 只移动这条雷声,不会连带其他通道
+                    var voice = new GameObject("VolkenThunderVoice" + i);
+                    voice.transform.SetParent(transform, false);
+                    _thunderVoiceObjects[i] = voice;
+
+                    var src = voice.AddComponent<AudioSource>();
                     src.playOnAwake = false;
                     src.loop = false;
                     src.spatialBlend = 1f;                  // 3D
@@ -359,6 +366,9 @@ namespace Volken.Weather
                 float maxDelay = cfg != null ? cfg.lightning.maxDelay : 45f;
 
                 float wait = UnityEngine.Random.Range(minDelay, maxDelay);
+                // NaN/Infinity 会让下面 `t < wait` 恒为 false → 内层循环一次都不执行 → 外层 while 没有 yield = 主线程卡死。
+                // 配置在 ClampAll 已清过一次,这里再兜一层(运行时也可能被别处写脏)。
+                if (float.IsNaN(wait) || float.IsInfinity(wait) || wait <= 0f) wait = 6f;
                 TimeToNextStrike = wait;
 
                 float t = 0f;
@@ -373,19 +383,36 @@ namespace Volken.Weather
                 }
                 TimeToNextStrike = 0f;
 
-                // 条件复核:等待期间玩家可能关掉了天气/雷电,或已经飞到了上限之上
-                var weather = VolkenWeather.Instance;
-                if (weather == null || !weather.IsActive) continue;
-                var c = weather.Config;
-                if (c == null || !c.lightning.enabled) continue;
-
-                if (!IsBelowCeiling(out float skipAlt, out float skipCeiling))
+                // 落雷本体:异常必须自己兜住 —— 协程一旦抛异常就被 Unity 终止,而 _running 仍为 true,
+                // 之后 SetActive(true) 全被首行 return 掉,雷电会永久静默。
+                bool failed = false;
+                try
                 {
-                    LogCeilingSkip(skipAlt, skipCeiling);
-                    continue;   // 换一个间隔再来:高度降回上限内后自然恢复落雷
+                    // 条件复核:等待期间玩家可能关掉了天气/雷电,或已经飞到了上限之上
+                    var weather = VolkenWeather.Instance;
+                    if (weather == null || !weather.IsActive) continue;
+                    var c = weather.Config;
+                    if (c == null || !c.lightning.enabled) continue;
+
+                    if (!IsBelowCeiling(out float skipAlt, out float skipCeiling))
+                    {
+                        LogCeilingSkip(skipAlt, skipCeiling);
+                        continue;   // 换一个间隔再来:高度降回上限内后自然恢复落雷
+                    }
+
+                    CastRandomBolt();
+                }
+                catch (Exception ex)
+                {
+                    failed = true;
+                    Mod.Log("Volken:LightningModule storm loop failed: {0}", ex);
                 }
 
-                CastRandomBolt();
+                if (failed)
+                {
+                    TimeToNextStrike = 5f;
+                    yield return new WaitForSecondsRealtime(5f);
+                }
             }
         }
 
@@ -670,6 +697,13 @@ namespace Volken.Weather
         private void OnDestroy()
         {
             SetActive(false);
+            // 每通道的 AudioSource 挂在自建子 GameObject 上(3D 定位需要),组件销毁时一起清掉
+            if (_thunderVoiceObjects == null) return;
+            for (int i = 0; i < _thunderVoiceObjects.Length; i++)
+            {
+                if (_thunderVoiceObjects[i] != null) Destroy(_thunderVoiceObjects[i]);
+            }
+            _thunderVoiceObjects = null;
         }
     }
 }

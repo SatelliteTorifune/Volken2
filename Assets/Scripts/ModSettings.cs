@@ -22,8 +22,6 @@ namespace Assets.Scripts
 
         public BoolSetting AlterTransparency { get; set; }
 
-        public BoolSetting ShowProfiler { get; set; }
-
         public BoolSetting WaterReflection { get; set; }
 
         public BoolSetting ExtraCameraClouds { get; set; }
@@ -32,8 +30,13 @@ namespace Assets.Scripts
         public BoolSetting ExtraCameraRain { get; set; }
         public BoolSetting ExtraCameraFog { get; set; }
 
+        public BoolSetting RestoreDefaultConfig { get; set; }
+
         protected override void InitializeSettings()
         {
+            RestoreDefaultConfig = CreateBool("{Volken.ModSettings.RestoreDefaultConfig}", "RestoreDefaultConfig")
+                .SetDescription("{Volken.ModSettings.RestoreDefaultConfigDesc}")
+                .SetDefault(true);
             NoiseMapIndex = CreateNumeric<int>("{Volken.ModSettings.NoiseMapIndex}", 1, 5, 1, "noiseMap")
                 .SetDescription("{Volken.ModSettings.NoiseMapIndexDesc}")
                 .SetDisplayFormatter(x => x.ToString("F0"))
@@ -45,7 +48,7 @@ namespace Assets.Scripts
             // 开发设置保留 XML 键与读写兼容。
             DevMode = CreateBool("{Volken.ModSettings.ShowDevLog}", "ShowDevLog")
                 .SetDescription("{Volken.ModSettings.ShowDevLogDesc}")
-                
+
                 .SetDefault(false);
             AlterTransparency = CreateBool("{Volken.ModSettings.AlterTransparency}", "AlterTransparency")
                 .SetDescription("{Volken.ModSettings.AlterTransparencyDesc}")
@@ -61,10 +64,6 @@ namespace Assets.Scripts
                 .SetDefault(true);
             ExtraCameraFog = CreateBool("{Volken.ModSettings.ExtraCameraFog}", "ExtraCameraFog")
                 .SetDescription("{Volken.ModSettings.ExtraCameraFogDesc}")
-                .SetDefault(false);
-            ShowProfiler = CreateBool("{Volken.ModSettings.ShowProfiler}", "ShowProfiler")
-                .SetDescription("{Volken.ModSettings.ShowProfilerDesc}")
-                
                 .SetDefault(false);
         }
     }

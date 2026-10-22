@@ -125,8 +125,8 @@ namespace Volken.Clouds
                 noise = new CloudNoise(seed: UnityEngine.Random.Range(1, 99999)),
             };
             main.material = new Material(_cloudShader);
-            main.config = CloudConfig.CreateDefault();
-            main.currentConfigName = "Default";
+            main.config = CloudConfig.CreateNone();
+            main.currentConfigName = "None";
             main.runningOffset = main.config.offset;
             layers.Add(main);
 
@@ -346,51 +346,65 @@ namespace Volken.Clouds
             var main = MainLayer;
             if (main == null) return;
 
+            var record = list.GetPlanetConfig(planet);
             if (_availableConfigs.Count > 0)
             {
-                if (!list.ExistsInConfig(planet))
+                string mainName = record?.CloudConfigName;
+                if (string.IsNullOrEmpty(mainName))
                 {
-                    main.currentConfigName = _availableConfigs[0];
-                    list.AddConfig(planet, main.currentConfigName);
+                    mainName = _availableConfigs[0];
+                    if (record == null) list.AddConfig(planet, mainName);
+                    else list.SetConfig(planet, mainName, 0);
                 }
-                else
+                else if (!_availableConfigs.Contains(mainName))
                 {
-                    main.currentConfigName = list.GetConfigName(planet, 0);
-                    if (!_availableConfigs.Contains(main.currentConfigName))
-                    {
-                        main.currentConfigName = _availableConfigs[0];
-                        list.SetConfig(planet, main.currentConfigName, 0);
-                    }
+                    mainName = _availableConfigs[0];
+                    list.SetConfig(planet, mainName, 0);
                 }
 
-                main.config = CloudConfig.LoadFromFile(planet, main.currentConfigName);
+                main.currentConfigName = mainName;
+                main.config = CloudConfig.LoadFromFile(planet, mainName, out bool mainLoadFailed);
+                if (mainLoadFailed)
+                {
+                    Mod.Log($"Clouds: 主云层预设 '{mainName}' 读取失败(坏文件已隔离),当前使用内存默认值 planet={planet}");
+                }
             }
             else
             {
-                main.currentConfigName = "Default";
-                main.config = CloudConfig.CreateDefault();
-                main.config.SaveToFile(planet, main.currentConfigName);
+                main.currentConfigName = "None";
+                main.config = CloudConfig.CreateNone();
+                if (!main.config.SaveToFile(planet, main.currentConfigName))
+                {
+                    Mod.Log($"Clouds: 默认云预设 'None' 写入失败 planet={planet}");
+                }
                 _availableConfigs.Add(main.currentConfigName);
 
-                if (!list.ExistsInConfig(planet)) list.AddConfig(planet, main.currentConfigName);
+                if (record == null) list.AddConfig(planet, main.currentConfigName);
                 else list.SetConfig(planet, main.currentConfigName, 0);
             }
 
-            var extra = layers.Count > 1 ? layers[1] : null;   // Extra 层(Layer 1)按行星记的预设名单独装
-            if (extra != null)
+            // Extra 层(Layer 1)只按清单里**明确登记**的预设名装载;没登记或文件缺失 → 恢复默认关闭的 Extra。
+            // 不能借用 PlanetConfigList.GetConfigName 的 "Default" 兜底:LoadFromFile 对缺失文件会返回 enabled=true 的 None
+            // 并就地写盘,结果就是未登记行星的 Extra 被主层参数静默打开(双层叠加 + 垃圾预设文件)。
+            var extra = layers.Count > 1 ? layers[1] : null;
+            if (extra == null) return;
+
+            record = list.GetPlanetConfig(planet);
+            string extraCfgName = record?.ExtraCloudConfigName;
+            if (!string.IsNullOrEmpty(extraCfgName) && CloudConfig.Exists(planet, extraCfgName))
             {
-                string extraCfgName = list.ExistsInConfig(planet) ? list.GetConfigName(planet, 1) : null;
-                if (!string.IsNullOrEmpty(extraCfgName))
+                var loaded = CloudConfig.LoadFromFile(planet, extraCfgName, out bool extraLoadFailed);
+                if (!extraLoadFailed)
                 {
-                    try
-                    {
-                        var loaded = CloudConfig.LoadFromFile(planet, extraCfgName);
-                        extra.config.CopyFrom(loaded);
-                        extra.currentConfigName = extraCfgName;
-                    }
-                    catch (Exception ex) { Mod.Log("Clouds: Error loading extra config: " + ex); }
+                    extra.config.CopyFrom(loaded);
+                    extra.currentConfigName = extraCfgName;
+                    return;
                 }
+                Mod.Log($"Clouds: Extra 云层预设 '{extraCfgName}' 读取失败(坏文件已隔离),恢复默认 Extra planet={planet}");
             }
+
+            extra.config.CopyFrom(CreateExtraDefaultConfig());
+            extra.currentConfigName = "ExtraDefault";
         }
 
         // 按环境设/撤"运行时抑制"。不要回写 CloudConfig.enabled:那是玩家预设本体的字段,回写会在保存时污染预设。

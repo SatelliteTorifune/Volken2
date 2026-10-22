@@ -3,6 +3,7 @@ using Assets.Packages.DevConsole;
 using Assets.Scripts.Flight.UI;
 using HarmonyLib;
 using ModApi.Scenes.Events;
+using UnityEditor;
 
 namespace Assets.Scripts
 {
@@ -38,6 +39,10 @@ namespace Assets.Scripts
             var harmony = new Harmony("com.SatelliteTorifune.Volken");
             harmony.PatchAll();
 
+            if (ModSettings.Instance.RestoreDefaultConfig)
+            {
+                VolkenFileSetUp.CreateDefaultConfig();
+            }
             SetUpGo<VolkenUserInterface>(ref VolkenUI,"VolkenUI");
             SetUpGo<ForceSetting>(ref ForceSettingScriptLoadGameObject,"ForceSettingObject");
 
@@ -55,7 +60,7 @@ namespace Assets.Scripts
 
             // 更新检查(本地模式:LatestVersionUrl 未配置时仅打日志,不弹窗)
             new ModUpdater().CheckForUpdate();
-            VolkenFileSetUp.CreateDefaultConfig();
+
         }
 
         private void SetUpGo<T>(ref GameObject GO,string name) where T : MonoBehaviour

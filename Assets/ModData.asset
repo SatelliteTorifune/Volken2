@@ -15,20 +15,25 @@ MonoBehaviour:
   _assemblies:
   - Volken.dll
   _author: Insanity+SatelliteTorifune
-  _description: '<color=green>Raymarched Volumetric Clouds for Juno: New Origins
+  _description: '<color=green>Raymarched Volumetric Clouds & Weather for Juno: New
+    Origins
 
 
-    <color=red><size=250%>Require
-    JUNO Harmony'
+    <color=red><size=250%>Require JUNO Harmony'
   _loadPriority: 1000
   _name: Volken
   _otherAssets:
+  - {fileID: 4900000, guid: a834044cfa6ba0948a232e413e3da6a7, type: 3}
   - {fileID: 2800000, guid: 00088ef87faf2c846bf0104d230d1f08, type: 3}
   - {fileID: 7200000, guid: eb434837fdf45194ba93f283c11b3678, type: 3}
   - {fileID: 102900000, guid: bbad8fc26facbd94189ac29d52825d66, type: 3}
+  - {fileID: 4900000, guid: 782a314a8c658b247813a51e90dfbdf4, type: 3}
   - {fileID: 2800000, guid: 228dfce7bb963ed4e86c23598e4f5a74, type: 3}
   - {fileID: 4900000, guid: 0387c02c783df06469af9e6d5e6f671a, type: 3}
   - {fileID: 2800000, guid: d65a83d2858a4b044ae00bbabfa0c82f, type: 3}
+  - {fileID: 4900000, guid: 0297c96218817ab44b42e0b3c1a30739, type: 3}
+  - {fileID: 4900000, guid: 84ce3a65c3e9d0d48b5d1f917f5c413c, type: 3}
+  - {fileID: 4900000, guid: a6cc4dc9ddd28074d92e361c1759e940, type: 3}
   - {fileID: 4800000, guid: 05b9b50e35e65dd449a60972a6307b5d, type: 3}
   - {fileID: 4800000, guid: c83fb1cccacf403c84c5393b878bbca2, type: 3}
   - {fileID: 4800000, guid: 33bf46c810aae2545950ab05d025f0e6, type: 3}
@@ -37,12 +42,22 @@ MonoBehaviour:
   - {fileID: 4800000, guid: 0883b124fc234e68b356af4b7bb52ecd, type: 3}
   - {fileID: 4800000, guid: ba2fe6ec78a841899587cf389c91518d, type: 3}
   - {fileID: 4800000, guid: f74f766f108fb1447b887e7a4a525a59, type: 3}
+  - {fileID: 4900000, guid: 9a93b1b15da884f49b3a99f6ffd3fb73, type: 3}
+  - {fileID: 4900000, guid: 2eeb97a626d68774c9b7a02a6cd2320e, type: 3}
+  - {fileID: 4900000, guid: 49aea78f0cd10cc47bf15a281118c632, type: 3}
+  - {fileID: 4900000, guid: 2f0ddc90fcd444a4d8324c0ae7f09d25, type: 3}
   - {fileID: 2800000, guid: 0d23d8eaf341d964fa557285cad5672d, type: 3}
+  - {fileID: 4900000, guid: 5fede388cdca19b4da3430235a192bfa, type: 3}
   - {fileID: 2800000, guid: 5c03357c1bfd4594e98c6a1fadfda428, type: 3}
+  - {fileID: 4900000, guid: a60d1153fdcfe234ebecfce671d5d072, type: 3}
+  - {fileID: 4900000, guid: fb6cc0c6e19c0334f84118b4d843e3ae, type: 3}
   - {fileID: 7200000, guid: d53652b92a1d3b74bab5b87fdafaa8fc, type: 3}
   - {fileID: 7200000, guid: 9c3f6a2e5b8d4c1f9e7a0b3c5d6e7f80, type: 3}
   - {fileID: 4900000, guid: d1b14163cd6126d48a6bec60431b96d7, type: 3}
   - {fileID: 102900000, guid: 0aba0717bdc59304a8505add62f157c2, type: 3}
+  - {fileID: 4900000, guid: 7e4ab8eaa4807014f8c036a0cc88d9dc, type: 3}
+  - {fileID: 4900000, guid: 14c70b74dd71f9f40b6cd3380e5517d5, type: 3}
+  - {fileID: 4900000, guid: 4d79e9f934d6bcf44968f5ec7db3e8ff, type: 3}
   - {fileID: 4800000, guid: 1a2b3c4d5e6f708192a3b4c5d6e7f890, type: 3}
   - {fileID: 4800000, guid: fb165202322c2584e8c034518e28168b, type: 3}
   - {fileID: 4800000, guid: 64e1c5ee2e494dcd932f70dc366abb51, type: 3}
@@ -72,7 +87,7 @@ MonoBehaviour:
   _steamTitle: 
   _steamVisibility: 0
   _versionMajor: 0
-  _versionMinor: 65
+  _versionMinor: 68
   _partCategories: []
   _parts: []
   _partStyleExtensions: []

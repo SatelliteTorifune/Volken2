@@ -16,6 +16,8 @@
     <s id="Volken.ModSettings.ExtraCameraRainDesc">Показывать дождь на дополнительных камерах.</s>
     <s id="Volken.ModSettings.ShowProfiler">Оверлей профайлера</s>
     <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности.</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfig">Восстановить пресеты по умолчанию</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfigDesc">При запуске дописывать недостающие стандартные пресеты облаков и погоды в UserData. Применяется со следующего запуска.</s>
 
     <s id="Volken.UI.CloudSettings">Настройка Облаков</s>
     <s id="Volken.UI.GroundShadowDistance">Дальность теней облаков(м)</s>
@@ -186,6 +188,10 @@
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
     <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
+    <s id="Volken.UI.SolarCacheEnabled">Кэш солнечного освещения (эксперимент)</s>
+    <s id="Volken.UI.EmptySpaceSkippingEnabled">Консервативный пропуск пустых областей</s>
+    <s id="Volken.UI.SolarCacheResolution">Разрешение сетки солнечного кэша</s>
+    <s id="Volken.UI.SolarCacheExtent">Ширина области солнечного кэша (м)</s>
 
     <!-- Орбитальные облака(2D-шейдинг оболочки + перекрёстное затухание) -->
     <s id="Volken.UI.OrbitClouds">Орбитальные облака</s>
@@ -254,4 +260,6 @@
     <s id="Volken.UI.QualityLow">Низкое</s>
     <s id="Volken.UI.QualityMedium">Среднее</s>
     <s id="Volken.UI.QualityHigh">Высокое</s>
+    <s id="Volken.VolkenCloud.MainLayerName">Основной</s>
+    <s id="Volken.VolkenCloud.ExtraLayerName">Дополнительный</s>
 </Strings>

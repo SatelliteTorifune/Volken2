@@ -4,11 +4,12 @@ using System.IO;
 using System.Xml.Serialization;
 using Assets.Scripts;
 using UnityEngine;
+using Volken.Core;
 using Application = UnityEngine.Application;
 
 namespace Volken.Weather
 {
-    
+
     // --------------------------------------------------------------------------------------------
     //  天气预设(一份预设 = 一个文件;总体、雨、镜头水珠、雾、雷 XML 节点)。
     //  新增效果默认关闭或恒等;旧 XML 中已移除的字段由 XmlSerializer 忽略。
@@ -27,7 +28,7 @@ namespace Volken.Weather
             public void CopyFrom(OverallSection s)
             {
                 if (s == null) return;
-             
+
             }
         }
 
@@ -103,7 +104,7 @@ namespace Volken.Weather
             public float underwaterFade = 2f;    // 米;海平面 → 水面下此深度内线性淡出到 0(贴水面浮动时不会闪断)
 
             // false = 域内随机重生(默认,持续混合 = 连续雨帘);true = 确定性镜像,会零混合、周期团块。
-            
+
 
             public void CopyFrom(RainSection s)
             {
@@ -170,8 +171,6 @@ namespace Volken.Weather
                 shelterCheck = source.shelterCheck;
             }
         }
-
-        // ④ 雾
 
         /// <summary>独立的径向高度雾与流动体积雾;密度单位为每米。</summary>
         [Serializable]
@@ -440,27 +439,29 @@ namespace Volken.Weather
             fog.debugMode = Mathf.Clamp(fog.debugMode, 0, 3);
 
             // ---- ⑤ 雷 ----
-            lightning.minDelay = Mathf.Max(0.05f, lightning.minDelay);
-            lightning.maxDelay = Mathf.Max(lightning.minDelay, lightning.maxDelay);
-            lightning.targetRange = Mathf.Max(1f, lightning.targetRange);
-            lightning.spawnRange = Mathf.Max(1f, lightning.spawnRange);
-            lightning.ceilingAltitude = Mathf.Clamp(lightning.ceilingAltitude, 0f, 500000f);
+            // NaN/Infinity 必须在这里清掉:Mathf.Max/Clamp 对 NaN 是"原样放过",而 NaN 延时会让落雷协程里 `t < wait` 恒 false →
+            // 内层等待循环一次都不执行 → 外层 while 没有 yield,主线程卡死。
+            lightning.minDelay = FogFinite(lightning.minDelay, 6f, 0.05f, 3600f);
+            lightning.maxDelay = FogFinite(lightning.maxDelay, 45f, lightning.minDelay, 86400f);
+            lightning.targetRange = FogFinite(lightning.targetRange, 3000f, 1f, 1e7f);
+            lightning.spawnRange = FogFinite(lightning.spawnRange, 4000f, 1f, 1e7f);
+            lightning.ceilingAltitude = FogFinite(lightning.ceilingAltitude, 12000f, 0f, 500000f);
             lightning.arcs = Mathf.Clamp(lightning.arcs, 4, 64);
-            lightning.inaccuracy = Mathf.Clamp(lightning.inaccuracy, 0f, 2f);
+            lightning.inaccuracy = FogFinite(lightning.inaccuracy, 0.5f, 0f, 2f);
             lightning.splits = Mathf.Clamp(lightning.splits, 0, 8);
-            lightning.width = Mathf.Clamp(lightning.width, 0.1f, 200f);
-            lightning.intensity = Mathf.Max(0f, lightning.intensity);
-            lightning.flashIntensity = Mathf.Max(0f, lightning.flashIntensity);
-            lightning.lightIntensity = Mathf.Clamp(lightning.lightIntensity, 0f, 100f);
-            lightning.lightRange = Mathf.Clamp(lightning.lightRange, 1f, 1e7f);
+            lightning.width = FogFinite(lightning.width, 10f, 0.1f, 200f);
+            lightning.intensity = FogFinite(lightning.intensity, 1f, 0f, 100f);
+            lightning.flashIntensity = FogFinite(lightning.flashIntensity, 50f, 0f, 1e5f);
+            lightning.lightIntensity = FogFinite(lightning.lightIntensity, 1f, 0f, 100f);
+            lightning.lightRange = FogFinite(lightning.lightRange, 8000f, 1f, 1e7f);
             lightning.cloudLightIntensity = FogFinite(lightning.cloudLightIntensity, 8f, 0f, 100f);
             lightning.cloudLightRange = FogFinite(lightning.cloudLightRange, 3000f, 1f, 30000f);
             lightning.cloudLightSamples = Mathf.Clamp(lightning.cloudLightSamples, 2, 16);
-            lightning.thunderDelay = Mathf.Clamp(lightning.thunderDelay, 0f, 10f);
-            lightning.thunderVolume = Mathf.Clamp01(lightning.thunderVolume);
-            lightning.thunderDistanceAttenuation = Mathf.Clamp01(lightning.thunderDistanceAttenuation);
-            lightning.thunderNearDistance = Mathf.Max(1f, lightning.thunderNearDistance);
-            lightning.thunderSourceBlend = Mathf.Clamp01(lightning.thunderSourceBlend);
+            lightning.thunderDelay = FogFinite(lightning.thunderDelay, 0.05f, 0f, 10f);
+            lightning.thunderVolume = FogFinite(lightning.thunderVolume, 0.65f, 0f, 1f);
+            lightning.thunderDistanceAttenuation = FogFinite(lightning.thunderDistanceAttenuation, 1f, 0f, 1f);
+            lightning.thunderNearDistance = FogFinite(lightning.thunderNearDistance, 2000f, 1f, 1e7f);
+            lightning.thunderSourceBlend = FogFinite(lightning.thunderSourceBlend, 0.5f, 0f, 1f);
         }
 
         private static float FogFinite(float value, float fallback, float minimum, float maximum)
@@ -501,8 +502,13 @@ namespace Volken.Weather
             return folderPath;
         }
 
+        /// <summary>取预设文件路径;**预设名非法时抛 <see cref="ArgumentException"/>,绝不把名字拼进路径**(防路径穿越)。</summary>
         public static string GetConfigPath(string planetName, string configName)
         {
+            if (!ConfigFileNames.IsValid(configName))
+            {
+                throw new ArgumentException("Invalid weather config name: " + configName, nameof(configName));
+            }
             return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
         }
 
@@ -511,7 +517,7 @@ namespace Volken.Weather
         {
             try
             {
-                if (string.IsNullOrEmpty(planetName) || string.IsNullOrEmpty(configName)) return false;
+                if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName)) return false;
                 string path = Path.Combine(Application.persistentDataPath + CONFIG_FOLDER, planetName, configName + ".xml");
                 return File.Exists(path);
             }
@@ -538,9 +544,15 @@ namespace Volken.Weather
             return names;
         }
 
-        /// <summary>完整写入临时文件后替换天气预设;失败保留旧文件并返回 false。</summary>
+        /// <summary>完整写入临时文件后替换天气预设;预设名非法 / 写盘失败返回 false 并保留旧文件。</summary>
         public bool SaveToFile(string planetName, string configName)
         {
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Weather config save rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                return false;
+            }
+
             string temporaryPath = null;
             try
             {
@@ -581,7 +593,33 @@ namespace Volken.Weather
         /// <summary>读 <c>{行星}/{预设}.xml</c>;不存在 → 建一份默认(**全关**)并落盘,与云层同约定。读进来的实例一律过 <see cref="EnsureSections"/> + <see cref="ClampAll"/>,免脏值进 shader。</summary>
         public static VolkenWeatherConfig LoadFromFile(string planetName, string configName)
         {
-            string filePath = GetConfigPath(planetName, configName);
+            return LoadFromFile(planetName, configName, out _);
+        }
+
+        /// <summary>读天气预设。<paramref name="loadFailed"/> = 文件存在但无法读取(已把坏文件改名为 <c>.broken</c> 保留现场,
+        /// 返回值只是内存默认值,调用方不应把它当作"加载成功")。</summary>
+        public static VolkenWeatherConfig LoadFromFile(string planetName, string configName, out bool loadFailed)
+        {
+            loadFailed = false;
+
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Weather config load rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                loadFailed = true;
+                return CreateDefault();
+            }
+
+            string filePath;
+            try
+            {
+                filePath = GetConfigPath(planetName, configName);
+            }
+            catch (Exception e)
+            {
+                Mod.Log("Weather config path failed for '{0}': {1}", configName, e.Message);
+                loadFailed = true;
+                return CreateDefault();
+            }
 
             if (!File.Exists(filePath))
             {
@@ -594,10 +632,10 @@ namespace Volken.Weather
             try
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(VolkenWeatherConfig));
-                using (FileStream stream = new FileStream(filePath, FileMode.Open))
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     VolkenWeatherConfig config = serializer.Deserialize(stream) as VolkenWeatherConfig;
-                    if (config == null) return CreateDefault();
+                    if (config == null) throw new InvalidDataException("deserialized config is null");
                     config.EnsureSections();
                     config.UpgradeUneditedDefaults();
                     config.ClampAll();
@@ -607,7 +645,9 @@ namespace Volken.Weather
             }
             catch (Exception e)
             {
-                Mod.Log($"Failed to load weather config '{configName}': {e.Message}. Using default config.");
+                Mod.Log($"Failed to load weather config '{configName}': {e.Message}. Quarantining the file and using in-memory default.");
+                ConfigFileNames.TryQuarantine(filePath);
+                loadFailed = true;
                 return CreateDefault();
             }
         }

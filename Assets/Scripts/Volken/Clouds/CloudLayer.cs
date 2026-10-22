@@ -70,6 +70,10 @@ namespace Volken.Clouds
             Material mat = target != null ? target : material;
             if (config == null || mat == null) return;
             if (target == null) ShaderRevision++;
+            CloudSolarCache.Disable(mat);
+            mat.SetFloat("_CloudEmptySpaceEnabled", 0f);
+            mat.DisableKeyword("VOLKEN_CLOUD_SOLAR_CACHE");
+            mat.DisableKeyword("VOLKEN_CLOUD_EMPTY_SPACE");
 
             mat.SetFloat("cloudDensity", config.density);
             mat.SetFloat("cloudAbsorption", config.absorption);

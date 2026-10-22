@@ -9,12 +9,14 @@
 | [CloudRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudRenderer.cs) | 每相机远近深度与场景深度历史、raymarch、TSS、雾与逐层合成；提供 `LinearSceneDepth` |
 | [CloudLayer.cs](../Assets/Scripts/Volken/Clouds/CloudLayer.cs) | 每层配置、材质、噪声、风偏移和静态参数修订 |
 | [CloudLayerView.cs](../Assets/Scripts/Volken/Clouds/CloudLayerView.cs) | 每相机 × 每云层的 RT、运动数据和历史 |
-| [Clouds.shader](../Assets/Scripts/Volken/Clouds/Shader/Clouds.shader) | 体积云、轨道壳面、上采样、合成与雷光遮光缓存生成 |
+| [Clouds.shader](../Assets/Scripts/Volken/Clouds/Shader/Clouds.shader) | 体积云、轨道壳面、上采样、合成与光照缓存生成 |
 | [CloudVolumeLighting.cginc](../Assets/Scripts/Volken/Clouds/Shader/CloudVolumeLighting.cginc) | 共用密度、光照和有限光程消光 |
 | [CloudNoise.cs](../Assets/Scripts/Volken/Clouds/CloudNoise.cs) / [StockCloudMap.cs](../Assets/Scripts/Volken/Clouds/StockCloudMap.cs) | 程序化噪声和游戏自带云分布缓存 |
 | [FarCameraScript.cs](../Assets/Scripts/Volken/Clouds/FarCameraScript.cs) / [SceneDepth.cs](../Assets/Scripts/Volken/Clouds/SceneDepth.cs) | 远相机 CommandBuffer 与独立深度资源 |
 | [CloudReflectionRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudReflectionRenderer.cs) | 补入游戏水面反射的体积云 |
 | [CloudLightningCache.cs](../Assets/Scripts/Volken/Clouds/CloudLightningCache.cs) | 世界空间雷光光学厚度图集 |
+| [CloudSolarCache.cs](../Assets/Scripts/Volken/Clouds/CloudSolarCache.cs) | 每相机 × 每层的太阳光学厚度图集与加速变体选择 |
+| [CloudEmptySpace.cs](../Assets/Scripts/Volken/Clouds/CloudEmptySpace.cs) | 密度上界、保守径向支持带及纹理范围守卫 |
 | [CloudGroundShadows.cs](../Assets/Scripts/Volken/Clouds/CloudGroundShadows.cs) | 每相机逐接收点太阳透射率与原生屏幕阴影接入 |
 
 `CloudRenderer` 的 `[ImageEffectOpaque]` 必须保留：先处理不透明场景，再绘制原生透明物体。近远线性场景深度供云合成、雾和本相机雨软粒子；低清深度供体积步进。无有效云层时仍可生成天气需要的深度，附加相机不能借用无关主相机的远深度。
@@ -29,6 +31,14 @@
 - 单段光照使用 Beer 解析权重；很小光学厚度用展开式避免除零。`Upscale` 可对积分后的 RGB / 透射率做 3×3 足迹重建，拒绝场景后方邻点，并保留中心命中距离；这不等于新增射线样本或消除底层周期。
 
 默认光样本不要混淆：`CloudConfig.CreateDefault()` 为 25，`CreateAnotherDefault()` 为 5；`VolumetricClouds` 实际初始化的附加层默认关闭，使用独立 `CreateExtraDefaultConfig()`，光样本为 10。已保存 XML 的值优先于这些默认值。
+
+## 可切换采样与太阳缓存
+
+每层 `solarCacheEnabled`、`emptySpaceSkippingEnabled` 独立且默认 false，旧 XML 不自动启用；支持旧路径、仅缓存、仅跳空与组合对照。主 / 附加层三语质量面板完整接入复制、限值、保存与加载。缓存与跳空分别使用 `VOLKEN_CLOUD_SOLAR_CACHE` / `VOLKEN_CLOUD_EMPTY_SPACE` 编译变体，均关闭或不可用时走旧变体；全球分布始终可选。
+
+太阳缓存默认 24³ 格点、覆盖立方体边长 24000 米；`solarCacheResolution` 限 8~64，`solarCacheExtent` 限 1000~100000 米，非有限边长回默认。每相机 × 每层独立持有 RGFloat 图集和 CommandBuffer，格网贴齐当前参考帧坐标，每次体积绘制按当前行星、太阳、风、分布和参数完整刷新。[CloudSolarCache.cginc](../Assets/Scripts/Volken/Clouds/Shader/CloudSolarCache.cginc) 保留前两步实时追光，其余积分以八格点插值；节点无完整远段、无效数据或覆盖外回退直接追光，角点缺少可靠遮挡、覆盖边缘或较大透射率梯度时平滑回退。梯度判断不构成误差上界，子格薄云仍须视觉对照；两步水面反射保留直接追光。缓存关闭、相机停用、行星切换、层不活跃 / 移除、纯轨道及资源重建时释放图集与命令；不支持格式或创建失败回退旧追光。
+
+空区加速从噪声 / 分布值域和四层高斯包络推导密度上界，仅在证明密度非正的径向区间省掉密度查询；不以 `TryGetBand` 硬裁高斯尾部，也不是水平稀疏体素层级。[CloudEmptySpace.cginc](../Assets/Scripts/Volken/Clouds/Shader/CloudEmptySpace.cginc) 重演旧空样本的步长、回退相位与 350 次迭代预算；浮点安全余量使边界继续走原查询。纹理须为本层受控 R8 噪声与 RGFloat 程序化图，stock 启用时另守卫归一化格式和混合范围，未知资源 / 非有限参数禁用跳空；全球图关闭或缺失时仍可使用程序化路径。
 
 ## 阳光遮蔽
 
@@ -62,7 +72,7 @@
 
 当前 `ComputeOrbitFade` 使用海拔归一化后的 `u²(3−2u)`。过渡带两种表示同时绘制，0.001 / 0.999 端点收口，纯轨道时跳过体积 raymarch / TSS；Orbit pass 不可用时回退体积。轨道绘制独立绑定当前场景深度，不依赖上一条体积路径的绑定。
 
-轨道轮廓、覆盖和浮雕使用现有宏观分布及恒定噪声均值标定，可选 albedo 使用固定世界尺度细节。壳面单点表示与体积积分不同，不能承诺轮廓逐像素一致；新过渡曲线和真正反平铺尚未实现。
+轨道轮廓、覆盖和浮雕使用现有宏观分布及恒定噪声均值标定，可选 albedo 使用固定世界尺度细节。壳面单点表示与体积积分不同，不能承诺轮廓逐像素一致；替代设计见 [新核心的同源远景](cloud-core.md#云型与同源远景)，当前仍使用上述路径。
 
 【决策：2026-10-14】只回退 2D 轨道环境夜光，保留体积 / 反射夜光。当前轨道恢复旧太阳 `dayFactor` 门控：深夜 RGB=0，白天和晨昏沿用旧公式，覆盖和透射率仍存在。
 

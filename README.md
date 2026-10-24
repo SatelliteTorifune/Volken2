@@ -1,1 +1,1 @@
-A Juno: New Origins mod for adding raymarched volumetric clouds to planets.
+A Juno: New Origins mod for raymarched volumetric clouds, rain, fog, lightning and thunder.

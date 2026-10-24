@@ -1,0 +1,145 @@
+// 实例化雨滴计算:初始化、径向下落、浮动原点平移、活跃数统计。
+// 粒子位置存于参考帧空间;积分不加入相机速度,Positioning 不读取 _RandomData。
+// 重生使用粒子 id 与整数相位 hash,禁止使用随时间增大的浮点 frac hash。
+// 间接绘制参数由 CPU 每帧复位;诊断计数累计至回读后清零。
+// 原子加使用 RWStructuredBuffer<uint> 的带下标形式,线程组为 64。
+
+#pragma kernel Randomize
+#pragma kernel Positioning
+#pragma kernel TranslateFixed
+#pragma kernel FillArgs
+
+RWStructuredBuffer<float4> _Positions;   // xyz = 参考帧空间位置;w = 最近积分时间(秒)
+RWStructuredBuffer<float4> _RandomData;  // x = 种子;yzw = 逐粒长/宽倍率与滚转(只由 Randomize 写、雨丝 shader 读)
+RWStructuredBuffer<uint> _ArgsBuffer;    // 5×uint 间接绘制参数(args[1] = instanceCount)
+RWStructuredBuffer<uint> _DiagBuffer;    // x0 = 累计重生次数;保留缓冲绑定,CPU 不回读。
+
+float _time;
+float _dt;
+float3 _domainCenter;   // 域中心,参考帧空间
+float _domainRadius;    // 米,由 CPU 按配置及速度调整
+float _fallSpeed;       // 下落速度,米/秒
+float3 _downDir;        // 径向"下" = 指向行星中心(帧空间,craft.GravityNormal)
+float3 _translation;    // 浮动原点重定位的参考帧平移量
+uint _capacity;         // buffer 容量(固定,重建才变)
+uint _amount;           // 活跃粒子数,不超过 _capacity
+uint _phase;            // 重生相位 = (uint)floor(_time*20),CPU 传(整数 hash 的输入之一)
+uint _indexCountPerInstance;  // 12(十字四边形)
+
+float3 _camRight;
+float3 _camUp;
+float3 _camFwd;
+
+// 1 = 相机前等距排,用于验证实例索引数据流。
+uint _testRow;
+float _testRowSpacing;
+
+// 0 = 球内随机重生(默认);1 = 穿过球心镜像,仅供对照。
+uint _respawnMode;
+
+uint HashU(uint x)
+{
+    x ^= x >> 16; x *= 0x7feb352du;
+    x ^= x >> 15; x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+float Hash01u(uint salt, uint id, uint phase)
+{
+    return (float)(HashU(salt ^ HashU(id ^ (phase * 0x9e3779b9u))) >> 8) * (1.0f / 16777216.0f);
+}
+
+void SpawnRandom(uint id, uint phase, out float3 nd, out float u)
+{
+    float theta = Hash01u(0x68bc21ebu, id, phase) * 6.2831853f;
+    float cz = Hash01u(0x02e5be93u, id, phase) * 2.0f - 1.0f;   // cos(phi)
+    u = Hash01u(0x967a889bu, id, phase);
+    float sz = sqrt(saturate(1.0f - cz * cz));
+    nd = float3(sz * cos(theta), cz, sz * sin(theta));
+}
+
+// 在 [0.15R,R] 壳层中按体积均匀分布,避开镜头近旁。
+float3 RandomSpawnInside(uint id, uint phase)
+{
+    const float inner = 0.15f;
+    float3 nd; float u;
+    SpawnRandom(id, phase, nd, u);
+    float r = pow(lerp(inner * inner * inner, 1.0f, u), 0.3333333f) * _domainRadius;
+    return _domainCenter + nd * r;
+}
+
+[numthreads(64, 1, 1)]
+void Randomize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _capacity) return;
+    _RandomData[id.x] = float4(Hash01u(0x1f123bb5u, id.x, 0u), Hash01u(0x2c1b3c6du, id.x, 0u),
+                               Hash01u(0x3a5f0c19u, id.x, 0u), Hash01u(0x4d7e2a83u, id.x, 0u));
+    float3 nd; float u;
+    SpawnRandom(id.x, 0u, nd, u);
+    // 均匀体积采样要求半径为 R*u^(1/3)。
+    float r = pow(u, 0.3333333f) * _domainRadius;
+    _Positions[id.x] = float4(_domainCenter + nd * r, 0);
+}
+
+[numthreads(64, 1, 1)]
+void Positioning(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _capacity) return;
+
+    if (_testRow == 1u)
+    {
+        float span = (float)_amount * _testRowSpacing;
+        float3 rowPos = _domainCenter
+            + _camRight * ((float)id.x * _testRowSpacing - span * 0.5f)
+            + _camUp * 0.5f
+            + _camFwd * 30.0f;
+        _Positions[id.x] = float4(rowPos, 0);
+        return;
+    }
+
+    float4 p = _Positions[id.x];
+
+    // 零向量或 NaN 回退到世界下。
+    float3 down = _downDir;
+    if (!(dot(down, down) > 1e-6f)) down = float3(0, -1, 0);
+    down = normalize(down);
+
+    p.xyz += (down * _fallSpeed) * _dt;
+
+    float3 d = p.xyz - _domainCenter;
+    float dist = length(d);
+    if (dist > _domainRadius)
+    {
+        if (_respawnMode == 1u)
+        {
+            float3 n = dist > 1e-4f ? d / dist : float3(0, 1, 0);
+            p.xyz = _domainCenter - n * _domainRadius * 0.999f;
+        }
+        else
+        {
+            p.xyz = RandomSpawnInside(id.x, _phase);
+        }
+        InterlockedAdd(_DiagBuffer[0], 1u);
+    }
+    p.w = _time;   // 执行探针:回读 pos[0].w 应随帧变化;恒不变 = 本 kernel 没在跑
+    _Positions[id.x] = p;
+}
+
+[numthreads(64, 1, 1)]
+// 浮动原点重定位时,所有粒子跟随参考帧一起平移。
+void TranslateFixed(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _capacity) return;
+    float4 p = _Positions[id.x];
+    p.xyz += _translation;
+    _Positions[id.x] = p;
+}
+
+[numthreads(64, 1, 1)]
+void FillArgs(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _amount) return;   // 只统计活跃粒子
+    uint original;
+    InterlockedAdd(_ArgsBuffer[1], 1, original);   // args[1] = instanceCount
+}

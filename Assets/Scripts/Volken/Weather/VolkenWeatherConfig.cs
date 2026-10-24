@@ -1,0 +1,655 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Xml.Serialization;
+using Assets.Scripts;
+using UnityEngine;
+using Volken.Core;
+using Application = UnityEngine.Application;
+
+namespace Volken.Weather
+{
+
+    // --------------------------------------------------------------------------------------------
+    //  天气预设(一份预设 = 一个文件;总体、雨、镜头水珠、雾、雷 XML 节点)。
+    //  新增效果默认关闭或恒等;旧 XML 中已移除的字段由 XmlSerializer 忽略。
+    // --------------------------------------------------------------------------------------------
+
+    /// <summary>一套天气预设(总体 / 雨 / 镜头水珠 / 雾 / 雷)。存于 <c>UserData/VolkenWeatherConfig/{行星}/{预设}.xml</c> ——
+    /// **独立目录**,与云的 <c>UserData/VolkenConfig/</c> 分开(否则同名预设互相覆盖);两边预设名也互相独立。</summary>
+    [Serializable]
+    public class VolkenWeatherConfig
+    {
+        /// <summary>兼容旧 XML 的总体字段;enabled 不再控制天气运行。</summary>
+        [Serializable]
+        public class OverallSection
+        {
+
+            public void CopyFrom(OverallSection s)
+            {
+                if (s == null) return;
+
+            }
+        }
+
+        // ③ 雨
+
+        /// <summary>雨子系统参数;密度、域半径与运行契约见 <c>docs/weather.md</c>。</summary>
+        [Serializable]
+        public class RainSection
+        {
+            public bool enabled = false;
+
+            /// <summary>粒子数量上限。**默认 100000 = SP2 出厂值**(<c>_particleAmount</c>;R=50 时密度 0.191/m³):粒子太少则每根雨丝被单独看清 = 细线"面条"感;掉帧就在面板把这一项拉下来。</summary>
+            public float amount = 100000f;
+
+            public float domainRadius = 50f;   // 米
+
+            public bool adaptiveDomain = true;
+
+            public float fallSpeed = 15f;   // 米/秒
+
+            public float strength = 1f;   // 强度倍率;1 = 标定基准
+
+            public float windInfluence = 1f;   // 0 = 纯竖直下落
+
+            public float streakLength = 2.5f;   // 米
+
+            /// <summary>雨丝宽度(米)。**默认 0.1 = SP2 出厂值**(<c>_streakThickness</c>);曾误用 0.05(比 SP2 细一半)→ 细亮线"面条"观感。</summary>
+            public float streakWidth = 0.1f;
+
+            public float volume = 0.5f;   // 雨声音量
+
+            /// <summary>雨丝朝向速度源:true = 沿相对速度(下落−飞行器速度,SP2 AlignStreaks 语义);false = 恒径向"下"(永远竖直,不看速度);两者都是世界系朝向,与相机无关。</summary>
+            public bool streamMode = true;
+
+            public float stretchAmount = 0.045f;   // SP2 _stretchAmount;0 = 不拉伸
+
+            /// <summary>拉伸上限(SP2 _stretchLimit):雨丝最长 = streakLength × 本值(默认 3.5 → 8.75m),嫌"太长像面条"就把这项或拉伸系数调小。</summary>
+            public float stretchLimit = 3.5f;
+
+            public float edgeFade = 0.2f;   // 域边界淡出宽度(占球域半径比例);0 = 关,默认 0.2 = 最外 20% 渐隐,隐藏边界与出域回收的突现
+
+            public float softParticles = 1f;   // SP2 _InvFade;0 = 关(硬边),1 = SP2 默认
+
+            public float tailFalloff = 0.9f;   // SP2 _falloff;0 = 不淡,1 = 尾端全透明
+
+            public float brightness = 0f;   // = shader _Emission;0 = 无自发光,仍接受场景光照
+
+            public float transparency = 0f;   // 0 = 原有透明度,1 = 完全透明;仅影响雨滴视觉
+
+            public bool collisionEnabled = false;
+            public int collisionResolution = 256;   // 256 / 512,沿下落方向的深度图
+            public bool splashesEnabled = false;
+            public float splashDistance = 25f;      // 米,仅在相机附近生成
+            public float splashLifetime = 0.35f;    // 秒
+            public float splashSize = 0.18f;        // 米,最大半径
+            public float splashDensity = 0.35f;     // 撞击抽样比例,另受固定 GPU 预算限制
+
+            // 纵深线索(治"快速缩放时像一层平面"):整片雨丝等长、等亮、平行 → 没有纵深
+            public float distanceFade = 0.35f;    // 整段域内的距离衰减(0 = 关;近了亮远了暗)
+            public float streakVariation = 0.5f;  // 逐粒长度/宽度倍率(0 = 全一样长)
+
+            // JNO 能把镜头缩到整颗星球,不加限制会在太空里下雨。
+            //  阈值是雨**自己的**配置项,**不读 CloudConfig.maxCloudHeight**。
+
+            public float ceilingAltitude = 12000f;   // 米;0 = 关闭闸门(不限制),超过上限不再下雨
+
+            public float ceilingBand = 0.4f;   // 上限处的淡出带宽(占上限比例 0.02~1);默认 0.4 = 顶部 40% 渐隐到 0
+
+            // 水下闸门:相机沉到海平面以下(有水行星)时整片不画 —— 高度闸门管不到水下这半边。
+
+            public bool underwaterGate = true;   // 海平面以下不画雨
+
+            public float underwaterFade = 2f;    // 米;海平面 → 水面下此深度内线性淡出到 0(贴水面浮动时不会闪断)
+
+            // false = 域内随机重生(默认,持续混合 = 连续雨帘);true = 确定性镜像,会零混合、周期团块。
+
+
+            public void CopyFrom(RainSection s)
+            {
+                if (s == null) return;
+                enabled = s.enabled;
+                amount = s.amount;
+                domainRadius = s.domainRadius;
+                adaptiveDomain = s.adaptiveDomain;
+                fallSpeed = s.fallSpeed;
+                strength = s.strength;
+                windInfluence = s.windInfluence;
+                streakLength = s.streakLength;
+                streakWidth = s.streakWidth;
+                volume = s.volume;
+                streamMode = s.streamMode;
+                stretchAmount = s.stretchAmount;
+                stretchLimit = s.stretchLimit;
+                edgeFade = s.edgeFade;
+                softParticles = s.softParticles;
+                tailFalloff = s.tailFalloff;
+                brightness = s.brightness;
+                transparency = s.transparency;
+                collisionEnabled = s.collisionEnabled;
+                collisionResolution = s.collisionResolution;
+                splashesEnabled = s.splashesEnabled;
+                splashDistance = s.splashDistance;
+                splashLifetime = s.splashLifetime;
+                splashSize = s.splashSize;
+                splashDensity = s.splashDensity;
+                distanceFade = s.distanceFade;
+                streakVariation = s.streakVariation;
+                ceilingAltitude = s.ceilingAltitude;
+                ceilingBand = s.ceilingBand;
+                underwaterGate = s.underwaterGate;
+                underwaterFade = s.underwaterFade;
+            }
+        }
+
+        /// <summary>主视图镜头水珠;生成依赖雨开关,关闭效果会清除残留。</summary>
+        [Serializable]
+        public class RainLensSection
+        {
+            public bool enabled = false;
+            public float intensity = 1f;
+            public float spawnRate = 18f;          // 滴/秒,基准雨量和完全迎雨时
+            public float dropSize = 0.018f;        // 屏幕高度比例,水珠半径
+            public float lifetime = 6f;           // 秒
+            public float refraction = 14f;        // 最大折射偏移,像素
+            public float blur = 1.8f;              // 局部模糊半径,像素
+            public float speedThreshold = 40f;    // 地表相对速度,米/秒
+            public bool shelterCheck = true;
+
+            public void CopyFrom(RainLensSection source)
+            {
+                if (source == null) return;
+                enabled = source.enabled;
+                intensity = source.intensity;
+                spawnRate = source.spawnRate;
+                dropSize = source.dropSize;
+                lifetime = source.lifetime;
+                refraction = source.refraction;
+                blur = source.blur;
+                speedThreshold = source.speedThreshold;
+                shelterCheck = source.shelterCheck;
+            }
+        }
+
+        /// <summary>独立的径向高度雾与流动体积雾;密度单位为每米。</summary>
+        [Serializable]
+        public class FogSection
+        {
+            public bool enabled = false;
+            public bool heightEnabled = true;
+            public bool volumetricEnabled = false;
+            public float volumeDensity = 0f;
+            public float maxDistance = 30000f;
+            public int quality = 1;
+            public float noiseScale = 800f;
+            public float coverage = 0.65f;
+            public float contrast = 1.5f;
+            public float windSpeed = 5f;
+            public float windDirection = 45f;
+            public float anisotropy = 0.35f;
+            public float colorR = 0.72f, colorG = 0.78f, colorB = 0.85f;
+            public int debugMode = 0;
+
+            /// <summary>按太阳方向与本相机径向上方的夹角增强晨昏密度,日出日落两侧对等,最多两倍。</summary>
+            public bool dawnFog = false;
+
+            public float baseHeight = 0f;   // 米,相对行星半径
+
+            public float height = 800f;   // 米;实际指数尺度 H = height / heightFalloff
+
+            public float density = 0f;   // 薄雾在基准高度以下的消光系数,单位 1/米
+
+            public float heightFalloff = 0.5f;   // 越大雾越贴着地面
+
+            public float maxOpacity = 1f;
+
+            public float startDistance = 0f;   // 相机前方多远开始起雾(米)
+
+            public float colorBlend = 0.5f;   // 雾色受环境光色相影响的比例
+
+            public void CopyFrom(FogSection s)
+            {
+                if (s == null) return;
+                enabled = s.enabled;
+                heightEnabled = s.heightEnabled;
+                volumetricEnabled = s.volumetricEnabled;
+                volumeDensity = s.volumeDensity;
+                maxDistance = s.maxDistance;
+                quality = s.quality;
+                noiseScale = s.noiseScale;
+                coverage = s.coverage;
+                contrast = s.contrast;
+                windSpeed = s.windSpeed;
+                windDirection = s.windDirection;
+                anisotropy = s.anisotropy;
+                colorR = s.colorR; colorG = s.colorG; colorB = s.colorB;
+                debugMode = s.debugMode;
+                dawnFog = s.dawnFog;
+                baseHeight = s.baseHeight;
+                height = s.height;
+                density = s.density;
+                heightFalloff = s.heightFalloff;
+                maxOpacity = s.maxOpacity;
+                startDistance = s.startDistance;
+                colorBlend = s.colorBlend;
+            }
+        }
+
+        /// <summary>雷(闪电 + 雷声);五个 Section 里唯一在跑的子系统。</summary>
+        [Serializable]
+        public class LightningSection
+        {
+            public bool enabled = false;
+
+            public float minDelay = 6f;   // 秒
+
+            public float maxDelay = 45f;   // 秒
+
+            public float targetRange = 3000f;   // 米;落雷点相对目标(地面)的随机偏移半径
+
+            public float spawnRange = 4000f;   // 米;源点相对云层中高的随机偏移半径
+
+            /// <summary>海拔上限(米;0 = 关闭闸门,不限制):**观测者**高于它就不再落雷 —— JNO 能把镜头缩到整颗星球,
+            /// 不限制就会"在太空里劈雷"。语义与 <see cref="RainSection.ceilingAltitude"/> 一致:按观测者高度判定,
+            /// 阈值是雷**自己的**配置项,**不读 CloudConfig**。</summary>
+            public float ceilingAltitude = 12000f;
+
+            public int arcs = 20;   // 主干分叉段数(SP2 arcs = 20/2;实际分叉点在 i < arcs-2)
+
+            public float inaccuracy = 0.5f;   // 主干每段抖动幅度(SP2 inaccuracy)
+
+            public int splits = 4;   // 每段生成的分叉数(SP2 splits = 4,即 0..4 共 5 条)
+
+            public float width = 10f;   // 主干线段宽度(LineRenderer widthMultiplier;SP2 = 10)
+
+            public float intensity = 1f;   // 闪电亮度基线(材质 _Intensity;SP2 每段随机 0~2)
+
+            public float flashIntensity = 50f;   // 闪光瞬间亮度
+
+            public float lightIntensity = 1f;   // 落雷点光源强度
+
+            public float lightRange = 8000f;   // 落雷点光源照射半径(米)
+
+            public bool cloudLightingEnabled = false;
+            public float cloudLightIntensity = 8f;
+            public float cloudLightRange = 3000f;   // 云端光源半径(米)
+            public int cloudLightSamples = 8;       // 有限光程中点采样;反射最多 4 步
+
+            public float thunderDelay = 0.05f;   // 秒;落雷后到雷声的延迟
+
+            public float thunderVolume = 0.65f;   // 0~1
+
+            public float thunderDistanceAttenuation = 1f;   // 0 = 恒音量 + 恒 0.05s 延迟,1 = 按 1/距离衰减 + 真实声速延迟
+
+            /// <summary>near / far 雷声素材的分界距离(米):落点到观测者 ≤ 本值播 near,否则播 far。默认 2000 = 与 targetRange(3000)同量级,近/远两种都真能听到。</summary>
+            public float thunderNearDistance = 2000f;
+
+            /// <summary>雷击"声源距离"里"云底距离"的混合比例(0~1):雷声由整条放电通道(云底↔落点)发出,远处先听到声程最短的那段(通常是云底端),
+            /// 所以真实延迟比"到落点距离 / 声速"短 —— 0 = 纯落点距离,1 = 取 min(落点, 云底)。</summary>
+            public float thunderSourceBlend = 0.5f;
+
+            public void CopyFrom(LightningSection s)
+            {
+                if (s == null) return;
+                enabled = s.enabled;
+                minDelay = s.minDelay;
+                maxDelay = s.maxDelay;
+                targetRange = s.targetRange;
+                spawnRange = s.spawnRange;
+                ceilingAltitude = s.ceilingAltitude;
+                arcs = s.arcs;
+                inaccuracy = s.inaccuracy;
+                splits = s.splits;
+                width = s.width;
+                intensity = s.intensity;
+                flashIntensity = s.flashIntensity;
+                lightIntensity = s.lightIntensity;
+                lightRange = s.lightRange;
+                cloudLightingEnabled = s.cloudLightingEnabled;
+                cloudLightIntensity = s.cloudLightIntensity;
+                cloudLightRange = s.cloudLightRange;
+                cloudLightSamples = s.cloudLightSamples;
+                thunderDelay = s.thunderDelay;
+                thunderVolume = s.thunderVolume;
+                thunderDistanceAttenuation = s.thunderDistanceAttenuation;
+                thunderNearDistance = s.thunderNearDistance;
+                thunderSourceBlend = s.thunderSourceBlend;
+            }
+        }
+
+        // 实例(顺序 = XML 节点顺序 = 面板分组顺序)
+
+        [XmlElement("Overall")]
+        public OverallSection overall = new OverallSection();
+
+        [XmlElement("Rain")]
+        public RainSection rain = new RainSection();
+
+        [XmlElement("RainLens")]
+        public RainLensSection rainLens = new RainLensSection();
+
+        [XmlElement("Fog")]
+        public FogSection fog = new FogSection();
+
+        [XmlElement("Lightning")]
+        public LightningSection lightning = new LightningSection();
+
+        /// <summary>默认配置 = **完全关闭**(新增特性默认不改变现有画面)。</summary>
+        public static VolkenWeatherConfig CreateDefault()
+        {
+            return new VolkenWeatherConfig
+            {
+                overall = new OverallSection (),
+                rain = new RainSection(),
+                rainLens = new RainLensSection(),
+                fog = new FogSection(),
+                lightning = new LightningSection(),
+            };
+        }
+
+        /// <summary>空节点兜底:XML 里缺了某一节(手改删掉 / 旧文件)时 XmlSerializer 会把它留成 <c>null</c> —— 补上默认实例,否则面板与读参数的地方会到处 NRE。</summary>
+        public void EnsureSections()
+        {
+            if (overall == null) overall = new OverallSection();
+            if (rain == null) rain = new RainSection();
+            if (rainLens == null) rainLens = new RainLensSection();
+            if (fog == null) fog = new FogSection();
+            if (lightning == null) lightning = new LightningSection();
+        }
+
+        /// <summary>默认值升级:**只重写"仍是旧默认值"的字段**(用户手动改过的一律不动)。XML 反序列化对已存在的字段用存档值,新默认值不会自动生效 —— 必须有这一步。
+        /// 雨旧默认字段独立升级;镜头水珠只在四项视觉参数全部保持首版默认时一起升级。</summary>
+        public void UpgradeUneditedDefaults()
+        {
+            EnsureSections();
+            if (Mathf.Abs(rain.streakWidth - 0.05f) < 1e-4f) { rain.streakWidth = 0.1f; }
+            if (Mathf.Abs(rain.amount - 20000f) < 1f) { rain.amount = 100000f; }
+            if (Mathf.Abs(rain.stretchLimit) < 1e-4f) { rain.stretchLimit = 3.5f; }   // 旧存档无此字段
+            if (Mathf.Abs(rainLens.spawnRate - 14f) < 1e-4f && Mathf.Abs(rainLens.dropSize - 0.012f) < 1e-6f &&
+                Mathf.Abs(rainLens.refraction - 8f) < 1e-4f && Mathf.Abs(rainLens.blur - 1.2f) < 1e-4f)
+            {
+                rainLens.spawnRate = 18f;
+                rainLens.dropSize = 0.018f;
+                rainLens.refraction = 14f;
+                rainLens.blur = 1.8f;
+            }
+        }
+
+        /// <summary>把 XML 里可能出现的越界值收拢到安全区间(手改配置/旧文件都可能带脏值,而它们会直接进 shader 与 compute)。</summary>
+        public void ClampAll()
+        {
+            EnsureSections();
+
+            // ---- ③ 雨 ----
+            rain.amount = Mathf.Clamp(rain.amount, 0f, 400000f);
+            rain.domainRadius = Mathf.Clamp(rain.domainRadius, 10f, 400f);
+            rain.fallSpeed = Mathf.Clamp(rain.fallSpeed, 0.1f, 200f);
+            rain.strength = Mathf.Clamp(rain.strength, 0f, 4f);
+            rain.windInfluence = Mathf.Clamp01(rain.windInfluence);
+            rain.streakLength = Mathf.Clamp(rain.streakLength, 0.05f, 50f);
+            rain.streakWidth = Mathf.Clamp(rain.streakWidth, 0.001f, 2f);
+            rain.volume = Mathf.Clamp01(rain.volume);
+            rain.stretchAmount = Mathf.Clamp(rain.stretchAmount, 0f, 1f);
+            rain.stretchLimit = Mathf.Clamp(rain.stretchLimit, 1f, 20f);
+            rain.edgeFade = Mathf.Clamp(rain.edgeFade, 0f, 0.5f);
+            rain.softParticles = Mathf.Clamp(rain.softParticles, 0f, 3f);
+            rain.tailFalloff = Mathf.Clamp01(rain.tailFalloff);
+            rain.brightness = Mathf.Clamp(rain.brightness, 0f, 3f);
+            rain.transparency = Mathf.Clamp01(rain.transparency);
+            rain.collisionResolution = rain.collisionResolution >= 384 ? 512 : 256;
+            rain.splashDistance = Mathf.Clamp(rain.splashDistance, 1f, 50f);
+            rain.splashLifetime = Mathf.Clamp(rain.splashLifetime, 0.1f, 1f);
+            rain.splashSize = Mathf.Clamp(rain.splashSize, 0.03f, 0.5f);
+            rain.splashDensity = Mathf.Clamp01(rain.splashDensity);
+            rain.distanceFade = Mathf.Clamp01(rain.distanceFade);
+            rain.streakVariation = Mathf.Clamp01(rain.streakVariation);
+            rain.ceilingAltitude = Mathf.Clamp(rain.ceilingAltitude, 0f, 500000f);
+            rain.ceilingBand = Mathf.Clamp(rain.ceilingBand, 0.02f, 1f);
+            rain.underwaterFade = Mathf.Clamp(rain.underwaterFade, 0.1f, 50f);
+
+            rainLens.intensity = FogFinite(rainLens.intensity, 1f, 0f, 3f);
+            rainLens.spawnRate = FogFinite(rainLens.spawnRate, 18f, 0f, 40f);
+            rainLens.dropSize = FogFinite(rainLens.dropSize, 0.018f, 0.003f, 0.035f);
+            rainLens.lifetime = FogFinite(rainLens.lifetime, 6f, 0.5f, 20f);
+            rainLens.refraction = FogFinite(rainLens.refraction, 14f, 0f, 30f);
+            rainLens.blur = FogFinite(rainLens.blur, 1.8f, 0f, 4f);
+            rainLens.speedThreshold = FogFinite(rainLens.speedThreshold, 40f, 1f, 500f);
+
+            // ---- ④ 雾 ----
+            fog.baseHeight = FogFinite(fog.baseHeight, 0f, -500f, 50000f);
+            fog.height = FogFinite(fog.height, 800f, 1f, 20000f);
+            fog.density = FogFinite(fog.density, 0f, 0f, 1f);
+            fog.volumeDensity = FogFinite(fog.volumeDensity, 0f, 0f, 1f);
+            fog.heightFalloff = FogFinite(fog.heightFalloff, 0.5f, 0.001f, 10f);
+            fog.maxOpacity = FogFinite(fog.maxOpacity, 1f, 0f, 1f);
+            fog.maxDistance = FogFinite(fog.maxDistance, 30000f, 100f, 200000f);
+            fog.startDistance = FogFinite(fog.startDistance, 0f, 0f, fog.maxDistance);
+            fog.colorBlend = FogFinite(fog.colorBlend, 0.5f, 0f, 1f);
+            fog.quality = Mathf.Clamp(fog.quality, 0, 2);
+            fog.noiseScale = FogFinite(fog.noiseScale, 800f, 20f, 10000f);
+            fog.coverage = FogFinite(fog.coverage, 0.65f, 0.01f, 1f);
+            fog.contrast = FogFinite(fog.contrast, 1.5f, 0.2f, 5f);
+            fog.windSpeed = FogFinite(fog.windSpeed, 5f, 0f, 200f);
+            fog.windDirection = FogFinite(fog.windDirection, 45f, 0f, 360f);
+            fog.anisotropy = FogFinite(fog.anisotropy, 0.35f, -0.8f, 0.8f);
+            fog.colorR = FogFinite(fog.colorR, 0.72f, 0f, 1f);
+            fog.colorG = FogFinite(fog.colorG, 0.78f, 0f, 1f);
+            fog.colorB = FogFinite(fog.colorB, 0.85f, 0f, 1f);
+            fog.debugMode = Mathf.Clamp(fog.debugMode, 0, 3);
+
+            // ---- ⑤ 雷 ----
+            // NaN/Infinity 必须在这里清掉:Mathf.Max/Clamp 对 NaN 是"原样放过",而 NaN 延时会让落雷协程里 `t < wait` 恒 false →
+            // 内层等待循环一次都不执行 → 外层 while 没有 yield,主线程卡死。
+            lightning.minDelay = FogFinite(lightning.minDelay, 6f, 0.05f, 3600f);
+            lightning.maxDelay = FogFinite(lightning.maxDelay, 45f, lightning.minDelay, 86400f);
+            lightning.targetRange = FogFinite(lightning.targetRange, 3000f, 1f, 1e7f);
+            lightning.spawnRange = FogFinite(lightning.spawnRange, 4000f, 1f, 1e7f);
+            lightning.ceilingAltitude = FogFinite(lightning.ceilingAltitude, 12000f, 0f, 500000f);
+            lightning.arcs = Mathf.Clamp(lightning.arcs, 4, 64);
+            lightning.inaccuracy = FogFinite(lightning.inaccuracy, 0.5f, 0f, 2f);
+            lightning.splits = Mathf.Clamp(lightning.splits, 0, 8);
+            lightning.width = FogFinite(lightning.width, 10f, 0.1f, 200f);
+            lightning.intensity = FogFinite(lightning.intensity, 1f, 0f, 100f);
+            lightning.flashIntensity = FogFinite(lightning.flashIntensity, 50f, 0f, 1e5f);
+            lightning.lightIntensity = FogFinite(lightning.lightIntensity, 1f, 0f, 100f);
+            lightning.lightRange = FogFinite(lightning.lightRange, 8000f, 1f, 1e7f);
+            lightning.cloudLightIntensity = FogFinite(lightning.cloudLightIntensity, 8f, 0f, 100f);
+            lightning.cloudLightRange = FogFinite(lightning.cloudLightRange, 3000f, 1f, 30000f);
+            lightning.cloudLightSamples = Mathf.Clamp(lightning.cloudLightSamples, 2, 16);
+            lightning.thunderDelay = FogFinite(lightning.thunderDelay, 0.05f, 0f, 10f);
+            lightning.thunderVolume = FogFinite(lightning.thunderVolume, 0.65f, 0f, 1f);
+            lightning.thunderDistanceAttenuation = FogFinite(lightning.thunderDistanceAttenuation, 1f, 0f, 1f);
+            lightning.thunderNearDistance = FogFinite(lightning.thunderNearDistance, 2000f, 1f, 1e7f);
+            lightning.thunderSourceBlend = FogFinite(lightning.thunderSourceBlend, 0.5f, 0f, 1f);
+        }
+
+        private static float FogFinite(float value, float fallback, float minimum, float maximum)
+        {
+            return Mathf.Clamp(float.IsNaN(value) || float.IsInfinity(value) ? fallback : value, minimum, maximum);
+        }
+
+        /// <summary>拷贝全部字段(供"重置为默认"/复制记录时用)。</summary>
+        public void CopyFrom(VolkenWeatherConfig source)
+        {
+            if (source == null) return;
+            source.EnsureSections();
+            EnsureSections();
+
+            overall.CopyFrom(source.overall);
+            rain.CopyFrom(source.rain);
+            rainLens.CopyFrom(source.rainLens);
+            fog.CopyFrom(source.fog);
+            lightning.CopyFrom(source.lightning);
+        }
+
+        // 文件 IO(按预设名存,与 Volken.Clouds.CloudConfig 同一套逻辑)
+
+        /// <summary>天气预设根目录(相对 <c>persistentDataPath</c>)。**刻意与云的 <c>/UserData/VolkenConfig/</c> 分开**:两边预设同名,放同一个目录会互相覆盖,
+        /// 而且天气文件会混进云的 <c>GetAllConfigNames</c>(它按 <c>*.xml</c> 枚举整个行星目录)。</summary>
+        public const string CONFIG_FOLDER = "/UserData/VolkenWeatherConfig/";
+
+        public const string DefaultConfigName = "Default";   // 清单里没登记预设名时用的名字(与云层一致)
+
+        /// <summary>某行星的天气预设目录(不存在则创建 —— 有副作用)。</summary>
+        public static string GetConfigFolderPath(string planetName)
+        {
+            string folderPath = Application.persistentDataPath + CONFIG_FOLDER + planetName;
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+            return folderPath;
+        }
+
+        /// <summary>取预设文件路径;**预设名非法时抛 <see cref="ArgumentException"/>,绝不把名字拼进路径**(防路径穿越)。</summary>
+        public static string GetConfigPath(string planetName, string configName)
+        {
+            if (!ConfigFileNames.IsValid(configName))
+            {
+                throw new ArgumentException("Invalid weather config name: " + configName, nameof(configName));
+            }
+            return Path.Combine(GetConfigFolderPath(planetName), configName + ".xml");
+        }
+
+        /// <summary>该行星下这份预设文件是否**真实存在**。与 <see cref="GetConfigPath"/> 不同:不建目录、不写盘(查存在不该有副作用)。</summary>
+        public static bool Exists(string planetName, string configName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName)) return false;
+                string path = Path.Combine(Application.persistentDataPath + CONFIG_FOLDER, planetName, configName + ".xml");
+                return File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>这颗行星已有的**天气预设名**列表(扫目录,与 <c>CloudConfig.GetAllConfigNames</c> 同逻辑);天气预设**独立**,与云的预设列表无关。</summary>
+        public static List<string> GetAllConfigNames(string planetName)
+        {
+            var names = new List<string>();
+            if (string.IsNullOrEmpty(planetName)) return names;
+
+            // 刻意不用 GetConfigFolderPath —— 它顺手建目录,而"查列表"不该有副作用
+            string folder = Application.persistentDataPath + CONFIG_FOLDER + planetName;
+            if (!Directory.Exists(folder)) return names;
+
+            foreach (string f in Directory.GetFiles(folder, "*.xml"))
+            {
+                names.Add(Path.GetFileNameWithoutExtension(f));
+            }
+            return names;
+        }
+
+        /// <summary>完整写入临时文件后替换天气预设;预设名非法 / 写盘失败返回 false 并保留旧文件。</summary>
+        public bool SaveToFile(string planetName, string configName)
+        {
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Weather config save rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                return false;
+            }
+
+            string temporaryPath = null;
+            try
+            {
+                string filePath = GetConfigPath(planetName, configName);
+                string directory = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                XmlSerializer serializer = new XmlSerializer(typeof(VolkenWeatherConfig));
+                temporaryPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    serializer.Serialize(stream, this);
+                    stream.Flush(true);
+                }
+                if (File.Exists(filePath)) File.Replace(temporaryPath, filePath, null);
+                else File.Move(temporaryPath, filePath);
+                Mod.Log($"Weather config '{configName}' saved to: {filePath}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Mod.Log("Failed to save weather config '{0}': {1}", configName, e.Message);
+                return false;
+            }
+            finally
+            {
+                if (temporaryPath != null && File.Exists(temporaryPath))
+                {
+                    try { File.Delete(temporaryPath); }
+                    catch (Exception e) { Mod.Log($"Weather config temporary file cleanup failed: {e.Message}"); }
+                }
+            }
+        }
+
+        /// <summary>读 <c>{行星}/{预设}.xml</c>;不存在 → 建一份默认(**全关**)并落盘,与云层同约定。读进来的实例一律过 <see cref="EnsureSections"/> + <see cref="ClampAll"/>,免脏值进 shader。</summary>
+        public static VolkenWeatherConfig LoadFromFile(string planetName, string configName)
+        {
+            return LoadFromFile(planetName, configName, out _);
+        }
+
+        /// <summary>读天气预设。<paramref name="loadFailed"/> = 文件存在但无法读取(已把坏文件改名为 <c>.broken</c> 保留现场,
+        /// 返回值只是内存默认值,调用方不应把它当作"加载成功")。</summary>
+        public static VolkenWeatherConfig LoadFromFile(string planetName, string configName, out bool loadFailed)
+        {
+            loadFailed = false;
+
+            if (string.IsNullOrEmpty(planetName) || !ConfigFileNames.IsValid(configName))
+            {
+                Mod.Log("Weather config load rejected: invalid name '{0}' for planet '{1}'", configName, planetName);
+                loadFailed = true;
+                return CreateDefault();
+            }
+
+            string filePath;
+            try
+            {
+                filePath = GetConfigPath(planetName, configName);
+            }
+            catch (Exception e)
+            {
+                Mod.Log("Weather config path failed for '{0}': {1}", configName, e.Message);
+                loadFailed = true;
+                return CreateDefault();
+            }
+
+            if (!File.Exists(filePath))
+            {
+                Mod.Log($"Weather config '{configName}' not found at {filePath}. Creating default config.");
+                VolkenWeatherConfig created = CreateDefault();
+                created.SaveToFile(planetName, configName);
+                return created;
+            }
+
+            try
+            {
+                XmlSerializer serializer = new XmlSerializer(typeof(VolkenWeatherConfig));
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    VolkenWeatherConfig config = serializer.Deserialize(stream) as VolkenWeatherConfig;
+                    if (config == null) throw new InvalidDataException("deserialized config is null");
+                    config.EnsureSections();
+                    config.UpgradeUneditedDefaults();
+                    config.ClampAll();
+                    Mod.Log($"Weather config '{configName}' loaded from: {filePath}");
+                    return config;
+                }
+            }
+            catch (Exception e)
+            {
+                Mod.Log($"Failed to load weather config '{configName}': {e.Message}. Quarantining the file and using in-memory default.");
+                ConfigFileNames.TryQuarantine(filePath);
+                loadFailed = true;
+                return CreateDefault();
+            }
+        }
+    }
+}

@@ -1,16 +1,10 @@
 using System;
-using System.Reflection;
 using Assets.Scripts.Flight.UI;
-using Assets.Scripts.Terrain.Rendering;
 using HarmonyLib;
-using ModApi;
-using ModApi.Mods;
-using UnityEditor;
-using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace Assets.Scripts
 {
+    using Volken.Core;
     #region NavPanelController HarmonyPatch
     [HarmonyPatch(typeof(NavPanelController), "LayoutRebuilt")]
     class LayoutRebuiltPatch

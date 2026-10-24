@@ -1,0 +1,39 @@
+#pragma kernel Integrate
+#define VOLKEN_FOG_COMPUTE
+#include "FogCommon.cginc"
+RWTexture3D<float4> _FogOutput;
+Texture3D<float> _FogNoise;
+SamplerState sampler_FogNoise;
+
+[numthreads(8,8,1)]
+void Integrate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_VolkenFogGrid.x || id.y >= (uint)_VolkenFogGrid.y) return;
+    float2 uv = (id.xy+0.5)/_VolkenFogGrid.xy;
+    float3 ray = VolkenFogRay(uv);
+    float forward = max(0.001, -mul((float3x3)_VolkenFogWorldToCamera,ray).z);
+    float2 span = VolkenFogInterval(ray,_VolkenFogRange.y);
+    float3 lighting = VolkenFogLighting(ray);
+    float tau = 0;
+    _FogOutput[uint3(id.xy,0)] = float4(0,0,0,1);
+    [loop] for (uint z=1; z<=(uint)_VolkenFogGrid.z; ++z)
+    {
+        float previous = (z-1)/_VolkenFogGrid.z, current = z/_VolkenFogGrid.z;
+        float a = max(span.x, previous*previous*_VolkenFogRange.y/forward);
+        float b = min(span.y, current*current*_VolkenFogRange.y/forward);
+        if (b>a)
+        {
+            float3 delta = ray*((a+b)*0.5);
+            float altitude = VolkenFogAltitude(delta);
+            float profile = exp(-max(0,altitude-_VolkenFogHeight.x)/_VolkenFogHeight.y);
+            float3 noisePos = (_VolkenFogNoiseOffset.xyz + mul((float3x3)_VolkenFogPlanetRotation,delta))/_VolkenFogShape.x;
+            float n = _FogNoise.SampleLevel(sampler_FogNoise,noisePos/32,0);
+            float shape = pow(saturate((n-(1-_VolkenFogShape.y))/max(0.01,_VolkenFogShape.y)),_VolkenFogShape.z);
+            // Integrate uniform height density analytically across each slice.
+            tau += _VolkenFogHeight.z * VolkenFogSegment(VolkenFogAltitude(ray*a),VolkenFogAltitude(ray*b),b-a);
+            tau += _VolkenFogHeight.w * profile * shape * (b-a);
+        }
+        float T = max(1-_VolkenFogRange.z,exp(-tau));
+        _FogOutput[uint3(id.xy,z)] = float4(lighting*(1-T),T);
+    }
+}

@@ -1,24 +1,117 @@
 <Strings>
     <!-- Mod Settings -->
     <s id="Volken.ModSettings.NoiseMapIndex">Шумовая карта</s>
-    <s id="Volken.ModSettings.NoiseMapIndexDesc">Выбор текстуры шума для формы объёмных облаков (1-5).</s>
+    <s id="Volken.ModSettings.NoiseMapIndexDesc">Выбор текстуры шума объёмных облаков.</s>
     <s id="Volken.ModSettings.MinHeight">Мин. высота</s>
-    <s id="Volken.ModSettings.MinHeightDesc">Высота (м), ниже которой включается прозрачность воды (когда включено «Изменять прозрачность»).</s>
+    <s id="Volken.ModSettings.MinHeightDesc">Предел высоты изменения прозрачности воды, в метрах.</s>
     <s id="Volken.ModSettings.ShowDevLog">Журнал разработчика</s>
     <s id="Volken.ModSettings.ShowDevLogDesc">Показывать сообщения журнала для разработчиков.</s>
     <s id="Volken.ModSettings.AlterTransparency">Изменять прозрачность</s>
-    <s id="Volken.ModSettings.AlterTransparencyDesc">Переопределяет прозрачность воды по высоте (оригинальная настройка прозрачности заменена этой).</s>
+    <s id="Volken.ModSettings.AlterTransparencyDesc">Изменять прозрачность воды в зависимости от высоты.</s>
     <s id="Volken.ModSettings.WaterReflection">Отражение в воде</s>
     <s id="Volken.ModSettings.WaterReflectionDesc">Рендерить объёмные облака в отражении воды.</s>
     <s id="Volken.ModSettings.ExtraCameraClouds">Облака на доп. камерах</s>
-    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Автоматически рендерить объёмные облака на дополнительных камерах (окна PIP и т.п.). Только по поведению, без кода конкретного мода.</s>
+    <s id="Volken.ModSettings.ExtraCameraCloudsDesc">Показывать облака на дополнительных камерах.</s>
+    <s id="Volken.ModSettings.ExtraCameraRain">Дождь на доп. камерах</s>
+    <s id="Volken.ModSettings.ExtraCameraRainDesc">Показывать дождь на дополнительных камерах.</s>
     <s id="Volken.ModSettings.ShowProfiler">Оверлей профайлера</s>
-    <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности (Volken.Profiler). Переключение командой консоли 'VolkenProfiler'.</s>
-    
+    <s id="Volken.ModSettings.ShowProfilerDesc">Показывать оверлей профайлера производительности.</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfig">Восстановить пресеты по умолчанию</s>
+    <s id="Volken.ModSettings.RestoreDefaultConfigDesc">При запуске дописывать недостающие стандартные пресеты облаков и погоды в UserData. Применяется со следующего запуска.</s>
+
     <s id="Volken.UI.CloudSettings">Настройка Облаков</s>
+    <s id="Volken.UI.GroundShadowDistance">Дальность теней облаков(м)</s>
+    <s id="Volken.UI.GroundShadows">Тени облаков</s>
+    <s id="Volken.UI.SunOcclusion">Общее освещение при облачности</s>
+    <s id="Volken.UI.SunlightOcclusionStrength">Сила ослабления прямого света</s>
+    <s id="Volken.UI.AmbientOcclusionStrength">Ослабление фонового света</s>
+
+    <s id="Volken.UI.Weather">Погода</s>
+    <s id="Volken.UI.WeatherUnavailable">Погода недоступна. Перезагрузите сцену полёта.</s>
+    <s id="Volken.UI.WeatherConfigSaved">Конфигурация погоды сохранена.</s>
+    <s id="Volken.UI.WeatherResetToDefault">Настройки сброшены. Сохраните конфигурацию.</s>
+
+
+    <s id="Volken.UI.WeatherRain">Дождь</s>
+    <s id="Volken.UI.RainLens">Капли на объективе</s>
+    <s id="Volken.UI.RainLensEnabled">Включить капли на объективе</s>
+    <s id="Volken.UI.RainLensIntensity">Интенсивность капель</s>
+    <s id="Volken.UI.RainLensSpawnRate">Частота появления(капель/с)</s>
+    <s id="Volken.UI.RainLensDropSize">Радиус капель(% высоты экрана)</s>
+    <s id="Volken.UI.RainLensLifetime">Время жизни капель(с)</s>
+    <s id="Volken.UI.RainLensRefraction">Преломление(пикс.)</s>
+    <s id="Volken.UI.RainLensBlur">Локальное размытие(пикс.)</s>
+    <s id="Volken.UI.RainLensSpeedThreshold">Порог скорости(м/с)</s>
+    <s id="Volken.UI.RainLensShelterCheck">Проверять укрытие от дождя</s>
+    <s id="Volken.UI.RainStreamMode">Струи вдоль относительной скорости</s>
+    <s id="Volken.UI.RainStretch">Растяжение от скорости</s>
+    <s id="Volken.UI.RainStretchLimit">Максимальный коэффициент растяжения</s>
+    <s id="Volken.UI.RainEdgeFade">Доля затухания у границы</s>
+    <s id="Volken.UI.RainSoftParticles">Сила смягчения частиц</s>
+    <s id="Volken.UI.RainTailFalloff">Затухание хвоста струи</s>
+    <s id="Volken.UI.RainBrightness">Самосвечение капель</s>
+    <s id="Volken.UI.RainTransparency">Прозрачность дождя</s>
+    <s id="Volken.UI.RainCollision">Столкновения капель</s>
+    <s id="Volken.UI.RainCollisionHighPrecision">Высокая точность столкновений</s>
+    <s id="Volken.UI.RainSplashes">Всплески при ударе</s>
+    <s id="Volken.UI.RainSplashDistance">Дальность видимости всплесков(м)</s>
+    <s id="Volken.UI.RainSplashLifetime">Время жизни всплесков(с)</s>
+    <s id="Volken.UI.RainSplashSize">Максимальный радиус всплеска(м)</s>
+    <s id="Volken.UI.RainSplashDensity">Плотность всплесков</s>
+    <s id="Volken.UI.RainDistanceFade">Затухание по расстоянию</s>
+    <s id="Volken.UI.RainStreakVariation">Разброс размеров струй</s>
+    <s id="Volken.UI.RainEnabled">Дождь включён</s>
+    <s id="Volken.UI.RainCeilingAltitude">Предел высоты дождя(м)</s>
+    <s id="Volken.UI.RainCeilingBand">Доля затухания у предела высоты</s>
+    <s id="Volken.UI.RainUnderwaterGate">Скрывать дождь под водой</s>
+    <s id="Volken.UI.RainUnderwaterFade">Глубина затухания под водой(м)</s>
+    <s id="Volken.UI.RainAmount">Количество частиц</s>
+    <s id="Volken.UI.RainDomainRadius">Радиус области(м)</s>
+    <s id="Volken.UI.RainAdaptiveDomain">Адаптивный радиус области</s>
+    <s id="Volken.UI.RainFallSpeed">Скорость падения(м/с)</s>
+    <s id="Volken.UI.RainStrength">Сила дождя</s>
+    <s id="Volken.UI.RainWindInfluence">Влияние ветра</s>
+    <s id="Volken.UI.RainStreakLength">Длина струи(м)</s>
+    <s id="Volken.UI.RainStreakWidth">Ширина струи(м)</s>
+    <s id="Volken.UI.RainVolume">Громкость дождя</s>
+
+    <s id="Volken.UI.WeatherFog">Туман</s>
+    <s id="Volken.UI.FogEnabled">Включить туман</s>
+    <s id="Volken.UI.FogDawnFog">Усиление на рассвете и закате</s>
+    <s id="Volken.UI.FogBaseHeight">Базовая высота плотности(м)</s>
+    <s id="Volken.UI.FogHeight">Масштаб высоты(м)</s>
+    <s id="Volken.UI.FogDensity">Плотность высотного тумана(1/м)</s>
+    <s id="Volken.UI.FogHeightFalloff">Затухание по высоте</s>
+    <s id="Volken.UI.FogMaxOpacity">Макс. непрозрачность</s>
+    <s id="Volken.UI.FogStartDistance">Дистанция начала(м)</s>
+    <s id="Volken.UI.FogColorBlend">Смешение цвета тумана</s>
+
+    <s id="Volken.UI.WeatherLightning">Молнии</s>
+    <s id="Volken.UI.LightningEnabled">Молнии включены</s>
+    <s id="Volken.UI.LightningMinDelay">Мин. интервал(с)</s>
+    <s id="Volken.UI.LightningMaxDelay">Макс. интервал(с)</s>
+    <s id="Volken.UI.LightningTargetRange">Разброс цели(м)</s>
+    <s id="Volken.UI.LightningSpawnRange">Разброс источника(м)</s>
+    <s id="Volken.UI.LightningCeilingAltitude">Предел высоты молний(м)</s>
+    <s id="Volken.UI.LightningArcs">Сегментов ствола</s>
+    <s id="Volken.UI.LightningInaccuracy">Дрожание ствола</s>
+    <s id="Volken.UI.LightningSplits">Ветвей на сегмент</s>
+    <s id="Volken.UI.LightningWidth">Толщина молнии</s>
+    <s id="Volken.UI.LightningFlashIntensity">Яркость вспышки</s>
+    <s id="Volken.UI.LightningLightIntensity">Яркость света удара</s>
+    <s id="Volken.UI.LightningLightRange">Радиус света удара(м)</s>
+    <s id="Volken.UI.LightningCloudLightingEnabled">Молния освещает облака</s>
+    <s id="Volken.UI.LightningCloudLightIntensity">Яркость света в облаках</s>
+    <s id="Volken.UI.LightningCloudLightRange">Радиус света в облаках(м)</s>
+    <s id="Volken.UI.LightningCloudLightSamples">Число выборок света в облаках</s>
+    <s id="Volken.UI.ThunderVolume">Громкость грома</s>
+    <s id="Volken.UI.ThunderDelay">Задержка грома на нулевой дистанции(с)</s>
+    <s id="Volken.UI.ThunderDistanceAttenuation">Гром: задержка по скорости звука / затухание</s>
+    <s id="Volken.UI.ThunderNearDistance">Порог близкого/дальнего грома(м)</s>
+    <s id="Volken.UI.ThunderSourceBlend">Источник грома: примесь нижней кромки облаков</s>
+
     
     <!-- Group Names -->
-    <s id="Volken.UI.ConfigManagement">Редактирование Конфигурации</s>
     <s id="Volken.UI.Clouds">Облака</s>
     <s id="Volken.UI.CloudContainer">Контейнер Облака</s>
     <s id="Volken.UI.CloudQuality">Качество Облаков</s>
@@ -39,14 +132,14 @@
     <s id="Volken.UI.StockDensityScale">Плотность в области карты облаков</s>
     <s id="Volken.UI.StockMaskInfluence">Влияние маски</s>
     <s id="Volken.UI.StockAlignSign">Знак выравнивания</s>
-    <s id="Volken.UI.StockAlignAngleOffset">Угол выравнивания (град)</s>
+    <s id="Volken.UI.StockAlignAngleOffset">Угол выравнивания(град)</s>
     <s id="Volken.UI.StockMapLayer">Слой облаков для карты</s>
     <s id="Volken.UI.StockLayerLow">Низкие облака</s>
     <s id="Volken.UI.StockLayerMid">Средние облака</s>
     <s id="Volken.UI.StockLayerHigh">Высокие облака</s>
     <s id="Volken.UI.StockLayerPerBand">По слоям</s>
     <!-- Cloud Settings -->
-    <s id="Volken.UI.MainToggle">ВКЛ/ВЫКЛ [MAIN]</s>
+    <s id="Volken.UI.MainToggle">Включить</s>
     <s id="Volken.UI.Density">Плотность</s>
     <s id="Volken.UI.Absorption">Поглощение света</s>
     <s id="Volken.UI.AmbientLight">Свет Окружения</s>
@@ -62,7 +155,6 @@
     <s id="Volken.UI.CloudColorBlue">Синий Оттенок Облака</s>
     <s id="Volken.UI.ScatterStrength">Сила Кучности</s>
     <s id="Volken.UI.AtmosphereBlendFactor">Фактор Смешивания с Атмосферой</s>
-    <s id="Volken.UI.NearThreshold">Близкий Порог</s>
     <s id="Volken.UI.ScatterPower">Мощность Кучности</s>
     <s id="Volken.UI.MultiScatterBlend">Смешивание Куч</s>
     <s id="Volken.UI.AmbientScatter">Окружение Кучности</s>
@@ -92,24 +184,26 @@
     <s id="Volken.UI.StepSizeFalloff">Размер Спада Шага</s>
     <s id="Volken.UI.NumberOfLightSamples">Число Источников Света</s>
     <s id="Volken.UI.LightMarchDistance">Дистанция Марша Света</s>
-    <s id="Volken.UI.Threshold">Порог</s>
     <s id="Volken.UI.RayOffsetStrength">Сила Разброса Лучей</s>
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
-    <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг (шаг 1/N)</s>
+    <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
+    <s id="Volken.UI.SolarCacheEnabled">Кэш солнечного освещения (эксперимент)</s>
+    <s id="Volken.UI.EmptySpaceSkippingEnabled">Консервативный пропуск пустых областей</s>
+    <s id="Volken.UI.SolarCacheResolution">Разрешение сетки солнечного кэша</s>
+    <s id="Volken.UI.SolarCacheExtent">Ширина области солнечного кэша (м)</s>
 
-    <!-- Орбитальные облака (2D-шейдинг оболочки + перекрёстное затухание) -->
-    <s id="Volken.UI.OrbitClouds">Орбитальные Облака (2D)</s>
-    <s id="Volken.UI.UseOrbitClouds">Использовать орбитальные облака (2D на высоте)</s>
-    <s id="Volken.UI.OrbitTransitionStart">Начало переходной зоны (м)</s>
-    <s id="Volken.UI.OrbitTransitionEnd">Конец переходной зоны (м)</s>
-    <s id="Volken.UI.OrbitSampleAltitude">Высота якоря 2D (0 = авто)</s>
-    <s id="Volken.UI.OrbitDensityBoost">Множитель оптической толщины 2D</s>
-    <s id="Volken.UI.OrbitBrightness">Яркость 2D</s>
-    <s id="Volken.UI.OrbitReliefStrength">Сила рельефа 2D (нормали)</s>
-    <s id="Volken.UI.OrbitDetailStrength">Сила текстуры деталей 2D</s>
-    <s id="Volken.UI.OrbitResolutionScale">Масштаб разрешения 2D</s>
-    <s id="Volken.UI.OrbitDebugMode">2D отладка: сплит (объём/2D, только в переходной зоне)</s>
+    <!-- Орбитальные облака(2D-шейдинг оболочки + перекрёстное затухание) -->
+    <s id="Volken.UI.OrbitClouds">Орбитальные облака</s>
+    <s id="Volken.UI.UseOrbitClouds">Включить орбитальные облака</s>
+    <s id="Volken.UI.OrbitTransitionStart">Начало переходной зоны(м)</s>
+    <s id="Volken.UI.OrbitTransitionEnd">Конец переходной зоны(м)</s>
+    <s id="Volken.UI.OrbitSampleAltitude">Высота выборки(м)</s>
+    <s id="Volken.UI.OrbitDensityBoost">Множитель оптической толщины</s>
+    <s id="Volken.UI.OrbitBrightness">Яркость</s>
+    <s id="Volken.UI.OrbitReliefStrength">Сила рельефа</s>
+    <s id="Volken.UI.OrbitDetailStrength">Сила детализации</s>
+    <s id="Volken.UI.OrbitResolutionScale">Масштаб разрешения</s>
     
     <!-- Messages -->
     <s id="Volken.UI.ConfigSaved">Конфиг '{0}' сохранён!</s>
@@ -122,16 +216,9 @@
     <s id="Volken.UI.ErrorResettingConfig">Ошибка сброса Конфига!</s>
     <s id="Volken.UI.ConfigSetToDefaultII">Конфиг задан на Default II!</s>
     <s id="Volken.UI.ErrorGettingConfig">Ошибка получения конфига!</s>
-    <s id="Volken.UI.ErrorCreatingSaveDialog">Ошибка при создании диалога сохранения: {0}</s>
-    <s id="Volken.UI.ErrorBuildingFlightUI">Ошибка при создании интерфейса в полёте: {0}</s>
-    <s id="Volken.UI.ErrorTogglingUI">Ошибка переключения интерфейса: {0}</s>
-    <s id="Volken.UI.ErrorCreatingPanel">Ошибка создания панели: {0}</s>
-    <s id="Volken.UI.ErrorInOnSceneLoaded">Volken: Ошибка OnSceneLoaded: {0}</s>
-    <s id="Volken.UI.ErrorInOnPlayerChangedSoi">Volken: Ошибка в OnPlayerChangedSoi: {0}</s>
     <!-- Extra Layer UI -->
     <s id="Volken.UI.ExtraLayer">Слой-Дополнение: {0}</s>
     <s id="Volken.UI.ExtraLayerEnabled">{0} ВКЛ</s>
-    <s id="Volken.UI.ExtraLayerConfig">{0} Конфиг</s>
     <s id="Volken.UI.ExtraLayerSaveCurrent">{0} Сохранить Текущее</s>
     <s id="Volken.UI.ExtraLayerSaveAs">Сохранить {0} Как...</s>
     <s id="Volken.UI.ExtraLayerLoadPreset">{0} Загрузить Пресет</s>
@@ -150,4 +237,29 @@
     <s id="Volken.UI.UpdateDownload">Скачать обновление</s>
     <s id="Volken.UI.UpdateLater">Позже</s>
     <s id="Volken.UI.UpdateDismiss">Не напоминать</s>
+    <s id="Volken.UI.FogHeightEnabled">Высотный туман</s>
+    <s id="Volken.UI.FogVolumeEnabled">Движущийся объёмный туман</s>
+    <s id="Volken.UI.FogVolumeDensity">Объёмная плотность(1/м)</s>
+    <s id="Volken.UI.FogMaxDistance">Максимальная дальность тумана(м)</s>
+    <s id="Volken.UI.FogQuality">Качество объёмного тумана</s>
+    <s id="Volken.UI.FogNoiseScale">Размер участков тумана(м)</s>
+    <s id="Volken.UI.FogCoverage">Покрытие объёмного тумана</s>
+    <s id="Volken.UI.FogContrast">Контраст участков</s>
+    <s id="Volken.UI.FogWindSpeed">Скорость ветра тумана(м/с)</s>
+    <s id="Volken.UI.FogWindDirection">Направление ветра(град)</s>
+    <s id="Volken.UI.FogAnisotropy">Анизотропия рассеяния света</s>
+    <s id="Volken.UI.FogColorR">Цвет тумана: красный</s>
+    <s id="Volken.UI.FogColorG">Цвет тумана: зелёный</s>
+    <s id="Volken.UI.FogColorB">Цвет тумана: синий</s>
+    <s id="Volken.UI.FogPresetThin">Пресет высотного тумана</s>
+    <s id="Volken.UI.FogPresetVolume">Пресет объёмного тумана</s>
+    <s id="Volken.UI.FogPresetBoth">Пресет смешанного тумана</s>
+    <s id="Volken.UI.FogPresetApplied">Пресет тумана применён. Сохраните конфигурацию.</s>
+    <s id="Volken.ModSettings.ExtraCameraFog">Туман дополнительных камер</s>
+    <s id="Volken.ModSettings.ExtraCameraFogDesc">Показывать туман на дополнительных камерах.</s>
+    <s id="Volken.UI.QualityLow">Низкое</s>
+    <s id="Volken.UI.QualityMedium">Среднее</s>
+    <s id="Volken.UI.QualityHigh">Высокое</s>
+    <s id="Volken.VolkenCloud.MainLayerName">Основной</s>
+    <s id="Volken.VolkenCloud.ExtraLayerName">Дополнительный</s>
 </Strings>

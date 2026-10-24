@@ -53,8 +53,6 @@ namespace Assets.Scripts
             // 注:性能剖析器(VolkenProfiler)不再由正式代码启动 —— 见 VolkenTests/TestsBootstrap.cs 自发注册
             RegisterCommands();
 
-            Game.Instance.Settings.Game.Flight.GroundClouds.Value = true;
-
             // 本地版本 = ModInfo.Version(System.Version,如 0.6)
             this.ModVersion = this.ModInfo.Version;
 
@@ -76,9 +74,6 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
-            DevConsoleApi.RegisterCommand<int>("VolkenCloudPerf", CloudPerformance.Capture);
-            DevConsoleApi.RegisterCommand<int>("VolkenCloudFastPath", CloudPerformance.SetFastPaths);
-            DevConsoleApi.RegisterCommand<int>("VolkenCloudBench", CloudPerformanceSweep.Run);
 
         }
 

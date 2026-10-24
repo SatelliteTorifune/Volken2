@@ -22,13 +22,9 @@
 | `orbitDebugMode` | XML 开发分屏；不输出轨道参数、投影或覆盖率日志 |
 | `fog.debugMode` | XML 开发视图，排查后恢复 debug=0 |
 
-`DevMode` 下 `VolkenCloudPerf 30` 预热 2 秒、采样 30 秒（10~120，0 停止），每 5 秒及结束记录主视图 CPU / GPU、整帧分位数与配置。Total 含子项，不相加；GPU 延迟约 3 帧，无样本记 n/a，CPU 提交不能定位 GPU 热点，mixedContext 须重采。`VolkenCloudFastPath 0/1` 切体积密度拒绝与历史短路（默认 1、不保存、清历史），不改照明复用 / 倒影。诊断默认关闭，不开全局 Profiler 或同步回读。
+云性能临时采样、冻结输入、省略渲染阶段、NoSolar 变体和照明 A/B 面板均已移除；整帧覆盖层仍由独立 Profiler 提供。正式渲染不持有基准测试状态，不修改 VSync / FPS 限制。
 
-`VolkenCloudBench 1` 对照 base / fast / empty，固定 TSS；`2` 冻结输入，分别省 Trace / Upscale（含历史复制）/ Composite；`3` 连跑两组，`0` 中止。`4`（shader ≥19）冻结完整 / NoSolar / 无步进，约 5 分半；NoSolar 只省太阳查询及依赖散射，`CloudBench split` 输出逐轮差。每档预热 5 秒、采样 30 秒、3 轮且第二轮反序；启动留 10 秒关控制台，1/2/3 约 5.5/7/12.5 分钟。保持无天气、静止镜头和游戏前台；临时解除 VSync / FPS 限制，完成、离场、暂停、失焦或镜头 / 配置改变均恢复，不写 XML。冻结组禁雾 / 雷光 / 轨道过渡；省 Composite 仍复制输出。`runtime` 核对射线尺寸和启用状态，`effective=false` 不计汇总；`summary` 给三轮中位值，`end reason=complete restored=true` 表示完成。省略差仅是整帧边际成本。
-
-主层质量 UI 全层临时 A/B：开=相邻太阳照明复用、关=直算，初始按预设，按钮恢复，不写 XML；显示复用变体启用 / 直算 / 轨道层数及近 2 秒整帧 FPS/ms（非 GPU），切换预热 2 秒。启用层数不是实际复用次数。暂停 / 失焦 / 改配置重测；离场 / 换行星 / 操作预设复用开关退出。`VolkenCloudBench 5`（shader 21）退出 UI 覆盖，冻结直算 / 复用两档 ×3 共 6 阶段，每轮共用输入、中轮反序，约 4 分钟；自动归还设置，`CloudBench reuse` 正差表示复用更快，仍是整帧差。旧列缓存命令已删除。
-
-源码标识：云 shader 21 / lightning 2，噪声 `VolkenWorleyFBM` 且两张 128³ 纹理各 8 级 mip，雨 shader 10，镜头水珠 shader 2，雾 shader 3。部署须核对程序集 / 资源，`build` 不能代替 shader 标识。
+源码标识：云 shader 22 / lightning 2，噪声 `VolkenWorleyFBM` 且两张 128³ 纹理各 8 级 mip，雨 shader 10，镜头水珠 shader 2，雾 shader 3。部署须核对程序集 / 资源，`build` 不能代替 shader 标识。
 
 游戏日志：`<USERPROFILE>/AppData/LocalLow/Jundroo/SimpleRockets 2/Player.log`；shader 编译查 `Editor.log`。本机映射见 [LOCAL_PATHS.md](LOCAL_PATHS.md)。排除暂停，记录配置、运行态、触发计数与资源标识；连续三轮无可信改善时换方向。
 
@@ -38,7 +34,7 @@
 
 | 范围 / 日期 | 保留的证据 | 实际限制 |
 |---|---|---|
-| 太阳照明复用 / 2026-10-24 | `.utmp/cloud-light-reuse-validation/` 插值版：Gamma / Linear 各 522 场景（含 90 动态），关闭与旧直算差 0，alpha / 深度 / MV / 雷光及反射 / 两样本差 0；RGB max 0.17243 / P99 0.02479 / RMSE 0.00565。状态 / UI 替身 48 场景 / 579 检查，C# 0 错误 | 本机 GPU / SDK / 分布替身；427×267 图像仍有明暗分层。10秒×1 GPU P50 旧直算 / 清理后关闭 / 复用=2.0424 / 2.0406 / 2.1025ms，复用慢约 3%；未做 30秒×3，不支持收益结论，未打包部署或游戏验收 |
+| 云直算清理 / 2026-10-24 | `.utmp/cloud-direct-cleanup-validation/`：C# 0 错误；shader 22 的 13 pass ×2 空区组合编译通过，Gamma / Linear 各 16 个体积 / 8 个上采样场景，RGBA / 深度 / MV / 雷光及上采样差 0，临时探针已删除 | 合成纹理 / NewConfig2 参数的独立回归，未验游戏部署或 FPS。撤销前复用短测 GPU P50 2.0406→2.1025ms 且有明暗分层，用户判为失败；只保留负结果防止误用 |
 | 云合成 / 历史资源 | `.utmp/cloud-{history,composite}-validation/result-{Gamma,Linear}.txt`：2026-10-20 历史各 39 场景 / 303 帧 / 7180 检查、RGBA 差 0、复制 3N→N+1；2026-10-19 合成各 171 场景 / 1538 检查、像素差 0、无雾 / 有雾少 2 / 1 次复制；C# 0 错误 | 本机 GPU；正式代码 / shader、替身输入，含多层 / 多相机、历史失效、雾 / 雷光、HDR / AA / 缩放 / 编码及异常清理；未验游戏部署或 FPS |
 | 云阳光遮蔽 / 局部投影 / 2026-10-15 | `.utmp/cloud-native-shadow-validation/` 各 256 配置、Linear 800 距离；`cloud-native-shadow-design-probe/` 各 621 世界点近远差 0、64 契约；无扩展 / 遮蔽回归 128 / 248 项，C# 0 错误 | Unity 2022.3.62f3 / D3D11；SDK / 行星替身，含 CloseFit / StableFit、0~4 级、EVA、矩阵 / 剔除 / 嵌套恢复；手动剔除只验字段。历史 build 16 游戏机体影消失，build 17 画质 / 几何开销待复测 |
 | 雨计数 / 云影短路 | 2026-10-23：`.utmp/gpu-fastpath-validation/result-{Gamma,Linear}.txt` 各 119 场景通过，云影像素与雨数据一致，C# 0 错误；30秒×3，中位雨 0.0166→0.0113ms、云影 0.1298→0.0891ms；2026-10-14 `.utmp/rain-splash-regression/` 各 115 项通过 | 本机 GPU；正式 shader / compute / 计数、替身输入，含容量 / 重建 / 多层 / 相机隔离；主机内存压力 / 丢样本，仅作趋势，未验游戏绘制、观感或 FPS |

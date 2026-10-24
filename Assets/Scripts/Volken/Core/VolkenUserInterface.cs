@@ -137,7 +137,6 @@ namespace Volken.Core
         /// <summary>进飞行场景时建面板。**不做行星解析 / 云装配 / 大气门控** —— 那些属于 Clouds。</summary>
         private void OnSceneLoaded(object sender, SceneEventArgs e)
         {
-            CloudLightReuseComparison.Restore();
             if (e.Scene != "Flight") return;
 
             try
@@ -794,14 +793,6 @@ namespace Volken.Core
             group.Add(containerGroup);
 
             GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
-            qualityGroup.Add(new ToggleModel(Locale.GetString("Volken.UI.LightReuseCompareToggle"),
-                () => CloudLightReuseComparison.EnabledOverride == true, value => CloudLightReuseComparison.SetMode(value)));
-            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareMode"), () => CloudLightReuseComparison.ModeText));
-            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareActual"), () => CloudLightReuseComparison.StateText));
-            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareFrame"), () => CloudLightReuseComparison.TimingText));
-            qualityGroup.Add(new TextButtonModel(Locale.GetString("Volken.UI.LightReuseCompareRestore"),
-                (Action<TextButtonModel>)(button => CloudLightReuseComparison.SetMode(null))));
-            // 方案 C: 时序超采样(A/B 对比用)
             var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
                 () => cfg.useTemporalUpscale, s =>
                 {
@@ -1046,13 +1037,6 @@ namespace Volken.Core
 
         private static void CreateCloudAccelerationControls(GroupModel group, CloudConfig cfg)
         {
-            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SolarLightReuseEnabled"),
-                () => cfg.solarLightReuseEnabled, s =>
-                {
-                    CloudLightReuseComparison.Restore();
-                    cfg.solarLightReuseEnabled = s;
-                    VolumetricClouds.Instance.ValueChanged();
-                }));
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.EmptySpaceSkippingEnabled"),
                 () => cfg.emptySpaceSkippingEnabled, s =>
                 {
@@ -1192,7 +1176,6 @@ namespace Volken.Core
 
         private void OnDestroy()
         {
-            if (Instance == this) CloudLightReuseComparison.Restore();
             if (inspectorPanel != null)
             {
                 try

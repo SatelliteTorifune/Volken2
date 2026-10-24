@@ -406,53 +406,6 @@ float2 SampleLightRay(float3 pos, float2 noiseLod) {
     return float2(d, intersect.y - max(0.0, intersect.x));
 }
 
-#if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-// Mode 1 traces a right anchor; mode 2 consumes it. The light loop stays outside the mode branches.
-float2 SampleAdjacentLightRay(float3 pos, float3 nextPos, float2 noiseLod, int requestedMode,
-    float2 previous, float blend, out int mode, out float2 anchor)
-{
-    mode = 0;
-    anchor = 0.0;
-    float3 rayDir = -lightDir;
-    float2 ground = RaySphereIntersect(pos, rayDir, surfaceRadius);
-    if (ground.y > 0.0) return 0.0;
-    float2 shell = RaySphereIntersect(pos, rayDir, surfaceRadius + maxCloudHeight);
-    float pathLength = shell.y - max(0.0, shell.x);
-    int lightSamples = min(numLightSamplePoints, ceil(pathLength / lightStepSize));
-    int previousSamples = min(numLightSamplePoints, ceil(previous.y / lightStepSize));
-    bool adjacent = pathLength > 0.0 && pathLength < 1e20 &&
-        abs(pathLength - previous.y) <= lightStepSize && lightSamples == previousSamples;
-    if (requestedMode == 2 && adjacent) mode = 2;
-    float3 rayPos = pos;
-    float anchorLength = pathLength;
-    int marchSamples = mode == 2 ? 0 : lightSamples;
-    if (requestedMode == 1 && adjacent)
-    {
-        float2 nextGround = RaySphereIntersect(nextPos, rayDir, surfaceRadius);
-        float2 nextShell = RaySphereIntersect(nextPos, rayDir, surfaceRadius + maxCloudHeight);
-        float nextLength = nextShell.y - max(0.0, nextShell.x);
-        int nextSamples = min(numLightSamplePoints, ceil(nextLength / lightStepSize));
-        if (nextGround.y <= 0.0 && nextLength > 0.0 && nextLength < 1e20 &&
-            abs(nextLength - pathLength) <= lightStepSize && nextSamples == lightSamples)
-        {
-            mode = 1;
-            rayPos = nextPos;
-            anchorLength = nextLength;
-            marchSamples = nextSamples;
-        }
-    }
-    float d = mode == 2 ? previous.x : 0.0;
-    [loop] for (int i = 0; i < marchSamples; i++)
-    {
-        rayPos += lightStepSize * rayDir;
-        d += lightStepSize * max(0.0, SampleDensityCheap(rayPos, noiseLod));
-        if (numLightSamplePoints > 2 && cloudAbsorption > 0.0 && d * cloudAbsorption >= 32.0) break;
-    }
-    anchor = float2(d, anchorLength);
-    return float2(mode == 1 ? lerp(previous.x, d, blend) : d, pathLength);
-}
-#endif
-
 // 完整球壳光程的固定预算查询;不使用视线 LOD、环境亮度下限或 12km 光程截断。
 float CloudSunTransmittance(float3 pos, float3 direction)
 {

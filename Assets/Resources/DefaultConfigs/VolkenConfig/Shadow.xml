@@ -25,7 +25,6 @@
   <stepSizeFalloff>0.1</stepSizeFalloff>
   <numLightSamplePoints>50</numLightSamplePoints>
   <lightMarchDistance>500</lightMarchDistance>
-  <solarLightReuseEnabled>false</solarLightReuseEnabled>
   <emptySpaceSkippingEnabled>false</emptySpaceSkippingEnabled>
   <blueNoiseStrength>0</blueNoiseStrength>
   <historyBlend>0</historyBlend>

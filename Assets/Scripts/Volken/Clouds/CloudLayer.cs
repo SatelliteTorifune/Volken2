@@ -72,7 +72,6 @@ namespace Volken.Clouds
             if (target == null) ShaderRevision++;
             mat.SetFloat("_CloudEmptySpaceEnabled", 0f);
             mat.SetFloat("_CloudDensityBounds", 0f);
-            mat.DisableKeyword(CloudLightReuse.Keyword);
             mat.DisableKeyword("VOLKEN_CLOUD_EMPTY_SPACE");
 
             mat.SetFloat("cloudDensity", config.density);

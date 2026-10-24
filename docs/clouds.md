@@ -9,13 +9,12 @@
 | [CloudRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudRenderer.cs) | 每相机远近深度与场景深度历史、raymarch、TSS、雾与逐层合成；提供 `LinearSceneDepth` |
 | [CloudLayer.cs](../Assets/Scripts/Volken/Clouds/CloudLayer.cs) | 每层配置、材质、噪声、风偏移和静态参数修订 |
 | [CloudLayerView.cs](../Assets/Scripts/Volken/Clouds/CloudLayerView.cs) | 每相机 × 每云层的 RT、运动数据和历史 |
-| [Clouds.shader](../Assets/Scripts/Volken/Clouds/Shader/Clouds.shader) | 体积云、轨道壳面、上采样、合成与邻点太阳照明复用 |
+| [Clouds.shader](../Assets/Scripts/Volken/Clouds/Shader/Clouds.shader) | 体积云、轨道壳面、上采样与合成 |
 | [CloudVolumeLighting.cginc](../Assets/Scripts/Volken/Clouds/Shader/CloudVolumeLighting.cginc) | 共用密度、光照和有限光程消光 |
 | [CloudNoise.cs](../Assets/Scripts/Volken/Clouds/CloudNoise.cs) / [StockCloudMap.cs](../Assets/Scripts/Volken/Clouds/StockCloudMap.cs) | 程序化噪声和游戏自带云分布缓存 |
 | [FarCameraScript.cs](../Assets/Scripts/Volken/Clouds/FarCameraScript.cs) / [SceneDepth.cs](../Assets/Scripts/Volken/Clouds/SceneDepth.cs) | 远相机 CommandBuffer 与独立深度资源 |
 | [CloudReflectionRenderer.cs](../Assets/Scripts/Volken/Clouds/CloudReflectionRenderer.cs) | 补入游戏水面反射的体积云 |
 | [CloudLightningCache.cs](../Assets/Scripts/Volken/Clouds/CloudLightningCache.cs) | 世界空间雷光光学厚度图集 |
-| [CloudLightReuse.cs](../Assets/Scripts/Volken/Clouds/CloudLightReuse.cs) | 太阳照明复用变体选择；不分配跨点或跨帧资源 |
 | [CloudEmptySpace.cs](../Assets/Scripts/Volken/Clouds/CloudEmptySpace.cs) | 密度上界、保守径向支持带及纹理范围守卫 |
 | [CloudGroundShadows.cs](../Assets/Scripts/Volken/Clouds/CloudGroundShadows.cs) | 每相机逐接收点太阳透射率与原生屏幕阴影接入 |
 
@@ -30,17 +29,13 @@
 - 太阳光和游戏环境 RGB 分开。体积及水面反射保留环境夜光，有效云段内累积环境散射，不设置固定夜间发光下限；没有独立月光输入。
 - 单段光照使用 Beer 解析权重；很小光学厚度用展开式避免除零。`Upscale` 可对积分后的 RGB / 透射率做 3×3 足迹重建，拒绝场景后方邻点，并保留中心命中距离；这不等于新增射线样本或消除底层周期。
 
-体积相机密度先算宏观分布 / 高度包络，仅在受控纹理与有限参数通过守卫、含浮点余量的密度上界严格为负时，返回零并省去域扰动与两张 3D 噪声；正密度沿用原公式和采样格点，未知资源降级。全清重建在历史越界、预期上一距离无效或 TSS 运动权重已为 1 时跳过三次历史读取；对照命令见[诊断](development.md#当前工具与诊断)。直算追光在预算 >2、正吸收、光学厚度 ≥32 时早停，保留光程；两步反射不截断。
+体积相机密度先算宏观分布 / 高度包络，仅在受控纹理与有限参数通过守卫、含浮点余量的密度上界严格为负时，返回零并省去域扰动与两张 3D 噪声；正密度沿用原公式和采样格点，未知资源降级。全清重建在历史越界、预期上一距离无效或 TSS 运动权重已为 1 时固定跳过三次历史读取。太阳照明逐点直算，在预算 >2、正吸收、光学厚度 ≥32 时早停，保留光程；两步反射不截断。
 
 默认光样本不要混淆：`CloudConfig.CreateDefault()` 为 25，`CreateAnotherDefault()` 为 5；`VolumetricClouds` 实际初始化的附加层默认关闭，使用独立 `CreateExtraDefaultConfig()`，光样本为 10。已保存 XML 的值优先于这些默认值。
 
-## 可切换采样与太阳照明复用
+## 保守空区加速
 
-每层 `solarLightReuseEnabled`、`emptySpaceSkippingEnabled` 独立且默认 false，主 / 附加层三语质量面板支持复制、保存与加载。分别使用 `VOLKEN_CLOUD_LIGHT_REUSE` / `VOLKEN_CLOUD_EMPTY_SPACE` 编译变体；关闭复用时不编译复用状态或分支，全球分布仍可选。旧太阳缓存 / 列积分的图集、生成 pass、关键词、配置和命令已移除；旧 XML 的 `solarCache*` 字段按未知字段忽略，不迁移成复用开关。
-
-复用只作用于一条体积视线内连续正密度点的太阳积分：先直算左锚，在中间点按原步长公式预测下一点并追光右锚，按距离线性插值积分；到达预测位置后消费右锚并转为新左锚，不把插值结果继续传播。前后间隔不超过光照步长及相应前段步长的 1.25 倍，步长变化不超过前段的 25%，密度差不超过两点较大密度的 25%；太阳不穿地、球壳光程变化不超过光照步长且预算样本数一致。当前点光程、环境 / 太阳色和散射照常计算。
-
-空区、跳空、双倍步长命中回退均清复用状态，预测位置不完全吻合时直算；下一点越过场景终点或本段消光后已到原停止阈值时不预取。反射、预算 ≤2、非正吸收及无效样本直算。视线密度 / 消光、云深度、MV、雷光和地表 alpha 阴影保持原计算。复用不持有跨射线、跨帧状态或 GPU 图集；密度 / 距离守卫不能保证太阳遮挡连续，薄云、银边、低太阳与配对相位变化的闪烁仍须游戏验收。
+每层 `emptySpaceSkippingEnabled` 默认 false，主 / 附加层三语质量面板支持复制、保存与加载，使用 `VOLKEN_CLOUD_EMPTY_SPACE` 编译变体，全球分布仍可选。太阳缓存、列积分和相邻照明复用的实现及测试入口均已移除；旧 XML 的 `solarCache*`、`solarLightReuseEnabled` 按未知字段忽略，不迁移成其他开关。
 
 空区加速从噪声 / 分布值域和四层高斯包络推导密度上界，仅在证明密度非正的径向区间省掉密度查询；不以 `TryGetBand` 硬裁高斯尾部，也不是水平稀疏体素层级。[CloudEmptySpace.cginc](../Assets/Scripts/Volken/Clouds/Shader/CloudEmptySpace.cginc) 重演旧空样本的步长、回退相位与 350 次迭代预算；浮点安全余量使边界继续走原查询。纹理须为本层受控 R8 噪声与 RGFloat 程序化图，stock 启用时另守卫归一化格式和混合范围，未知资源 / 非有限参数禁用跳空；全球图关闭或缺失时仍可使用程序化路径。
 

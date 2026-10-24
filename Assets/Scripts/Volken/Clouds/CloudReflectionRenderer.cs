@@ -169,7 +169,6 @@ namespace Volken.Clouds
                 float lightSamples = Mathf.Max(1f, kReflectionLightSamples);
                 mat.SetFloat("numLightSamplePoints", lightSamples);
                 mat.SetFloat("lightStepSize", Mathf.Max(0.01f, layer.config.lightMarchDistance / lightSamples));
-                CloudLightReuse.Apply(mat, false);
                 CloudEmptySpace.Configure(mat, layer, layer.config.emptySpaceSkippingEnabled);
 
                 // Clouds pass 仍会算 MV,但不绑 MRT → 丢弃;reprojMat 给单位阵,避免未初始化矩阵产生 NaN

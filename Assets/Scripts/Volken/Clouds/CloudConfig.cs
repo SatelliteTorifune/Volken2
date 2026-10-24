@@ -134,7 +134,6 @@ namespace Volken.Clouds
         public float stepSizeFalloff;
         public int numLightSamplePoints;
         public float lightMarchDistance = 12000f;   // 光照步进总距离(米);lightStepSize = lightMarchDistance / numLightSamplePoints
-        public bool solarLightReuseEnabled = false;
         public bool emptySpaceSkippingEnabled = false;
         public float blueNoiseStrength;
         public float historyBlend;
@@ -383,7 +382,6 @@ namespace Volken.Clouds
                 stepSizeFalloff = 0.6731564f,
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
-                solarLightReuseEnabled = false,
                 emptySpaceSkippingEnabled = false,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
@@ -447,7 +445,6 @@ namespace Volken.Clouds
                 stepSizeFalloff = 0.6731564f,
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
-                solarLightReuseEnabled = false,
                 emptySpaceSkippingEnabled = false,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
@@ -511,7 +508,6 @@ namespace Volken.Clouds
                 stepSizeFalloff = 1.52126586f,
                 numLightSamplePoints = 5,
                 lightMarchDistance = 12000f,
-                solarLightReuseEnabled = false,
                 emptySpaceSkippingEnabled = false,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
@@ -579,7 +575,6 @@ namespace Volken.Clouds
             this.stepSizeFalloff = source.stepSizeFalloff;
             this.numLightSamplePoints = source.numLightSamplePoints;
             this.lightMarchDistance = source.lightMarchDistance;
-            this.solarLightReuseEnabled = source.solarLightReuseEnabled;
             this.emptySpaceSkippingEnabled = source.emptySpaceSkippingEnabled;
             this.blueNoiseStrength = source.blueNoiseStrength;
             this.historyBlend = source.historyBlend;

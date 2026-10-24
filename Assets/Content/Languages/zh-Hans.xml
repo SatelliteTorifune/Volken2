@@ -189,18 +189,6 @@
     <s id="Volken.UI.HistoryBlend">运动残影</s>
     <s id="Volken.UI.UseTemporalUpscale">时序超采样</s>
     <s id="Volken.UI.UpscaleGrid">时序超采样格网</s>
-    <s id="Volken.UI.SolarLightReuseEnabled">相邻点太阳照明复用（实验）</s>
-    <s id="Volken.UI.LightReuseCompareToggle">太阳照明复用 A/B 对比（全层、临时）</s>
-    <s id="Volken.UI.LightReuseCompareRestore">结束对比，恢复预设</s>
-    <s id="Volken.UI.LightReuseCompareMode">对比模式</s>
-    <s id="Volken.UI.LightReuseCompareActual">主视图实际状态</s>
-    <s id="Volken.UI.LightReuseCompareFrame">整帧表现（近两秒）</s>
-    <s id="Volken.UI.LightReuseComparePreset">按预设（未启用对比）</s>
-    <s id="Volken.UI.LightReuseCompareDirect">A：原始直算（开关关闭）</s>
-    <s id="Volken.UI.LightReuseCompareReuse">B：相邻照明复用（开关开启）</s>
-    <s id="Volken.UI.LightReuseCompareWaiting">预热 / 等待主视图绘制</s>
-    <s id="Volken.UI.LightReuseCompareState">复用变体启用 {0} 层；直算 {1} 层；轨道 {2} 层</s>
-    <s id="Volken.UI.LightReuseCompareTiming">{0:F1} FPS / {1:F2} ms</s>
     <s id="Volken.UI.EmptySpaceSkippingEnabled">保守空区跳过</s>
 
     <!-- 轨道云(2D 壳着色 + 过渡带交叉淡入) -->

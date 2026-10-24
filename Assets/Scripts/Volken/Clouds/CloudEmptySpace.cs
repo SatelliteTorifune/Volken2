@@ -23,7 +23,7 @@ namespace Volken.Clouds
                 material.GetVector("cloudLayerSpreads"), material.GetVector("cloudLayerStrengths"),
                 out var minimum, out var maximum)) return false;
 
-            material.SetFloat(DensityBoundsId, CloudPerformance.FastPathsEnabled ? 1f : 0f);
+            material.SetFloat(DensityBoundsId, 1f);
             if (!enabled) return false;
             material.SetVector(MinId, minimum);
             material.SetVector(MaxId, maximum);

@@ -4,8 +4,7 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 21
-        [HideInInspector] _CloudHistoryFastPath("History read shortcuts", Float) = 1
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 22
         [HideInInspector] _CloudSunOcclusion("Cloud sun occlusion", Float) = 0
         [HideInInspector] _SunlightOcclusionStrength("Sunlight occlusion strength", Float) = 0.8
         [HideInInspector] _AmbientOcclusionStrength("Ambient occlusion strength", Float) = 0.5
@@ -173,9 +172,7 @@ Shader "Hidden/Clouds"
 
             CGPROGRAM
 
-            #pragma multi_compile_local __ VOLKEN_CLOUD_LIGHT_REUSE
             #pragma multi_compile_local __ VOLKEN_CLOUD_EMPTY_SPACE
-            #pragma multi_compile_local __ VOLKEN_CLOUD_BENCH_NO_SOLAR
             #pragma target 4.0 VOLKEN_CLOUD_EMPTY_SPACE
             #pragma vertex vert
             #pragma fragment frag
@@ -317,12 +314,6 @@ Shader "Hidden/Clouds"
                 float cloudSurfaceDist = maxRayDist;
                 
                 int iter = 0;
-                #if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-                int lightReuseStage = 0;
-                float2 previousLightSample = 0.0;
-                float previousLightDensity = 0.0, previousLightDistance = 0.0, previousLightStep = 0.0;
-                bool lightReuseAllowed = _ReflectionMode < 0.5 && numLightSamplePoints > 2 && cloudAbsorption > 0.0;
-                #endif
                 
                 [loop]
                 while(rayDist < maxRayDist && iter < 350) {
@@ -330,9 +321,6 @@ Shader "Hidden/Clouds"
                     [branch] if (CloudTrySkipEmptyInterval(camPos, viewDir, maxRayDist,
                         rayDist, localStepSize, stepSizeMultiplier, emptySamples, iter))
                     {
-                        #if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-                        lightReuseStage = 0;
-                        #endif
                         continue;
                     }
                     #endif
@@ -341,16 +329,10 @@ Shader "Hidden/Clouds"
                     density = (stepSizeMultiplier == 1.0 && rayDist < detailCutoffDist)
                         ? SampleDensity(rayPos, saturate(1e-4 * (detailCutoffDist - rayDist)), noiseLod)
                         : SampleDensityCheap(rayPos, noiseLod);
-                    #if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-                    if (!(density > 0.0)) lightReuseStage = 0;
-                    #endif
                     
                     if (density > 0.0) {
                         // switch to normal step size when a cloud surface is hit and backtrack the overshot distance
                         if(stepSizeMultiplier == 2.0) {
-                            #if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-                            lightReuseStage = 0;
-                            #endif
                             rayDist = max(startRayDist, rayDist - localStepSize * stepSizeMultiplier);
                             stepSizeMultiplier = 1.0;
                             emptySamples = 0;
@@ -362,51 +344,11 @@ Shader "Hidden/Clouds"
 
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
-                        // 诊断变体只省太阳项；密度、步长和消光仍沿原轨迹执行。
-                        #if defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
-                        float3 solarRadiance = 0.0;
-                        #else
-                        #if defined(VOLKEN_CLOUD_LIGHT_REUSE)
-                        float lightGap = rayDist - previousLightDistance;
-                        bool adjacentLight = lightReuseAllowed &&
-                            abs(localStepSize - previousLightStep) <= previousLightStep * 0.25 &&
-                            abs(density - previousLightDensity) <= max(density, previousLightDensity) * 0.25;
-                        float nextLightStep = stepSize * clamp(stepSizeFalloff * 1e-5 * rayDist, 1.0, 2.0);
-                        float nextLightDistance = rayDist + nextLightStep;
-                        int requestedLightMode = 0;
-                        float lightBlend = 0.0;
-                        if (adjacentLight && lightReuseStage == 1 && lightGap > 0.0 &&
-                            lightGap <= lightStepSize && lightGap <= previousLightStep * 1.25 &&
-                            nextLightStep <= lightStepSize && nextLightStep <= localStepSize * 1.25 &&
-                            nextLightDistance > rayDist && nextLightDistance < maxRayDist &&
-                            transmittance * Beer(density * localStepSize, _CloudSunOcclusion > 0.5 ? 0.0 : amb) >= 0.01)
-                        {
-                            requestedLightMode = 1;
-                            lightBlend = lightGap / (nextLightDistance - previousLightDistance);
-                        }
-                        if (adjacentLight && lightReuseStage == 2 && rayDist == previousLightDistance)
-                            requestedLightMode = 2;
-                        lightReuseStage = 0;
-                        int lightMode;
-                        float2 nextLightAnchor;
-                        float2 lightSample = SampleAdjacentLightRay(rayPos, camPos + nextLightDistance * viewDir,
-                            noiseLod, requestedLightMode, previousLightSample, lightBlend, lightMode, nextLightAnchor);
-                        bool validLightAnchor = lightReuseAllowed && nextLightAnchor.x >= 0.0 && nextLightAnchor.x < 1e20 &&
-                            nextLightAnchor.y > 0.0 && nextLightAnchor.y < 1e20 && density < 1e20 &&
-                            rayDist >= 0.0 && rayDist < 1e20 && localStepSize > 0.0 && localStepSize < 1e20;
-                        lightReuseStage = validLightAnchor ? (lightMode == 1 ? 2 : 1) : 0;
-                        previousLightSample = nextLightAnchor;
-                        previousLightDistance = lightMode == 1 ? nextLightDistance : rayDist;
-                        previousLightDensity = density;
-                        previousLightStep = localStepSize;
-                        #else
                         float2 lightSample = SampleLightRay(rayPos, noiseLod);
-                        #endif
                         
                         float3 solarRadiance = BeersPowder(lightSample.x, 0.0) * (1.0 - amb)
                             * exp(-lightSample.y * scatterCoeff) * phaseValue;
                         if (_CloudSunOcclusion > 0.5) solarRadiance *= max(0.0, _CloudSolarColor.rgb);
-                        #endif
 
                         float densityStep = density * localStepSize;
                         float extinctionAmbient = _CloudSunOcclusion > 0.5 ? 0.0 : amb;
@@ -697,7 +639,6 @@ Shader "Hidden/Clouds"
             SamplerState samplerHistoryCloudDepthTex;
 
             float _UseTemporal;       // 0=使用用户残影权重,1=按运动量混合
-            float _CloudHistoryFastPath;
             float _TssBlend;          // 静止时本帧混合权重
             float historyBlend;       // TSS关:历史权重(运动残影,如 0.90)
             float historyDepthThreshold;
@@ -760,8 +701,8 @@ Shader "Hidden/Clouds"
                 float2 reprojUV = i.uv + mv;
                 bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
                 // These cases already have zero history weight; skip all three history texture reads.
-                [branch] if (_CloudHistoryFastPath > 0.5 && (!inBounds || motion.z * 1e5 <= 0.001 ||
-                    (_UseTemporal >= 0.5 && length(mv) * 200.0 >= 1.0))) return fresh;
+                [branch] if (!inBounds || motion.z * 1e5 <= 0.001 ||
+                    (_UseTemporal >= 0.5 && length(mv) * 200.0 >= 1.0)) return fresh;
 
                 // 历史接受判据:场景遮挡与上一相机预期云面距离匹配。
                 float historySceneDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV);

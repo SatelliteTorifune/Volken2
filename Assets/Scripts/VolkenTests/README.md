@@ -11,7 +11,7 @@
 | `NoiseVisualizer.cs` | 遗留噪声组件；当前缺少 `Hidden/NoiseVisualizer` shader |
 | `RaymarchDebug.cs` | 遗留步进组件；当前缺少 `Hidden/RaymarchDebug` shader |
 
-控制台命令统一由 `Mod.RegisterCommands()` 注册，含 `frs` / `brs` / `VolkenForceRefresh`；正式主视图性能日志与对照命令见[诊断](../../../docs/development.md#当前工具与诊断)。
+控制台命令统一由 `Mod.RegisterCommands()` 注册，含 `frs` / `brs` / `VolkenForceRefresh`；当前工具见[开发与验证](../../../docs/development.md#当前工具与诊断)。
 
 ## 已删除的入口
 

@@ -137,6 +137,7 @@ namespace Volken.Core
         /// <summary>进飞行场景时建面板。**不做行星解析 / 云装配 / 大气门控** —— 那些属于 Clouds。</summary>
         private void OnSceneLoaded(object sender, SceneEventArgs e)
         {
+            CloudLightReuseComparison.Restore();
             if (e.Scene != "Flight") return;
 
             try
@@ -793,6 +794,13 @@ namespace Volken.Core
             group.Add(containerGroup);
 
             GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
+            qualityGroup.Add(new ToggleModel(Locale.GetString("Volken.UI.LightReuseCompareToggle"),
+                () => CloudLightReuseComparison.EnabledOverride == true, value => CloudLightReuseComparison.SetMode(value)));
+            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareMode"), () => CloudLightReuseComparison.ModeText));
+            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareActual"), () => CloudLightReuseComparison.StateText));
+            qualityGroup.Add(new TextModel(Locale.GetString("Volken.UI.LightReuseCompareFrame"), () => CloudLightReuseComparison.TimingText));
+            qualityGroup.Add(new TextButtonModel(Locale.GetString("Volken.UI.LightReuseCompareRestore"),
+                (Action<TextButtonModel>)(button => CloudLightReuseComparison.SetMode(null))));
             // 方案 C: 时序超采样(A/B 对比用)
             var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
                 () => cfg.useTemporalUpscale, s =>
@@ -1038,10 +1046,11 @@ namespace Volken.Core
 
         private static void CreateCloudAccelerationControls(GroupModel group, CloudConfig cfg)
         {
-            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SolarCacheEnabled"),
-                () => cfg.solarCacheEnabled, s =>
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SolarLightReuseEnabled"),
+                () => cfg.solarLightReuseEnabled, s =>
                 {
-                    cfg.solarCacheEnabled = s;
+                    CloudLightReuseComparison.Restore();
+                    cfg.solarLightReuseEnabled = s;
                     VolumetricClouds.Instance.ValueChanged();
                 }));
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.EmptySpaceSkippingEnabled"),
@@ -1050,20 +1059,7 @@ namespace Volken.Core
                     cfg.emptySpaceSkippingEnabled = s;
                     VolumetricClouds.Instance.ValueChanged();
                 }));
-            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheResolution"), () => cfg.solarCacheResolution,
-                s =>
-                {
-                    cfg.solarCacheResolution = Mathf.RoundToInt(s);
-                    cfg.ClampAccelerationSettings();
-                    VolumetricClouds.Instance.ValueChanged();
-                }, 8, 64, 0, true);
-            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheExtent"), () => cfg.solarCacheExtent,
-                s =>
-                {
-                    cfg.solarCacheExtent = s;
-                    cfg.ClampAccelerationSettings();
-                    VolumetricClouds.Instance.ValueChanged();
-                }, 1000f, 100000f, 0);
+
         }
 
         /// <summary>轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。默认关闭 → 零回归。</summary>
@@ -1196,6 +1192,7 @@ namespace Volken.Core
 
         private void OnDestroy()
         {
+            if (Instance == this) CloudLightReuseComparison.Restore();
             if (inspectorPanel != null)
             {
                 try

@@ -76,6 +76,9 @@ namespace Assets.Scripts
             DevConsoleApi.RegisterCommand<int>("frs",i=>this.frontRenderQueue=i);
             DevConsoleApi.RegisterCommand<int>("brs",i=>this.backRenderQueue=i);
             DevConsoleApi.RegisterCommand("VolkenForceRefresh",ForceRefresh);
+            DevConsoleApi.RegisterCommand<int>("VolkenCloudPerf", CloudPerformance.Capture);
+            DevConsoleApi.RegisterCommand<int>("VolkenCloudFastPath", CloudPerformance.SetFastPaths);
+            DevConsoleApi.RegisterCommand<int>("VolkenCloudBench", CloudPerformanceSweep.Run);
 
         }
 

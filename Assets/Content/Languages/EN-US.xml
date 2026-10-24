@@ -188,10 +188,19 @@
     <s id="Volken.UI.HistoryBlend">History Blend</s>
     <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
-    <s id="Volken.UI.SolarCacheEnabled">Solar Light Cache (Experimental)</s>
+    <s id="Volken.UI.SolarLightReuseEnabled">Reuse Adjacent Solar Lighting (Experimental)</s>
+    <s id="Volken.UI.LightReuseCompareToggle">Solar Lighting Reuse A/B (All Layers, Temporary)</s>
+    <s id="Volken.UI.LightReuseCompareRestore">End Comparison / Restore Preset</s>
+    <s id="Volken.UI.LightReuseCompareMode">Comparison Mode</s>
+    <s id="Volken.UI.LightReuseCompareActual">Main View Status</s>
+    <s id="Volken.UI.LightReuseCompareFrame">Whole Frame (Last 2 Seconds)</s>
+    <s id="Volken.UI.LightReuseComparePreset">Using Preset (No Comparison)</s>
+    <s id="Volken.UI.LightReuseCompareDirect">A: Direct Tracing (Switch Off)</s>
+    <s id="Volken.UI.LightReuseCompareReuse">B: Adjacent Lighting Reuse (Switch On)</s>
+    <s id="Volken.UI.LightReuseCompareWaiting">Warming Up / Waiting for Main View</s>
+    <s id="Volken.UI.LightReuseCompareState">Reuse variant enabled: {0}; direct: {1}; orbit: {2}</s>
+    <s id="Volken.UI.LightReuseCompareTiming">{0:F1} FPS / {1:F2} ms</s>
     <s id="Volken.UI.EmptySpaceSkippingEnabled">Conservative Empty Space Skipping</s>
-    <s id="Volken.UI.SolarCacheResolution">Solar Cache Grid Resolution</s>
-    <s id="Volken.UI.SolarCacheExtent">Solar Cache Coverage Width (m)</s>
 
     <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
     <s id="Volken.UI.OrbitClouds">Orbit clouds</s>

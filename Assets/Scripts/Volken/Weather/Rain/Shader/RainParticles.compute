@@ -1,17 +1,15 @@
-// 实例化雨滴计算:初始化、径向下落、浮动原点平移、活跃数统计。
+// 实例化雨滴计算:初始化、径向下落和浮动原点平移。
 // 粒子位置存于参考帧空间;积分不加入相机速度,Positioning 不读取 _RandomData。
 // 重生使用粒子 id 与整数相位 hash,禁止使用随时间增大的浮点 frac hash。
-// 间接绘制参数由 CPU 每帧复位;诊断计数累计至回读后清零。
+// 间接绘制数量由 CPU 在数量变化时更新;诊断计数只在初始化时清零。
 // 原子加使用 RWStructuredBuffer<uint> 的带下标形式,线程组为 64。
 
 #pragma kernel Randomize
 #pragma kernel Positioning
 #pragma kernel TranslateFixed
-#pragma kernel FillArgs
 
 RWStructuredBuffer<float4> _Positions;   // xyz = 参考帧空间位置;w = 最近积分时间(秒)
 RWStructuredBuffer<float4> _RandomData;  // x = 种子;yzw = 逐粒长/宽倍率与滚转(只由 Randomize 写、雨丝 shader 读)
-RWStructuredBuffer<uint> _ArgsBuffer;    // 5×uint 间接绘制参数(args[1] = instanceCount)
 RWStructuredBuffer<uint> _DiagBuffer;    // x0 = 累计重生次数;保留缓冲绑定,CPU 不回读。
 
 float _time;
@@ -24,7 +22,6 @@ float3 _translation;    // 浮动原点重定位的参考帧平移量
 uint _capacity;         // buffer 容量(固定,重建才变)
 uint _amount;           // 活跃粒子数,不超过 _capacity
 uint _phase;            // 重生相位 = (uint)floor(_time*20),CPU 传(整数 hash 的输入之一)
-uint _indexCountPerInstance;  // 12(十字四边形)
 
 float3 _camRight;
 float3 _camUp;
@@ -134,12 +131,4 @@ void TranslateFixed(uint3 id : SV_DispatchThreadID)
     float4 p = _Positions[id.x];
     p.xyz += _translation;
     _Positions[id.x] = p;
-}
-
-[numthreads(64, 1, 1)]
-void FillArgs(uint3 id : SV_DispatchThreadID)
-{
-    if (id.x >= _amount) return;   // 只统计活跃粒子
-    uint original;
-    InterlockedAdd(_ArgsBuffer[1], 1, original);   // args[1] = instanceCount
 }

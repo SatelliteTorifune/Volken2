@@ -188,10 +188,19 @@
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
     <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
-    <s id="Volken.UI.SolarCacheEnabled">Кэш солнечного освещения (эксперимент)</s>
+    <s id="Volken.UI.SolarLightReuseEnabled">Повтор соседнего солнечного освещения (эксперимент)</s>
+    <s id="Volken.UI.LightReuseCompareToggle">A/B повтора солнечного освещения (все слои, временно)</s>
+    <s id="Volken.UI.LightReuseCompareRestore">Завершить сравнение / вернуть пресет</s>
+    <s id="Volken.UI.LightReuseCompareMode">Режим сравнения</s>
+    <s id="Volken.UI.LightReuseCompareActual">Состояние основного вида</s>
+    <s id="Volken.UI.LightReuseCompareFrame">Полный кадр (последние 2 секунды)</s>
+    <s id="Volken.UI.LightReuseComparePreset">По пресету (сравнение выключено)</s>
+    <s id="Volken.UI.LightReuseCompareDirect">A: Прямая трассировка (выключатель выкл.)</s>
+    <s id="Volken.UI.LightReuseCompareReuse">B: Повтор соседнего освещения (выключатель вкл.)</s>
+    <s id="Volken.UI.LightReuseCompareWaiting">Прогрев / ожидание основного вида</s>
+    <s id="Volken.UI.LightReuseCompareState">Вариант повтора включён: {0}; трассировка: {1}; орбита: {2}</s>
+    <s id="Volken.UI.LightReuseCompareTiming">{0:F1} FPS / {1:F2} ms</s>
     <s id="Volken.UI.EmptySpaceSkippingEnabled">Консервативный пропуск пустых областей</s>
-    <s id="Volken.UI.SolarCacheResolution">Разрешение сетки солнечного кэша</s>
-    <s id="Volken.UI.SolarCacheExtent">Ширина области солнечного кэша (м)</s>
 
     <!-- Орбитальные облака(2D-шейдинг оболочки + перекрёстное затухание) -->
     <s id="Volken.UI.OrbitClouds">Орбитальные облака</s>

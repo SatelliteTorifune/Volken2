@@ -50,6 +50,7 @@ SamplerState samplerCloudDepthTex;
 
 //Cloud Shape
 float cloudDensity;
+float _CloudDensityBounds;
 float cloudAbsorption;
 float ambientLight;
 float4 _CloudAmbientColor;
@@ -200,19 +201,6 @@ float SampleDensity(float3 worldPos, float detailFalloff, float2 noiseLod)
         offset.x * sinAngle + offset.z * cosAngle
     );
 
-    // Domain warping: small sinusoidal perturbation to break up visible tiling
-    float3 warpOffset = float3(
-        sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
-        cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
-        sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
-    ) * 0.15;
-    float3 warpedUv = rotatedOffset + warpOffset;
-
-    // Keep shape relatively cheap; target the smallest-scale repetition in detail.
-    float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
-    float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
-    shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
-
     float3 dir = normalize(rotatedOffset);
     float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
 
@@ -270,6 +258,27 @@ float SampleDensity(float3 worldPos, float detailFalloff, float2 noiseLod)
     float4 active = step(0.0001, cloudLayerStrengths);
     // 方案 B: gate the 3D shape by the stock distribution per band (valid==0 → dist=1, 不回退门)
     float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff * valid);
+    // Maximum uneroded shape; keep a margin at the density boundary and fall back for unknown textures.
+    float shapeUpper = 1.0 + max(0.0, -detailStrength);
+    float upper = shapeUpper * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
+                + layers.x * falloff.x + layers.y * falloff.y
+                + layers.z * falloff.z + layers.w * falloff.w + cloudCoverage - 1.0;
+    float margin = 1e-4 * (1.0 + abs(cloudCoverage) + dot(abs(layers), falloff) + shapeUpper * dot(dist, falloff));
+    [branch] if (_CloudDensityBounds > 0.5 && upper < -margin) return 0.0;
+
+    // Domain warping: small sinusoidal perturbation to break up visible tiling
+    float3 warpOffset = float3(
+        sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+        cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+        sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+    ) * 0.15;
+    float3 warpedUv = rotatedOffset + warpOffset;
+
+    // Keep shape relatively cheap; target the smallest-scale repetition in detail.
+    float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
+    float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
+    shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detailFalloff * detail;
+
     float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
                        + layers.x * falloff.x + layers.y * falloff.y
                        + layers.z * falloff.z + layers.w * falloff.w;
@@ -289,18 +298,6 @@ float SampleDensityCheap(float3 worldPos, float2 noiseLod)
         offset.y,
         offset.x * sinAngle + offset.z * cosAngle
     );
-
-    // Domain warping: small sinusoidal perturbation to break up visible tiling
-    float3 warpOffset = float3(
-        sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
-        cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
-        sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
-    ) * 0.15;
-    float3 warpedUv = rotatedOffset + warpOffset;
-
-    float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
-    float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
-    shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
 
     float3 dir = normalize(rotatedOffset);
     float2 spherical = float2(0.5 * (atan2(dir.z, dir.x) / 3.14159265 + 1.0), acos(dir.y) / 3.14159265);
@@ -355,6 +352,26 @@ float SampleDensityCheap(float3 worldPos, float2 noiseLod)
     // 方案 B: gate the 3D shape by the stock distribution per band
     float4 active = step(0.0001, cloudLayerStrengths);
     float4 dist = lerp(float4(1.0, 1.0, 1.0, 1.0), stockBand, stockEff);
+    // Maximum uneroded shape; keep a margin at the density boundary and fall back for unknown textures.
+    float shapeUpper = 1.0 + max(0.0, -detailStrength);
+    float upper = shapeUpper * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
+                + layers.x * falloff.x + layers.y * falloff.y
+                + layers.z * falloff.z + layers.w * falloff.w + cloudCoverage - 1.0;
+    float margin = 1e-4 * (1.0 + abs(cloudCoverage) + dot(abs(layers), falloff) + shapeUpper * dot(dist, falloff));
+    [branch] if (_CloudDensityBounds > 0.5 && upper < -margin) return 0.0;
+
+    // Domain warping: small sinusoidal perturbation to break up visible tiling
+    float3 warpOffset = float3(
+        sin(rotatedOffset.y * 0.05 + rotatedOffset.z * 0.03),
+        cos(rotatedOffset.x * 0.04 - rotatedOffset.z * 0.05),
+        sin(rotatedOffset.x * 0.03 + rotatedOffset.y * 0.04)
+    ) * 0.15;
+    float3 warpedUv = rotatedOffset + warpOffset;
+
+    float shape = CloudShapeTex.SampleLevel(samplerCloudShapeTex, warpedUv * cloudScale, noiseLod.x);
+    float detail = CloudDetailTex.SampleLevel(samplerCloudDetailTex, warpedUv * detailScale, noiseLod.y);
+    shape -= (1.0 - shape) * (1.0 - shape) * detailStrength * detail;
+
     float totalDensity = shape * (dist.x * falloff.x + dist.y * falloff.y + active.z * dist.z * falloff.z + active.w * dist.w * falloff.w)
                        + layers.x * falloff.x + layers.y * falloff.y
                        + layers.z * falloff.z + layers.w * falloff.w;
@@ -378,21 +395,63 @@ float2 SampleLightRay(float3 pos, float2 noiseLod) {
 
     float d = 0.0;
 
-    // FXC can miscompile the nested dynamic loop in the cache variant; 50 is the runtime sample limit.
-    #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
-    [unroll(50)]
-    for (int i = 0; i < 50; i++) {
-        if (i >= lightSamples) break;
-    #else
     [loop]
     for (int i = 0; i < lightSamples; i++) {
-    #endif
         rayPos += step * rayDir;
         d += step * max(0.0, SampleDensityCheap(rayPos, noiseLod));
+        // Once exp(-tau) < 1.3e-14, further samples have no visible direct contribution.
+        if (numLightSamplePoints > 2 && cloudAbsorption > 0.0 && d * cloudAbsorption >= 32.0) break;
     }
 
     return float2(d, intersect.y - max(0.0, intersect.x));
 }
+
+#if defined(VOLKEN_CLOUD_LIGHT_REUSE) && !defined(VOLKEN_CLOUD_BENCH_NO_SOLAR)
+// Mode 1 traces a right anchor; mode 2 consumes it. The light loop stays outside the mode branches.
+float2 SampleAdjacentLightRay(float3 pos, float3 nextPos, float2 noiseLod, int requestedMode,
+    float2 previous, float blend, out int mode, out float2 anchor)
+{
+    mode = 0;
+    anchor = 0.0;
+    float3 rayDir = -lightDir;
+    float2 ground = RaySphereIntersect(pos, rayDir, surfaceRadius);
+    if (ground.y > 0.0) return 0.0;
+    float2 shell = RaySphereIntersect(pos, rayDir, surfaceRadius + maxCloudHeight);
+    float pathLength = shell.y - max(0.0, shell.x);
+    int lightSamples = min(numLightSamplePoints, ceil(pathLength / lightStepSize));
+    int previousSamples = min(numLightSamplePoints, ceil(previous.y / lightStepSize));
+    bool adjacent = pathLength > 0.0 && pathLength < 1e20 &&
+        abs(pathLength - previous.y) <= lightStepSize && lightSamples == previousSamples;
+    if (requestedMode == 2 && adjacent) mode = 2;
+    float3 rayPos = pos;
+    float anchorLength = pathLength;
+    int marchSamples = mode == 2 ? 0 : lightSamples;
+    if (requestedMode == 1 && adjacent)
+    {
+        float2 nextGround = RaySphereIntersect(nextPos, rayDir, surfaceRadius);
+        float2 nextShell = RaySphereIntersect(nextPos, rayDir, surfaceRadius + maxCloudHeight);
+        float nextLength = nextShell.y - max(0.0, nextShell.x);
+        int nextSamples = min(numLightSamplePoints, ceil(nextLength / lightStepSize));
+        if (nextGround.y <= 0.0 && nextLength > 0.0 && nextLength < 1e20 &&
+            abs(nextLength - pathLength) <= lightStepSize && nextSamples == lightSamples)
+        {
+            mode = 1;
+            rayPos = nextPos;
+            anchorLength = nextLength;
+            marchSamples = nextSamples;
+        }
+    }
+    float d = mode == 2 ? previous.x : 0.0;
+    [loop] for (int i = 0; i < marchSamples; i++)
+    {
+        rayPos += lightStepSize * rayDir;
+        d += lightStepSize * max(0.0, SampleDensityCheap(rayPos, noiseLod));
+        if (numLightSamplePoints > 2 && cloudAbsorption > 0.0 && d * cloudAbsorption >= 32.0) break;
+    }
+    anchor = float2(d, anchorLength);
+    return float2(mode == 1 ? lerp(previous.x, d, blend) : d, pathLength);
+}
+#endif
 
 // 完整球壳光程的固定预算查询;不使用视线 LOD、环境亮度下限或 12km 光程截断。
 float CloudSunTransmittance(float3 pos, float3 direction)

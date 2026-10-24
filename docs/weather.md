@@ -1,66 +1,61 @@
 # 天气系统现状
 
-> 核对日期：2026-10-14。雨、雾、闪电和雷声均已接入；历史验证与游戏验收分别见 [开发与验证](development.md#已有验证证据) 和 [待办](backlog.md#游戏验收)。
+> 核对日期：2026-10-14。当前行为见下文，验证 / 验收见 [开发](development.md#已有验证证据) / [待办](backlog.md#游戏验收)，地区方案见 [设计](weather-regions.md)。
 
 ## 配置与入口
 
 配置类为 [VolkenWeatherConfig](../Assets/Scripts/Volken/Weather/VolkenWeatherConfig.cs)，驱动为 [VolkenWeather](../Assets/Scripts/Volken/Weather/VolkenWeather.cs)，面板为 [WeatherUserInterface](../Assets/Scripts/Volken/Weather/WeatherUserInterface.cs)。雨、雾、雷电默认关闭，按独立 `enabled` 和大气 / 场景条件运行；空 `OverallSection` 仅用于旧 XML 兼容。
 
-天气运行要求当前行星快照支持大气效果且与所用预设的行星一致；无大气、恒星、缺行星数据和离场均抑制运行，不改用户 `enabled`。雨的挂载、参数应用、toggle、每帧同步与绘制共用此门控，主视图 / PIP 一并停雨并清掉旧水花历史，雨声门控关闭；雷电排程和镜头水珠随环境停用，手动落雷也不能绕过。回到有大气行星按其预设自动恢复；显式 `StandaloneMode` 保留独立预览。跨场景 SOI 订阅归属见 [架构](architecture.md#生命周期与模块边界)。
+运行要求行星快照支持大气效果且匹配天气预设。无大气、恒星、缺数据或离场时，雨的挂载 / 应用 / toggle / 同步 / 绘制统一停用，主视图 / PIP 清水花，雨声、雷电排程与水珠停用，手动落雷不可绕过；不改用户开关，返回有大气行星按预设恢复。`StandaloneMode` 保留独立预览；SOI 归属见 [架构](architecture.md#生命周期与模块边界)。
 
 ## 预设运行态同步
 
-【决策：2026-10-14】加载时直接应用配置，不依赖手动 toggle 补同步。
-
-- `ApplyPreset` 替换 `Config` 后调用 `RainParticles.ApplyConfig` 与 `SyncToCurrentView`，立即同步开关、容量、几何、雨声输入和所有存活相机实例；相机暂缺时由正常 tick 重试挂载。
-- 启用中的雷电切预设通过 `refreshSchedule=true` 停止旧等待并抽取新间隔，只重排下一次落雷，保留正在播放的闪电及待播雷声。
-- 普通状态刷新不反复重排；另存为只保存名称 / 文件，非法名 / 重名被拒绝，同名切换和缺失文件仍被拒绝。恢复默认同样应用雨参数和雷电启停。
-- `PlanetConfigLoaded` 在配置与运行态一致后发出。跨场景加载 / 保存语义见 [架构](architecture.md#配置与预设)。
-
-修复前游戏日志曾出现已加载 `rain=True`、运行仍 `rainEnabled=False`，以及保存 amount=100000、运行仍为 50000；这是遗漏雨参数应用的证据。雷电切换后等待旧间隔不等于永久停雷。
+- `ApplyPreset` 替换 `Config` 后调用 `RainParticles.ApplyConfig` / `SyncToCurrentView`，同步开关、容量、几何、雨声与全部相机；缺相机由 tick 重试，不依赖手动 toggle。
+- 启用中切雷电预设用 `refreshSchedule=true` 重抽下一次间隔，保留在播闪电 / 待播雷声；普通刷新不重排。恢复默认同步雨参数与雷电启停。
+- `PlanetConfigLoaded` 在运行态同步后发出；另存为及跨场景语义统一见 [配置契约](architecture.md#配置与预设)。
 
 ## 雨粒子、朝向与声音
 
 | 入口 | 职责 |
 |---|---|
 | [RainParticles.cs](../Assets/Scripts/Volken/Weather/Rain/RainParticles.cs) | 每相机实例、参数应用、compute 与间接绘制 |
-| [RainParticles.compute](../Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.compute) | Randomize / Positioning / FillArgs / TranslateFixed |
+| [RainParticles.compute](../Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.compute) | Randomize / Positioning / TranslateFixed |
 | [RainParticles.shader](../Assets/Scripts/Volken/Weather/Rain/Shader/RainParticles.shader) | 十字雨丝、透明度、光照、软深度与雾 |
 | [RainAudio.cs](../Assets/Scripts/Volken/Weather/Rain/RainAudio.cs) | 常驻雨声、强弱混音、环境淡出与音量 |
 
-雨配置默认 100000 粒、半径 50m、落速 15m/s、长度 2.5m、宽度 0.1m，容量上限 400000。`RainParticles.DefaultCapacity=10000` 是配置应用前的静态初值，不能当作实际天气默认雨量。密度为 `amount / (4πR³/3)`，10 万粒 / 50m 约 0.191/m³。
+默认 100000 粒、半径 50m、落速 15m/s、长 2.5m、宽 0.1m，上限 400000 粒。`DefaultCapacity=10000` 仅为应用配置前初值。密度 `amount / (4πR³/3)`，默认约 0.191/m³。
 
-粒子在参考帧空间下落，雨丝沿世界 / 帧空间 `_RotationMatrix` 构轴，流线模式用 **`down * FallSpeed - axisVel`**，保持飞行器速度真实符号；不用相机绕飞速度替代飞行器速度，不写死世界 -Y。`TranslateFixed` 处理重定位。随机重生使用 `id + phase` 的整数 hash，避免大数 float32 `frac` hash 精度塌缩。
+粒子在参考帧下落，雨丝由世界 / 帧空间 `_RotationMatrix` 构轴；流线用 **`down * FallSpeed - axisVel`**，不以相机绕飞速度代替飞行器速度或写死世界 -Y。`TranslateFixed` 处理重定位；重生用 `id + phase` 整数 hash，避免大数 float32 `frac` 精度塌缩。
 
-自适应雨域只增半径，不在 `OnPreCull` 自动重建 buffer 补密度，域变大时会变稀。容量 / 几何修改由 `ApplyConfig` 向全部实例更新。compute、材质、buffer、碰撞资源与就绪状态按实例持有；共享诊断及环境淡出仅主视图写，避免 PIP 覆盖雨声。
+自适应雨域只增半径、密度下降，不在 `OnPreCull` 重建 buffer 补密度。`ApplyConfig` 更新全部实例容量 / 几何；compute、材质、buffer、碰撞与就绪状态按实例持有。CPU 只在容量 / 测试模式变化或重建后上传间接数量，稳定帧不上传、不清零、不做 GPU 计数；暂无可见性剔除，新增 GPU 可见列表须恢复计数契约。共享诊断 / 环境淡出仅主视图写，防 PIP 覆盖雨声。
 
 `rain.transparency` 范围 0~1：0 保留原 alpha，1 完全透明，只影响雨滴 / 水花视觉，不改变雨声或共享环境淡出。雨限高和水下淡出看雨自身配置，不读 `maxCloudHeight`。
 
-雨滴先接受游戏环境 / 太阳光，再加 `brightness` 自发光。0 表示无独立自发光；颜色空间复用 `FogLighting.WorkingColor`，不设环境光下限。太阳项消费启用状态、强度、RGB、alpha 中的行星遮挡和局部径向高度，并消费 [云阳光遮蔽](clouds.md#阳光遮蔽) 的本相机直射 / 环境倍率；未采样逐雨滴云影、地形遮蔽或局部灯光。
+雨滴接受环境 / 太阳光后加 `brightness` 自发光，0 为无自发光；颜色复用 `FogLighting.WorkingColor`，无环境下限。太阳项消费 enabled、强度、RGB、alpha 行星遮挡与径向高度，以及 [云遮蔽](clouds.md#阳光遮蔽) 的本相机直射 / 环境倍率；无逐滴云影、地形遮蔽或局部灯光。
 
-首轮把入射光乘法扩展到水花，用户反馈溅落消失，**两个水花 shader 及 `RainCollision.Draw` 光照参数已回退**。水花保留原 RGB / 雾显示路径，自发光滑块只控制雨滴，不能把水花也写成当前已接受新雨滴光照。
+水花保留原 RGB / 雾路径，自发光仅控制雨滴。禁止对水花重加雨滴入射光乘法：该做法曾使溅落消失，两个水花 shader 与 `RainCollision.Draw` 光照参数均已回退。
 
 ## 镜头水珠
 
-[RainLensEffect.cs](../Assets/Scripts/Volken/Weather/Rain/RainLensEffect.cs) 只挂游戏 NearCamera,通过普通 `OnRenderImage` 在透明物体之后折射场景,保留源 alpha;不进入云 / 雾合成或共享雨诊断。独立 `<RainLens>` 配置默认关闭,旧 XML 保持关闭,面板位于雨组内;预设加载 / 默认重置清池,相机替换、离场或关闭释放实例渲染资源。新 [RainLens.shader](../Assets/Scripts/Volken/Weather/Rain/Shader/RainLens.shader) 已登记 `_otherAssets`,仍需重新打包才能进入游戏。
+[RainLensEffect.cs](../Assets/Scripts/Volken/Weather/Rain/RainLensEffect.cs) 只挂 NearCamera，普通 `OnRenderImage` 在透明物体后折射，保留源 alpha，不参与云 / 雾合成或共享雨诊断。雨组 `<RainLens>` 默认 / 旧 XML 关闭；加载预设 / 重置清池，换相机、离场或关闭释放资源。[RainLens.shader](../Assets/Scripts/Volken/Weather/Rain/Shader/RainLens.shader) 已登记 `_otherAssets`，入游戏仍需打包。
 
-[RainLensSimulation.cs](../Assets/Scripts/Volken/Weather/Rain/RainLensSimulation.cs) 使用 128 槽固定池,尺寸 / 速度按屏幕高度标定,支持附着、滑动、短拖痕和寿命消退。生成要求雨开启,抬头点积或高速连续增加入射量;速度使用补偿参考帧的 `CraftScript.SurfaceVelocity`,迎雨更多、背向减少。密度由雨量 / 域体积映射,不读雨声音量、雨丝透明度或云高度。暂停冻结,停止下雨或转离触发方向后只消退残留;限高 / 水下沿用雨配置并调制显示。
+[RainLensSimulation.cs](../Assets/Scripts/Volken/Weather/Rain/RainLensSimulation.cs) 为 128 槽池，尺寸 / 速度按屏幕高度标定，支持附着、滑动、短拖痕、寿命。雨开启后抬头点积 / 高速增加入射；速度取补偿参考帧的 `CraftScript.SurfaceVelocity`，迎雨增加、背向减少。密度取雨量 / 域体积，不读音量、透明度或云高；暂停冻结，停雨 / 转离只消退残留，限高 / 水下沿用雨配置。
 
-水珠遮罩先恢复按覆盖度混合后的法线 / 高度,再施加最终淡出;较宽的明暗边缘使均匀天空上也能辨认水珠,高光只借用局部场景亮度,黑背景无独立发光。拖痕半宽为水珠半径的 0.40、覆盖倍率为 0.65。默认生成率 18 滴/秒、半径为屏幕高度的 1.8%、折射 14px、模糊 1.8px;加载时只在这四项全部保持首版默认 14 / 1.2% / 8 / 1.2 时整体升级,任一自定义则保留该组,不改开关。
+遮罩恢复按覆盖混合的法线 / 高度后再淡出；宽明暗边缘增强天空可见性，高光借场景亮度，黑背景不发光。拖痕半宽为半径 ×0.40，覆盖倍率 0.65。默认 18 滴/秒、半径屏高 1.8%、折射 14px、模糊 1.8px；仅四项全为旧默认 14 / 1.2% / 8 / 1.2 时整体升级，任一自定义保留整组，不改开关。
 
-遮雨开关默认开启,每 0.15 秒从来雨方向 60m 向镜头检测物理层 26 / 29 / 31 的非 Trigger Collider,也可检测包围镜头的机体外壳;缺 Collider、超过检测距离或特殊层会漏遮挡。遮罩按源宽高比缩到最多 1024×512,两次 pass 为水珠遮罩绘制和局部折射 / 模糊;无水珠不分配遮罩。当前不合并水珠、不模拟连续水膜、不限制到挡风玻璃区域,也不挂 PIP;游戏后处理 / 原生水下效果顺序和实际耗时见 [待验收](backlog.md#游戏验收)。
+遮雨默认开，每 0.15 秒从来雨方向 60m 检测至镜头，取层 26 / 29 / 31 的非 Trigger Collider，含包围镜头的机壳；缺 Collider、超距或特殊层会漏挡。遮罩等比缩至最多 1024×512，两 pass 画遮罩 / 折射模糊，无水珠不分配。暂无合并、水膜、玻璃区域限制或 PIP；后处理 / 原生水下顺序与耗时见 [待验收](backlog.md#游戏验收)。
 
 ## 雨碰撞与水花
 
-[RainCollision.cs](../Assets/Scripts/Volken/Weather/Rain/RainCollision.cs) 使用每相机正交深度和 GPU 位移段检测，水面另做解析海平面求交。软粒子读取 `CloudRenderer.LinearSceneDepth`，碰撞读取专用正交图，两种深度来源不能互换。
+[RainCollision.cs](../Assets/Scripts/Volken/Weather/Rain/RainCollision.cs) 用每相机正交深度 / GPU 位移段检测，水面解析求交海平面；碰撞正交图不可与软粒子的 `CloudRenderer.LinearSceneDepth` 互换。
 
 - 碰撞 / 水花默认关闭；面板开启水花会开启碰撞。深度分辨率为 256 / 512。
-- 捕获先按 `RenderType` 处理其余层，再对物理层 26 / 29 / 31 使用空 replacement tag，最多两次渲染。原生地形 / 建筑 / 机体 shader 缺少 `RenderType`，不能合回单次 tagged 捕获；导出 DummyShader 的标签不能当原始资产证据。
-- GPU 水花池每相机 2048 槽，每帧最多 128 次发射请求获准尝试入池；默认作用距离 25m。地面命中和水面命中互斥，关停 / 重定位清池，不创建逐滴 Collider / Rigidbody。
+- 先 tagged 捕获其余层，再以空 replacement tag 捕获层 26 / 29 / 31，最多两次。原生地形 / 建筑 / 机体缺 `RenderType`，不能合为单次 tagged；DummyShader 标签不代表原资产。
+- 每相机 2048 槽 GPU 水花池，每帧最多 128 次请求尝试入池，默认距离 25m；地面 / 水面命中互斥，关停 / 重定位清池，无逐滴 Collider / Rigidbody。
 - [RainSplashes.shader](../Assets/Scripts/Volken/Weather/Rain/Shader/RainSplashes.shader) 处理地面；[RainWaterSplashes.shader](../Assets/Scripts/Volken/Weather/Rain/Shader/RainWaterSplashes.shader) 用双 quad 绘制水平双涟漪、竖直冠状飞溅和液滴，沿命中法线构轴。
-- 水面线性场景深度可用时用片元 eye-depth 和 4cm 软边检查遮挡，避免原水面波峰写硬件深度挡掉解析平面水花；缺少该深度时回退 `LessEqual`。新增一次水面间接绘制，没有新增捕获相机。
+- 水面用线性场景 eye-depth / 4cm 软边检查遮挡，防波峰硬件深度挡住解析平面水花；缺深度回退 `LessEqual`。水面增加一次间接绘制，无新捕获相机。
 
-单层深度不能完整表达桥下 / 洞穴 / 多层结构，低分辨率可能漏细杆 / 机翼；水花不绑定移动机体，残留漂移仍待评估。PIP 使用玩家飞行器采样，观察其他远处飞行器时环境门控存在边界。
+单层图不完整表达桥洞 / 多层结构，低分辨率漏细杆 / 机翼；水花未绑定移动机体，残留漂移待评估。PIP 仍取玩家 craft 样本，远处其他机体环境可能不匹配。
 
 ## 径向薄雾与流动体积雾
 
@@ -71,24 +66,24 @@
 | [FogCommon.cginc](../Assets/Scripts/Volken/Weather/Fog/Shader/FogCommon.cginc) | 背景、云、自有透明物体共用查询 |
 | [HeightFog.shader](../Assets/Scripts/Volken/Weather/Fog/Shader/HeightFog.shader) / [VolumetricFog.compute](../Assets/Scripts/Volken/Weather/Fog/Shader/VolumetricFog.compute) | 薄雾查询纹理与体积列积分 |
 
-薄雾按双精度行星坐标求径向海拔，基准以下恒定密度、以上指数衰减，实际尺度 `H=height/heightFalloff`。薄雾单独运行使用 **513×257 RFloat 光学厚度查询纹理**，每相机约 0.503MiB；解析积分保留作生成和兼容回退。
+薄雾以双精度行星坐标求径向海拔，基准下恒密度、上指数衰减，`H=height/heightFalloff`；单独运行用 **513×257 RFloat 光学厚度纹理**（约 0.503MiB / 相机），解析积分用于生成与回退。
 
-体积雾使用每相机累计 3D RT，噪声固定行星坐标，CPU 双精度取周期余数，风使用排除暂停的时间。同开时合并密度一次积分；两类纹理互斥持有。体积无时序历史，低档可能有网格 / Z 分段。雾从纹理 UV 重建射线，使用 `GL.GetGPUProjectionMatrix(..., false)`，不能照云的 `true` 一刀切。
+体积雾用每相机累计 3D RT；行星固定噪声、CPU 双精度周期余数，风时钟排除暂停。同开合并密度一次积分，两类纹理互斥。无时序历史，低档可能网格 / Z 分段；从 UV 重建射线，`GL.GetGPUProjectionMatrix(..., false)` 不可改成云的 `true`。
 
-环境 RGB 与太阳 RGB 独立，无固定 0.03 环境下限。Linear 项目先转换输入色；太阳消费 enabled、intensity、RGB 和遮挡，环境光尊重游戏昼夜结果。两项分别消费 [云阳光遮蔽](clouds.md#阳光遮蔽) 的本相机倍率，不重复使用已衰减的相机照明。黑环境无太阳时散射为零，密度对应的透射衰减仍在。
+环境 / 太阳 RGB 独立、无 0.03 下限；Linear 先转输入色。太阳消费 enabled、intensity、RGB 与遮挡，环境遵守游戏昼夜；各取 [云遮蔽](clouds.md#阳光遮蔽) 本相机倍率，不重复衰减。黑环境无太阳时散射为零，透射衰减仍在。
 
-雾受场景、大气、水下、范围、零密度 / 不透明度门控，正交相机不支持。自有雨、水花、闪电已接入相机匹配的雾查询；原生透明水、玻璃、折射和反射雾尚未适配。云雾使用首个云命中 / 壳面距离近似，不是云内逐步联合积分。
+门控包括场景、大气、水下、范围、零密度 / 不透明度；无正交支持。自有雨 / 水花 / 闪电查询本相机雾，原生透明水 / 玻璃 / 折射 / 反射未适配；云取首命中 / 壳距近似，不做云内联合积分。
 
-雾滑块由下一帧读取，不反复刷新雷电启停；雾字段随天气预设 XML 一起保存。`SaveToFile` / `SaveCurrentConfig` 返回实际保存结果，完整写入临时文件后替换旧预设；写入失败保留旧文件，面板显示失败。另存为只有写入成功才更新预设名 / 列表 / 行星登记，避免显示成功却未落盘。发布日志边界统一见 [当前工具与诊断](development.md#当前工具与诊断)。
+雾滑块下一帧读取，不刷新雷电启停；字段随天气 XML 保存。`SaveToFile` / `SaveCurrentConfig` 返回实际结果，另存为写入成功后才更新名称 / 列表 / 行星登记；原子保存及失败保护见 [配置契约](architecture.md#配置与预设)，日志见 [诊断](development.md#当前工具与诊断)。
 
 ## 闪电与雷声
 
-[LightningModule.cs](../Assets/Scripts/Volken/Weather/Lightning/LightningModule.cs) 管理落雷、限高和雷声排程，[LightningBolt.cs](../Assets/Scripts/Volken/Weather/Lightning/LightningBolt.cs) 管理动画、分叉、闪光、暂停及清理，[GamePause.cs](../Assets/Scripts/Volken/Weather/GamePause.cs) 提供按帧缓存的暂停 / 时间。
+[LightningModule.cs](../Assets/Scripts/Volken/Weather/Lightning/LightningModule.cs) 管落雷 / 限高 / 雷声；[LightningBolt.cs](../Assets/Scripts/Volken/Weather/Lightning/LightningBolt.cs) 管动画 / 分叉 / 闪光 / 暂停清理；同目录上级 `GamePause.cs` 按帧缓存暂停 / 时间。
 
-- 分叉第 0 点显式 `SetPosition(0, from)`；整道雷共享独立分叉材质，由拥有者在分叉销毁后释放，避免主干销毁后变品红。网格和渐变静态共用。
-- 八个亮灭时间点完整初始化，首个亮脉冲同帧生效；真实 Unity Light 在 `BeginAnimation` 应用最终配置。落点球形闪光为 `flashIntensity × 0.2`，云内雷光保持独立。
-- 雷限高按观察者海拔和雷自身 `ceilingAltitude`，默认 12000m，0 关闭闸门。停用 / 离场停止协程、雷声与在播闪电，暂停冻结动画和排程，恢复处理 DSP 时间。
-- 雷声 near / far 按观察者距离选素材；声程可混合落点与云底最短距离。声速从同一观察者位置的游戏 `AtmosphereData.SampleAltitude(...).SpeedOfSound` 取得；无有效正声速时不新排雷声。
-- **兜底声速字段 / UI 已删除**。即使选择固定延迟模式，当前代码也先要求有效大气样本；不自行填常量声速。使用多 AudioSource 和 `PlayScheduled`，避免新雷声覆盖旧排程。
+- 分叉显式 `SetPosition(0, from)`；独立材质整雷共享，由拥有者在分叉全销毁后释放，防主干销毁后变品红；网格 / 渐变静态共享。
+- 初始化全部八个亮灭点，首脉冲同帧生效；`BeginAnimation` 向 Unity Light 应用最终配置；落点闪光 `flashIntensity × 0.2`，云内雷光独立。
+- 按观察者海拔 / `ceilingAltitude` 限高，默认 12000m、0 关闭；停用 / 离场停协程、雷声与闪电；暂停冻结动画 / 排程，恢复处理 DSP 时间。
+- near / far 按观察者距离选素材，声程可混合落点 / 云底最短距；声速取同位置 `AtmosphereData.SampleAltitude(...).SpeedOfSound`，无有效正值不排新声。
+- 固定延迟也要求有效大气样本；兜底声速字段 / UI 已删，不填常量。多 AudioSource / `PlayScheduled` 防新声覆盖旧排程。
 
-尚未处理跨大气声程积分、水下介质、镜头进入真空后的旧排程取消、落点贴地形和联机一致性。云内雷光的渲染契约见 [云](clouds.md#雷光与水面反射)。
+跨大气声程、水下介质、进入真空取消旧声、贴地形与联机未处理；云内雷光见 [渲染契约](clouds.md#雷光与水面反射)。

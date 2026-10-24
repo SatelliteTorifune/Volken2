@@ -25,10 +25,8 @@
   <stepSizeFalloff>0.1</stepSizeFalloff>
   <numLightSamplePoints>50</numLightSamplePoints>
   <lightMarchDistance>500</lightMarchDistance>
-  <solarCacheEnabled>false</solarCacheEnabled>
+  <solarLightReuseEnabled>false</solarLightReuseEnabled>
   <emptySpaceSkippingEnabled>false</emptySpaceSkippingEnabled>
-  <solarCacheResolution>24</solarCacheResolution>
-  <solarCacheExtent>24000</solarCacheExtent>
   <blueNoiseStrength>0</blueNoiseStrength>
   <historyBlend>0</historyBlend>
   <historyDepthThreshold>0.05</historyDepthThreshold>

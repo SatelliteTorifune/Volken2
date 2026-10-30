@@ -32,6 +32,19 @@
     <s id="Volken.UI.WeatherResetToDefault">已重置为默认，请保存配置。</s>
 
 
+    <s id="Volken.UI.WeatherRegions">地区天气</s>
+    <s id="Volken.UI.RegionsEnabled">启用地区雨与雷暴</s>
+    <s id="Volken.UI.RegionsDistribution">地区分布方式</s>
+    <s id="Volken.UI.RegionsProcedural">程序化分布</s>
+    <s id="Volken.UI.RegionsTexture">全球贴图分布</s>
+    <s id="Volken.UI.RegionsMapLongitude">贴图东向偏移 (度)</s>
+    <s id="Volken.UI.RegionsSeed">分布种子</s>
+    <s id="Volken.UI.RegionsCoverage">降雨覆盖度</s>
+    <s id="Volken.UI.RegionsCellSize">地区尺度 (km)</s>
+    <s id="Volken.UI.RegionsEdgeSoftness">边界柔和度</s>
+    <s id="Volken.UI.RegionsWindSpeed">赤道东向移动速度 (m/s)</s>
+    <s id="Volken.UI.RegionsStormFraction">雨区内雷暴覆盖度</s>
+
     <s id="Volken.UI.WeatherRain">雨</s>
     <s id="Volken.UI.RainLens">镜头水珠</s>
     <s id="Volken.UI.RainLensEnabled">启用镜头水珠</s>

@@ -88,8 +88,8 @@ namespace Volken.Clouds
 
             // 天体/太阳参数与 SetLayerDynamicProperties 一致。只读:runningOffset / accumulatedRotation 用主相机上一帧推进后的值,一帧之差可忽略。
             Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
-            var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-            Vector3 lightDir = sun != null ? sun.transform.forward : Vector3.up;
+            Vector3 lightDir = CloudSceneLighting.SunDirection(
+                Game.Instance.FlightScene.ViewManager.GameView.SunLight);
             float surfaceRadius = 1f;
             try { surfaceRadius = (float)craftNode.Parent.PlanetData.Radius; } catch { }
 

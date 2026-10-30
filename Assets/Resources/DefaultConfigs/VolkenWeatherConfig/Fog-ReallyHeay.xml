@@ -1,6 +1,17 @@
 <?xml version="1.0"?>
 <VolkenWeatherConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Overall />
+  <Regions>
+    <enabled>false</enabled>
+    <distribution>0</distribution>
+    <mapLongitudeOffset>0</mapLongitudeOffset>
+    <seed>1337</seed>
+    <coverage>0.5</coverage>
+    <cellSizeKm>150</cellSizeKm>
+    <edgeSoftness>0.2</edgeSoftness>
+    <windSpeed>20</windSpeed>
+    <stormFraction>0.3</stormFraction>
+  </Regions>
   <Rain>
     <enabled>false</enabled>
     <amount>100000</amount>

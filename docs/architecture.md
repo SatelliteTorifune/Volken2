@@ -4,13 +4,13 @@
 
 ## 项目与入口
 
-Volken 为 SimpleRockets 2 / Juno: New Origins 视觉模组，开发环境 Unity **2022.3.62f3** / BIRP；版本以 `Assets/ModData.asset` 为准（当前 **0.68**），`version.txt` 同步；游戏加载以 ModData 为准。
+Volken 为 SimpleRockets 2 / Juno: New Origins 视觉模组，开发环境 Unity **2022.3.62f3** / BIRP；版本以 `Assets/ModData.asset` 为准（当前 **0.7**），`version.txt` 记录已发布版本（当前 0.68）；游戏加载以 ModData 为准。
 
 | 入口 | 职责 |
 |---|---|
 | [Mod.cs](../Assets/Scripts/Mod.cs) | 创建 UI、水设置组件，初始化云和天气，注册控制台命令 |
 | [ModSettings.cs](../Assets/Scripts/ModSettings.cs) | 开发日志、水面反射、附加相机等全局选项 |
-| [ModUpdater.cs](../Assets/Scripts/ModUpdater.cs) | 更新检查（GitHub → `version.txt` → 官方 mod 页版本号，失败静默） |
+| [ModUpdater.cs](../Assets/Scripts/ModUpdater.cs) | 更新检查（GitHub → `version.txt` → 官方 mod 页版本号，失败静默）；版本按十进制小数比较：0.62 < 0.68 < 0.7 |
 | [VolumetricClouds.cs](../Assets/Scripts/Volken/Clouds/VolumetricClouds.cs) | 云层、行星解析、云预设和渲染器装配；广播 `PlanetChanged` |
 | [PlanetEnvironment.cs](../Assets/Scripts/Volken/Clouds/PlanetEnvironment.cs) | 行星、飞行状态、大气和水的环境快照 |
 | [VolkenWeather.cs](../Assets/Scripts/Volken/Weather/VolkenWeather.cs) | 订阅行星事件，加载天气预设，驱动雨和雷电 |

@@ -228,10 +228,10 @@ namespace Volken.Weather
         }
 
         /// <summary>雨量 → light/heavy 混合系数(0 = 小雨,1 = 暴雨)。出厂 10 万粒 × 强度 1.0 → 0.5(各半);20 万粒或强度 2 → 1.0。</summary>
-        public static float ComputeIntensity()
+        public static float ComputeIntensity(float regionalRain = 1f)
         {
             float amountFactor = RainParticles.Capacity / IntensityAmountScale;
-            return Mathf.Clamp01(RainParticles.Strength * amountFactor);
+            return Mathf.Clamp01(RainParticles.Strength * amountFactor * regionalRain);
         }
 
         /// <summary>暂停一组:待播的那条必须停(绝对 dsp 排程会在暂停期间抢跑);在播的两条 Pause 住,恢复后接着播/接着淡。</summary>
@@ -317,6 +317,7 @@ namespace Volken.Weather
                             && RainParticles.Volume > VoiceStopMix;
 
             float altFade = 1f;
+            float regionalRain = RainParticles.StandaloneMode ? 1f : VolkenWeather.Instance?.SampleMainRegionalWeather().Rain ?? 1f;
             if (gateOpen)
             {
                 altFade = Mathf.Clamp01(RainParticles.LastAltitudeFade * RainParticles.LastWaterFade);   // 高度 + 水下闸门:雨被压掉时声音一起走
@@ -329,13 +330,16 @@ namespace Volken.Weather
                     if (w != null && !w.IsActive) gateOpen = false;
                 }
             }
+            if (regionalRain <= 0f) gateOpen = false;
+
+            float targetFade = gateOpen ? regionalRain : 0f;
 
             if (gateOpen != _lastGateOpen)
             {
                 _lastGateOpen = gateOpen;
                 Mod.Log("RainAudio: 门控 {0} (enabled={1} rainEnabled={2} rainVol={3:F2} altFade={4:F3} → 目标包络 {5})",
                     gateOpen ? "开 → 淡入" : "关 → 淡出", Enabled, RainParticles.Enabled,
-                    RainParticles.Volume, altFade, gateOpen ? 1f : 0f);
+                    RainParticles.Volume, altFade, targetFade);
             }
 
             // 首次出声时拉起素材数据(preloadAudioData=0 不会自动预载;不拉会吃掉第一声;只在要出声时拉以省内存)
@@ -347,11 +351,10 @@ namespace Volken.Weather
             }
 
             // ---- 目标值:只算目标,进度单调推进 ----
-            float targetFade = gateOpen ? 1f : 0f;
             float fadeDuration = targetFade > _fade ? FadeInTime : FadeOutTime;
             _fade = Mathf.MoveTowards(_fade, targetFade, dt / Mathf.Max(0.05f, fadeDuration));
 
-            float targetIntensity = ComputeIntensity();
+            float targetIntensity = ComputeIntensity(regionalRain);
             _intensity = Mathf.MoveTowards(_intensity, targetIntensity, Mathf.Max(0.01f, IntensitySmooth) * dt);
 
             // ---- 混音:等功率交叉淡化 ----

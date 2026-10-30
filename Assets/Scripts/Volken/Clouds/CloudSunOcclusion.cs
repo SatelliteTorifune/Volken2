@@ -70,7 +70,7 @@ namespace Volken.Clouds
             var sun = Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight;
             if (node?.ReferenceFrame == null || node.Parent == null || sun == null) { Invalidate(); return; }
             Vector3 center = node.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
-            Vector3 position = camera.transform.position, toSun = -sun.transform.forward;
+            Vector3 position = camera.transform.position, toSun = -CloudSceneLighting.SunDirection(sun);
             Vector3 planetPosition = (Vector3)node.ReferenceFrame.FrameToPlanetVector(position - center);
             Vector3 planetSun = (Vector3)node.ReferenceFrame.FrameToPlanetVector(toSun);
             if ((planetPosition - _position).sqrMagnitude > 62500f || Vector3.Dot(planetSun, _sunDirection) < 0.999f)

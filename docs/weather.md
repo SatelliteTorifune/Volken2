@@ -14,6 +14,16 @@
 - 启用中切雷电预设用 `refreshSchedule=true` 重抽下一次间隔，保留在播闪电 / 待播雷声；普通刷新不重排。恢复默认同步雨参数与雷电启停。
 - `PlanetConfigLoaded` 在运行态同步后发出；另存为及跨场景语义统一见 [配置契约](architecture.md#配置与预设)。
 
+## 地区分布
+
+[RegionalWeather.cs](../Assets/Scripts/Volken/Weather/RegionalWeather.cs) 提供无状态球面采样。`VolkenWeather.SampleRegionalWeather` 将每相机 / 落雷候选的帧位置经 `FrameToPlanetPosition`、`PlanetVectorToSurfaceVector` 转为双精度固连坐标，按海平面半径归一化；行星名与 seed 确定噪声，`FlightState.Time` 决定平流。暂停不推进天气，重定位不改变地理分布；无坐标缓存。无效输入返回恒等并按故障段记录诊断，环境门控仍独立生效。
+
+XML `<Regions>` 默认 / 缺节点为关闭，三语面板位于天气根组。`distribution=0/1` 选程序化 / 贴图，旧 XML 默认 0；`mapLongitudeOffset=0`（−180~180°，正值向东）。其余默认 / 范围：`seed=1337`（XML int，UI 0~999999）；`coverage=0.5`、`stormFraction=0.3`（0~1）；`cellSizeKm=150`（1~2000km）；`edgeSoftness=0.2`（0.01~0.5）；`windSpeed=20`（−200~200m/s，赤道东向即绕 −Y，局部速度乘 cos 纬度）。格距不是区域半径；覆盖调阈值，不是面积比例，0 / 1 为全干 / 全雨；雷暴比例 0 / 1 为无雷 / 全雨区可落雷。
+
+程序化模式用两级三维值噪声；贴图模式用 [RegionalCoverage.png](../Assets/Scripts/Volken/Weather/Textures/RegionalCoverage.png) 的 R 线性灰度，同用覆盖阈值 / 柔和度与平流。图为用户原始 1024×512 文件，北在上；`lon=-atan2(x,z)`，`u=lon/2π+0.5-offset/360`、`v=lat/π+0.5`，双线性横向循环，极点半像素收敛到边缘行均值。[RegionalWeatherMap](../Assets/Scripts/Volken/Weather/RegionalWeatherMap.cs) 缓存不可变 0.5MiB CPU 灰度；纹理可读、非 sRGB、无 mip / 压缩，已登记 `_otherAssets`。天气驱动首次使用时读取，失败限频诊断、30秒重试并回退程序化，不改所选模式。
+
+两种来源都以独立类型噪声乘雨倍率得到 Storm；贴图覆盖整球，不随格距或种子缩放，格距 / 种子仍控制雷暴类型分布。当前只返回水平 Rain / Storm，高度由各效果限高控制。雨按相机倍率改有效数量，保留容量和模拟；水花 / 水珠停新生后残留按寿命消退。雨声独立查主 NearCamera，倍率控制混音与淡出；PIP 不回写。切来源不重建雨池或重排雷电；远景 / 雾 / 云边界见 [地区设计](weather-regions.md#效果接入边界)。
+
 ## 雨粒子、朝向与声音
 
 | 入口 | 职责 |
@@ -27,7 +37,7 @@
 
 粒子在参考帧下落，雨丝由世界 / 帧空间 `_RotationMatrix` 构轴；流线用 **`down * FallSpeed - axisVel`**，不以相机绕飞速度代替飞行器速度或写死世界 -Y。`TranslateFixed` 处理重定位；重生用 `id + phase` 整数 hash，避免大数 float32 `frac` 精度塌缩。
 
-自适应雨域只增半径、密度下降，不在 `OnPreCull` 重建 buffer 补密度。`ApplyConfig` 更新全部实例容量 / 几何；compute、材质、buffer、碰撞与就绪状态按实例持有。CPU 只在容量 / 测试模式变化或重建后上传间接数量，稳定帧不上传、不清零、不做 GPU 计数；暂无可见性剔除，新增 GPU 可见列表须恢复计数契约。共享诊断 / 环境淡出仅主视图写，防 PIP 覆盖雨声。
+自适应雨域只增半径、密度下降，不在 `OnPreCull` 重建 buffer 补密度。`ApplyConfig` 更新全部实例容量 / 几何；compute、材质、buffer、碰撞与就绪状态按实例持有。CPU 仅有效数量变化或重建后上传间接数量，稳定数量不上传、不清零、不做 GPU 计数；暂无可见性剔除，新增 GPU 可见列表须恢复计数契约。共享诊断 / 环境淡出仅主视图写，防 PIP 覆盖雨声。
 
 `rain.transparency` 范围 0~1：0 保留原 alpha，1 完全透明，只影响雨滴 / 水花视觉，不改变雨声或共享环境淡出。雨限高和水下淡出看雨自身配置，不读 `maxCloudHeight`。
 
@@ -83,6 +93,7 @@
 - 分叉显式 `SetPosition(0, from)`；独立材质整雷共享，由拥有者在分叉全销毁后释放，防主干销毁后变品红；网格 / 渐变静态共享。
 - 初始化全部八个亮灭点，首脉冲同帧生效；`BeginAnimation` 向 Unity Light 应用最终配置；落点闪光 `flashIntensity × 0.2`，云内雷光独立。
 - 按观察者海拔 / `ceilingAltitude` 限高，默认 12000m、0 关闭；停用 / 离场停协程、雷声与闪电；暂停冻结动画 / 排程，恢复处理 DSP 时间。
+- 地区模式先在 `targetRange` 内选球面落点，再按该点 Storm 倍率接受一次，不在晴区重抽；源点以该地理列和云层中高为基准应用 `spawnRange` 偏移。晴区观察者可见邻区雷电，球面落点仍未贴地形；关闭地区模式沿用旧生成路径。
 - near / far 按观察者距离选素材，声程可混合落点 / 云底最短距；声速取同位置 `AtmosphereData.SampleAltitude(...).SpeedOfSound`，无有效正值不排新声。
 - 固定延迟也要求有效大气样本；兜底声速字段 / UI 已删，不填常量。多 AudioSource / `PlayScheduled` 防新声覆盖旧排程。
 

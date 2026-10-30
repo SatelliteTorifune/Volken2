@@ -51,7 +51,8 @@ namespace Volken.Clouds
             detailTex = noise.GetWhorleyFBM3D(128, 8 + layerIndex * 2, 4, 0.5f, 2.0f);
             material.SetTexture("CloudDetailTex", detailTex);
 
-            planetMapTex = noise.GetPlanetMap(2048, 16.0f + layerIndex * 4.0f, 6, 0.5f, 2.0f);
+            // 每层 2048×1024 RGFloat:ValueFractal 的高频 octave 已低于该采样率,降采样只省带宽 / 显存,不改大尺度覆盖。
+            planetMapTex = noise.GetPlanetMap(1024, 16.0f + layerIndex * 4.0f, 6, 0.5f, 2.0f);
             material.SetTexture("PlanetMapTex", planetMapTex);
 
             if (sharedBlueNoiseOverride != null)
@@ -78,6 +79,8 @@ namespace Volken.Clouds
             mat.SetFloat("cloudAbsorption", config.absorption);
             mat.SetFloat("ambientLight", config.ambientLight);
             mat.SetFloat("_CloudSunOcclusion", config.sunOcclusionEnabled || config.groundShadowsEnabled ? 1f : 0f);
+            // Clouds pass 需要本帧合成模式:Additive 不消费云 alpha,可跳过只写 alpha 的相机级阴影光程。
+            mat.SetFloat("_CompositeMode", config.compositeMode == CompositeMode.Standard ? 1f : 0f);
             float sunlightStrength = CloudSunOcclusion.Strength(config.sunlightOcclusionStrength, 0.8f);
             mat.SetFloat("_SunlightOcclusionStrength", config.sunOcclusionEnabled && !config.groundShadowsEnabled ? sunlightStrength : 0f);
             mat.SetFloat("_AmbientOcclusionStrength", config.sunOcclusionEnabled ? CloudSunOcclusion.Strength(config.ambientOcclusionStrength, 0.5f) : 0f);

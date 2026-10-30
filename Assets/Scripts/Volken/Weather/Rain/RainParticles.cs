@@ -337,7 +337,7 @@ namespace Volken.Weather
             _lastInstanceCount = -1;
         }
 
-        // 当前没有 GPU 可见性剔除;数量只在容量或测试模式变化时上传,不能逐帧清零。
+        // 当前没有 GPU 可见性剔除;有效数量变化时才上传,地区雨量不重建缓冲。
         private void UpdateDrawCount(int amount)
         {
             if (_lastInstanceCount == amount) return;
@@ -1007,7 +1007,8 @@ namespace Volken.Weather
             }
 
             int cap = Mathf.Max(1, BufferCapacity > 0 ? BufferCapacity : Capacity);
-            int amount = TestRow ? 20 : cap;   // 等距排只画一小排(20 粒,30m 外 3m 间距)
+            float regionalRain = StandaloneMode ? 1f : VolkenWeather.Instance?.SampleRegionalWeather(camPos).Rain ?? 1f;
+            int amount = Mathf.RoundToInt((TestRow ? 20 : cap) * regionalRain);
 
             bool collisionActive = false;
             _mat.SetInt("_RainCollisionEnabled", 0);
@@ -1017,7 +1018,7 @@ namespace Volken.Weather
                 try
                 {
                     if (_collision == null) _collision = new RainCollision();
-                    collisionActive = _collision.Begin(_cam, _positions, _mat, down, effR, dt,
+                    collisionActive = _collision.Begin(_cam, _positions, _mat, amount, down, effR, dt,
                         hasWater, StandaloneMode ? camPos.y : craft.Altitude, craft.SeaRadius,
                         StandaloneMode || craft.SeaUp.sqrMagnitude < 0.5f ? -down : craft.SeaUp);
                 }

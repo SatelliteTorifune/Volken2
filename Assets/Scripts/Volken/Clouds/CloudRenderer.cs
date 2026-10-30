@@ -64,7 +64,7 @@ namespace Volken.Clouds
 
         public CloudRenderer()
         {
-            cam = GetComponent<Camera>();
+            // camera resolved in OnEnable (GetComponent is illegal in a MonoBehaviour constructor)
             CloudRenderManualRefresh();
 
             // 切天体 → 本相机历史作废。只订阅唯一的行星事件源:自己监听 PlayerChangedSoi 会漏退订(销毁后实例仍被事件链引用)
@@ -91,6 +91,10 @@ namespace Volken.Clouds
             TryResolveFarDepthSource();
             CloudSceneLighting.Register(this);
         }
+
+        // Juno 在 Update 更新恒星光;在云影作用域改写光源前取本帧基线(见 CloudSceneLighting)。
+        private void LateUpdate() =>
+            CloudSceneLighting.CaptureSunSnapshot(Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight);
 
         private void OnPreRender() => Volken.Weather.FogRenderer.ClearGlobals();
         private void OnPostRender() => Volken.Weather.FogRenderer.ClearGlobals();
@@ -446,10 +450,12 @@ namespace Volken.Clouds
             mat.SetVector("sphereCenter", frame.PlanetToFramePosition(Vector3d.zero));
             mat.SetFloat("surfaceRadius", (float)node.Parent.PlanetData.Radius);
             var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-            mat.SetVector("lightDir", sun.transform.forward);
-            Color sunColor = CloudSceneLighting.SunColorBaseline(sun);
+            CloudSceneLighting.ReportSunLightMismatch(sun);
+            mat.SetVector("lightDir", CloudSceneLighting.SunDirection(sun));
+            Color sunColor = CloudSceneLighting.ResolvedSunColor(sun);
             var solar = CloudAmbientColor(sunColor, QualitySettings.activeColorSpace == ColorSpace.Linear);
-            float amount = sun.isActiveAndEnabled ? CloudSceneLighting.SunIntensityBaseline(sun) * Mathf.Clamp01(sunColor.a) : 0f;
+            float amount = CloudSceneLighting.SunEnabled(sun)
+                ? CloudSceneLighting.SunIntensity(sun) * Mathf.Clamp01(sunColor.a) : 0f;
             mat.SetVector("_CloudSolarColor", solar * amount);
             mat.SetFloat("currentRotation", layer.accumulatedRotation);
             mat.SetVector("cloudOffset", layer.runningOffset);

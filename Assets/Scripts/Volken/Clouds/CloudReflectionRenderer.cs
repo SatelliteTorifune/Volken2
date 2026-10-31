@@ -116,7 +116,7 @@ namespace Volken.Clouds
             EnsureResources(rt.width, rt.height);
 
             int cloudsPass = -1;
-            int compositePass = -1;
+            int additivePass = -1;
 
             foreach (var layer in activeLayers)
             {
@@ -126,10 +126,10 @@ namespace Volken.Clouds
                 if (mat == null) continue;
 
                 if (cloudsPass < 0) cloudsPass = mat.FindPass("Clouds");
-                if (compositePass < 0) compositePass = mat.FindPass("Composite");
-                if (cloudsPass < 0 || compositePass < 0)
+                if (additivePass < 0) additivePass = mat.FindPass("ReflectionCloudAdditive");
+                if (cloudsPass < 0 || additivePass < 0)
                 {
-                    Mod.Log("Cloud reflection pass not found (Clouds={0}, Composite={1})", cloudsPass, compositePass);
+                    Mod.Log("Cloud reflection pass not found (Clouds={0}, Additive={1})", cloudsPass, additivePass);
                     return;
                 }
 
@@ -190,15 +190,7 @@ namespace Volken.Clouds
                     Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
 
                     mat.SetTexture("UpscaledCloudTex", _cloudTex);
-                    mat.SetTexture("OrbitCloudTex", _cloudTex);   // 轨道云不进反射路径:绑上避免空采样
-                    mat.SetTexture("SceneDepthTex", _cloudTex);   // additive 分支不使用,绑上避免空采样
-                    mat.SetFloat("_CompositeMode", 0f);           // additive
-                    mat.SetFloat("_OrbitFade", 0f);               // 反射相机在水面(低空)→ 恒纯体积云
-
-                    var tmp = RenderTexture.GetTemporary(rt.width, rt.height, 0, rt.format);   // 不能同 RT 读写
-                    Graphics.Blit(rt, tmp, mat, compositePass);
-                    Graphics.Blit(tmp, rt);
-                    RenderTexture.ReleaseTemporary(tmp);
+                    Graphics.Blit(_cloudTex, rt, mat, additivePass);   // Blend One One:只加云 RGB,不改反射 RT 的 alpha
                 }
                 finally
                 {

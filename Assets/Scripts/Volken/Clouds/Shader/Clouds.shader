@@ -4,7 +4,7 @@ Shader "Hidden/Clouds"
     {
         _MainTex("Texture", 2D) = "white" {}
         _NearThreshold("Near Threshold", Float) = 2000.0
-        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 15
+        [HideInInspector] _CloudVisibilityRevision("Cloud visibility revision", Float) = 22
         [HideInInspector] _CloudSunOcclusion("Cloud sun occlusion", Float) = 0
         [HideInInspector] _SunlightOcclusionStrength("Sunlight occlusion strength", Float) = 0.8
         [HideInInspector] _AmbientOcclusionStrength("Ambient occlusion strength", Float) = 0.5
@@ -28,8 +28,6 @@ Shader "Hidden/Clouds"
         CloudMVTex("Cloud motion and previous distance", 2D) = "" {}
         CloudLightningTex("Current cloud lightning", 2D) = "black" {}
         _LightningShadowTex("Lightning optical depth atlas", 2D) = "black" {}
-        _CloudSolarCacheTex("Solar optical depth atlas", 2D) = "black" {}
-        [HideInInspector] _CloudSolarCacheEnabled("Solar cache available", Float) = 0
         [HideInInspector] _CloudEmptySpaceEnabled("Conservative empty space", Float) = 0
         HistoryCloudDepthTex("HistoryCloudDepthTex", 2D) = "" {}
         UpscaledCloudTex("UpscaledCloudTex", 2D) = "" {}
@@ -174,9 +172,7 @@ Shader "Hidden/Clouds"
 
             CGPROGRAM
 
-            #pragma multi_compile_local __ VOLKEN_CLOUD_SOLAR_CACHE
             #pragma multi_compile_local __ VOLKEN_CLOUD_EMPTY_SPACE
-            #pragma target 4.0 VOLKEN_CLOUD_SOLAR_CACHE
             #pragma target 4.0 VOLKEN_CLOUD_EMPTY_SPACE
             #pragma vertex vert
             #pragma fragment frag
@@ -204,6 +200,7 @@ Shader "Hidden/Clouds"
             float _Aspect;
             float _ReflectionMode; // 1 = 反射路径(跳过 DepthTex 遮挡)
             float _UseTemporal;
+            float _CompositeMode; // 0 = Additive, 1 = Standard;与 Composite pass 同一材质属性
 
             vert2Frag vert(appdata v)
             {
@@ -228,9 +225,6 @@ Shader "Hidden/Clouds"
             }
 
             #include "CloudVolumeLighting.cginc"
-            #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
-            #include "CloudSolarCache.cginc"
-            #endif
             #if defined(VOLKEN_CLOUD_EMPTY_SPACE)
             #include "CloudEmptySpace.cginc"
             #endif
@@ -326,13 +320,16 @@ Shader "Hidden/Clouds"
                 while(rayDist < maxRayDist && iter < 350) {
                     #if defined(VOLKEN_CLOUD_EMPTY_SPACE)
                     [branch] if (CloudTrySkipEmptyInterval(camPos, viewDir, maxRayDist,
-                        rayDist, localStepSize, stepSizeMultiplier, emptySamples, iter)) continue;
+                        rayDist, localStepSize, stepSizeMultiplier, emptySamples, iter))
+                    {
+                        continue;
+                    }
                     #endif
                     rayPos = camPos + rayDist * viewDir;
                     // get full or partial density sample at the current ray position and interpolate at the transition
                     density = (stepSizeMultiplier == 1.0 && rayDist < detailCutoffDist)
                         ? SampleDensity(rayPos, saturate(1e-4 * (detailCutoffDist - rayDist)), noiseLod)
-                        : SampleDensityCheap(rayPos, noiseLod);
+                        : SampleDensityCheap(rayPos, noiseLod, true);
                     
                     if (density > 0.0) {
                         // switch to normal step size when a cloud surface is hit and backtrack the overshot distance
@@ -348,20 +345,7 @@ Shader "Hidden/Clouds"
 
                         float amb = ambientLight * clamp(10.0 * dot(normalize(rayPos - sphereCenter), -lightDir), 0.0, 1.0);
                     
-                        #if defined(VOLKEN_CLOUD_SOLAR_CACHE)
-                        float2 cachedSample = 0.0;
-                        float cacheWeight = 0.0;
-                        [branch] if (_CloudSolarCacheEnabled > 0.5)
-                            TrySampleCachedLightRay(rayPos, noiseLod, cachedSample, cacheWeight);
-                        float2 lightSample = cachedSample;
-                        [branch] if (cacheWeight < 1.0)
-                        {
-                            lightSample = SampleLightRay(rayPos, noiseLod);
-                            if (cacheWeight > 0.0) lightSample = lerp(lightSample, cachedSample, cacheWeight);
-                        }
-                        #else
                         float2 lightSample = SampleLightRay(rayPos, noiseLod);
-                        #endif
                         
                         float3 solarRadiance = BeersPowder(lightSample.x, 0.0) * (1.0 - amb)
                             * exp(-lightSample.y * scatterCoeff) * phaseValue;
@@ -395,9 +379,9 @@ Shader "Hidden/Clouds"
                 }
                 
                 float shadowTransmittance = 1.0;
-                // calculate shadows for solid surfaces
+                // 相机级阴影光程只写 alpha(透射率);Additive 合成不消费 alpha,故只在 Standard 模式计算。
                 // 反射路径没有地表/场景遮蔽,跳过地表阴影(否则反射云会被整体压暗 50%)。
-                if (_CloudSunOcclusion < 0.5 && (surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
+                if (_CloudSunOcclusion < 0.5 && _CompositeMode > 0.5 && (surfIntersect.y > 0.0 || depth < maxDepth) && _ReflectionMode < 0.5) {
                     // offset sample point to avoid precision artifacts
                     shadowTransmittance = 0.5 + 0.5 * Beer(SampleLightRay(camPos + (maxRayDist - 50.0) * viewDir,
                         noiseLod).x, ambientLight);
@@ -501,7 +485,11 @@ Shader "Hidden/Clouds"
                 float4 world = mul(_GroundShadowInverseVP, float4(clip, raw, 1));
                 float3 position = world.xyz / world.w;
                 float fade = 1 - smoothstep(_GroundShadowDistance * 0.8, _GroundShadowDistance, distance(position,_GroundShadowCameraPosition));
-                float t = lerp(1, CloudSunTransmittance(position, -lightDir), _GroundShadowStrength * fade);
+                float weight = _GroundShadowStrength * fade;
+                float t = 1.0;
+                // 零贡献仍输出接收深度,供双边重建拒绝异面样本。
+                [branch] if (weight != 0.0)
+                    t = lerp(1, CloudSunTransmittance(position, -lightDir), weight);
                 float depth = -mul(_GroundShadowView, float4(position,1)).z;
                 return float4(t,t,t,depth);
             }
@@ -694,6 +682,27 @@ Shader "Hidden/Clouds"
                 return lerp(center, sum / weightSum, blend);
             }
 
+            // 历史颜色包络:当前帧 3×3 的 min/max 限制历史,旧云轮廓不能越过本帧邻域。
+            // 颜色与透射率一起钳;alpha 容差更小,旧不透明轮廓收得更快。中心取重建后的本帧值。
+            float4 ClampHistoryToCurrent(float2 uv, float4 fresh, float4 history)
+            {
+                float2 texel = abs(_MainTex_TexelSize.xy);
+                float2 margin = texel * 0.5;
+                float4 minimum = fresh;
+                float4 maximum = fresh;
+                [unroll] for (int y = -1; y <= 1; y++)
+                [unroll] for (int x = -1; x <= 1; x++)
+                {
+                    if (x == 0 && y == 0) continue;
+                    float2 sampleUv = clamp(uv + float2(x, y) * texel, margin, 1.0 - margin);
+                    float4 current = _MainTex.SampleLevel(sampler_MainTex, sampleUv, 0);
+                    minimum = min(minimum, current);
+                    maximum = max(maximum, current);
+                }
+                float4 expansion = float4(0.025, 0.025, 0.025, 0.015);
+                return clamp(history, minimum - expansion, maximum + expansion);
+            }
+
             // 单目标输出:颜色走 Graphics.Blit(自动绑 _MainTex,已由 Dilate/深度 pass 验证可靠)。
             // 云面距离历史由 CloudRenderer 直接 Blit 低清 cloudDepthTex → 全清 historyCloudDepthTex。
             float4 frag(v2f i) : SV_Target
@@ -713,6 +722,9 @@ Shader "Hidden/Clouds"
                 float2 mv = motion.xy;
                 float2 reprojUV = i.uv + mv;
                 bool inBounds = (min(reprojUV.x, reprojUV.y) >= 0.0) && (max(reprojUV.x, reprojUV.y) <= 1.0);
+                // These cases already have zero history weight; skip all three history texture reads.
+                [branch] if (!inBounds || motion.z * 1e5 <= 0.001 ||
+                    (_UseTemporal >= 0.5 && length(mv) * 200.0 >= 1.0)) return fresh;
 
                 // 历史接受判据:场景遮挡与上一相机预期云面距离匹配。
                 float historySceneDepth = HistoryDepthTex.Sample(samplerHistoryDepthTex, reprojUV);
@@ -739,6 +751,7 @@ Shader "Hidden/Clouds"
                     // 运动自适应混合:快速拖动(|MV| 大)时加大本帧分量 → 边缘不拖影;
                     // 静止时回到 _TssBlend 时序降噪。MV 单位是低清 UV(0..1):
                     // ~0.005 UV(网格2 时约 7 屏像素/帧)即视为快移 → 纯本帧。
+                    // 邻域钳制只在历史真正参与时采样;TSS 关的"运动残影"是用户显式选择,不钳制。
                     float mvLen = length(mv);
                     float motionW = saturate(mvLen * 200.0);
                     float tssBlend = lerp(_TssBlend, 1.0, motionW);
@@ -747,7 +760,11 @@ Shader "Hidden/Clouds"
                     if (hasFreshCloud && validHist > 0.5)
                     {
                         // 历史降噪,本帧追运动;快移 → 纯本帧。
-                        result = lerp(history, fresh, tssBlend);
+                        // 透射率差越大历史越不可信:历史权重再乘 0.5~1,向本帧收敛更快。
+                        float4 historyValue = ClampHistoryToCurrent(i.uv, fresh, history);
+                        float historyWeight = (1.0 - tssBlend) *
+                            lerp(0.5, 1.0, saturate(1.0 - abs(historyValue.a - fresh.a)));
+                        result = lerp(historyValue, fresh, 1.0 - historyWeight);
                     }
                     else if (hasFreshCloud)
                     {
@@ -758,7 +775,8 @@ Shader "Hidden/Clouds"
                         // 本帧无云、历史有云:拖影主因。当前帧是真实值 → 向"无云"(本帧)收敛,
                         // 不再整份保留旧云(旧逻辑 result=history 会让鬼影跟着云一直拖)。
                         // 0.85:残影 1 帧内降到 15%、2 帧内 ~2%,边缘后撤痕迹基本不可见。
-                        result = lerp(history, fresh, max(tssBlend, 0.85));
+                        float4 historyValue = ClampHistoryToCurrent(i.uv, fresh, history);
+                        result = lerp(historyValue, fresh, max(tssBlend, 0.85));
                     }
                     else
                     {
@@ -1272,27 +1290,6 @@ Shader "Hidden/Clouds"
             }
             ENDCG
         }
-        Pass
-        {
-            Name "SolarCache"
-            CGPROGRAM
-            #pragma target 4.0
-            #pragma vertex vert_img
-            #pragma fragment frag
-            #include "UnityCG.cginc"
-            #include "CloudVolumeLighting.cginc"
-            #include "CloudSolarCache.cginc"
-            float2 frag(v2f_img i) : SV_Target
-            {
-                float2 pixel = floor(i.uv * _CloudSolarCacheLayout.zw);
-                float size = _CloudSolarCacheLayout.x;
-                float2 tile = floor(pixel / size);
-                float slice = tile.x + _CloudSolarCacheLayout.y * tile.y;
-                if (slice >= size) return float2(0.0, -1.0);
-                float3 node = float3(pixel - tile * size, slice);
-                return BuildCloudSolarCache(_CloudSolarCacheMin.xyz + node / _CloudSolarCacheMin.w);
-            }
-            ENDCG
-        }
+
     }
 }

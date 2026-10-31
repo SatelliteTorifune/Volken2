@@ -118,10 +118,10 @@ namespace Assets.Scripts
 
             Mod.Log("更新检查——当前 {0},网站最新 {1}(来源:{2})",
                 _localVersion, latest, fromModPage ? "官方 mod 页" : "GitHub");
-            if (latest <= _localVersion) yield break; // 已是最新,不打扰
+            if (CompareVersions(latest, _localVersion) <= 0) yield break; // 已是最新,不打扰
 
             if (Version.TryParse(PlayerPrefs.GetString(SkippedVersionPrefKey, ""), out var skipped)
-                && latest <= skipped)
+                && CompareVersions(latest, skipped) <= 0)
             {
                 Mod.Log("更新检查——版本 {0} 已被用户跳过提醒", latest);
                 yield break;
@@ -268,6 +268,49 @@ namespace Assets.Scripts
             s = Regex.Match(s, @"\d+(?:\.\d+){1,3}").Value;
 
             return Version.TryParse(s, out version);
+        }
+
+        /// <summary>
+        /// 版本比较(本项目契约):版本号按"十进制小数"语义排大小 —— 0.5 &lt; 0.51 &lt; 0.62 &lt; 0.68 &lt; 0.7 &lt; 0.71。
+        /// 禁止直接用 System.Version 比较:它按"段"比整数,会得出 0.68 &gt; 0.7(段号 68 &gt; 7),把旧版本误判成新版本。
+        /// 仅当出现三段及以上(如 1.2.3)时,才回退到 System.Version 语义。
+        /// </summary>
+        private static int CompareVersions(Version a, Version b)
+        {
+            if (ReferenceEquals(a, b)) return 0;
+            if (a == null) return -1;
+            if (b == null) return 1;
+
+            if (TryParseDecimalVersion(a.ToString(), out var da) &&
+                TryParseDecimalVersion(b.ToString(), out var db))
+            {
+                return da.CompareTo(db);
+            }
+
+            return a.CompareTo(b);
+        }
+
+        /// <summary>两段(可带尾零段)版本号解析为 decimal:0.62 / v0.7 / 0.7.0 → 数值;三段非零(如 1.2.3)返回 false 交给上层回退。</summary>
+        private static bool TryParseDecimalVersion(string text, out decimal value)
+        {
+            value = 0m;
+            if (string.IsNullOrEmpty(text)) return false;
+
+            var match = Regex.Match(text.Trim(), @"^[vV]?(\d+(?:\.\d+){0,3})$");
+            if (!match.Success) return false;
+
+            // 去掉尾部为 0 的段:0.7.0 → 0.7、0.68.0 → 0.68(尾零不改变十进制数值)
+            var parts = match.Groups[1].Value.Split('.');
+            var count = parts.Length;
+            while (count > 1 && parts[count - 1] == "0") count--;
+
+            var normalized = count == parts.Length
+                ? match.Groups[1].Value
+                : string.Join(".", parts, 0, count);
+
+            return decimal.TryParse(normalized,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out value);
         }
 
         private void ShowUpdateDialog(Version latest, bool fromModPage)

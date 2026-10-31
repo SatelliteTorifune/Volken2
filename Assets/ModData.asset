@@ -53,6 +53,7 @@ MonoBehaviour:
   - {fileID: 4900000, guid: fb6cc0c6e19c0334f84118b4d843e3ae, type: 3}
   - {fileID: 7200000, guid: d53652b92a1d3b74bab5b87fdafaa8fc, type: 3}
   - {fileID: 7200000, guid: 9c3f6a2e5b8d4c1f9e7a0b3c5d6e7f80, type: 3}
+  - {fileID: 2800000, guid: 2f6ab417e08c4fb8af559d8a32ba4f46, type: 3}
   - {fileID: 4900000, guid: d1b14163cd6126d48a6bec60431b96d7, type: 3}
   - {fileID: 102900000, guid: 0aba0717bdc59304a8505add62f157c2, type: 3}
   - {fileID: 4900000, guid: 7e4ab8eaa4807014f8c036a0cc88d9dc, type: 3}
@@ -87,7 +88,7 @@ MonoBehaviour:
   _steamTitle: 
   _steamVisibility: 0
   _versionMajor: 0
-  _versionMinor: 68
+  _versionMinor: 7
   _partCategories: []
   _parts: []
   _partStyleExtensions: []

@@ -11,7 +11,7 @@ using Volken.Clouds;
 namespace Volken.Weather
 {
     /// <summary>
-    /// 雨粒子:手写 compute(Randomize/Positioning/FillArgs/TranslateFixed)+ 实例化雨丝 shader,经 Graphics.RenderMeshIndirect 绘制。
+    /// 雨粒子:compute 更新位置与随机数据,CPU 维护已知绘制数量,经 Graphics.RenderMeshIndirect 绘制。
     ///  雨丝朝向必须**世界系**:C# 每帧算世界旋转矩阵 _RotationMatrix 传给材质 —— 不要用屏幕平面投影(贴相机,垂直看会糊成横块)。
     ///  本游戏编译器**没有** RWByteAddressBuffer 的 4 参 InterlockedAdd,必须用带下标的 RWStructuredBuffer&lt;uint&gt; 2/3 参形式;一个 kernel 编译失败会毒掉整个 compute。
     /// 密度、朝向与每相机资源契约见 docs/weather.md。
@@ -135,6 +135,8 @@ namespace Volken.Weather
         private ComputeBuffer _diag;        // 保留 compute 的计数缓冲绑定,不作 CPU 回读。
         private Texture2D _streakTex;       // 程序化柔边雨丝贴图
         private GraphicsBuffer _args;       // 5×uint 间接参数(RenderMeshIndirect 要 GraphicsBuffer)
+        private readonly uint[] _instanceCount = new uint[1];
+        private int _lastInstanceCount = -1;
 
         private static readonly uint[] ArgsReset = { 12, 0, 0, 0, 0 };   // [0] = indexCount(十字四边形 12);建 buffer 时写入一次
         private static readonly uint[] DiagReset = { 0, 0, 0, 0 };   // compute 计数缓冲初值
@@ -145,7 +147,6 @@ namespace Volken.Weather
         private int _kernelRandomize = -1;
         private int _kernelPositioning = -1;
         private int _kernelTranslateFixed = -1;
-        private int _kernelFillArgs = -1;
 
         private CloudRenderer _cloudRenderer;      // 缓存本相机的云渲染器(每帧 GetComponent 是原生查找)
         private float _cloudProbeTime = -999f;     // 缓存未命中时的重探时间点
@@ -245,10 +246,9 @@ namespace Volken.Weather
                 _kernelRandomize = _compute.FindKernel("Randomize");
                 _kernelPositioning = _compute.FindKernel("Positioning");
                 _kernelTranslateFixed = _compute.FindKernel("TranslateFixed");
-                _kernelFillArgs = _compute.FindKernel("FillArgs");
-                if (_kernelRandomize < 0 || _kernelPositioning < 0 || _kernelTranslateFixed < 0 || _kernelFillArgs < 0)
+                if (_kernelRandomize < 0 || _kernelPositioning < 0 || _kernelTranslateFixed < 0)
                 {
-                    const string kernelsMissing = "kernel FindKernel 失败(Randomize/Positioning/TranslateFixed/FillArgs)";
+                    const string kernelsMissing = "kernel FindKernel 失败(Randomize/Positioning/TranslateFixed)";
                     if (_isMainView) AssetsStatus = kernelsMissing;
                     Mod.Log("RainParticles {0}", kernelsMissing);
                     return;
@@ -294,7 +294,8 @@ namespace Volken.Weather
             _diag = new ComputeBuffer(4, sizeof(uint));                       // 诊断计数
             _diag.SetData(DiagReset);
             _args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, sizeof(uint));
-            _args.SetData(ArgsReset);   // 置 indexCount = 12(Tick 里每帧只复位 instanceCount)
+            _args.SetData(ArgsReset);
+            _lastInstanceCount = -1;
             //  关键绑定:shader 顶点着色器按 SV_InstanceID 读 _Positions —— 必须绑到**材质**上;
             // RenderMeshIndirect 不会自动把 compute 的 buffer 带给材质(不绑 → 全部画在原点)。
             _mat.SetBuffer("_Positions", _positions);
@@ -333,6 +334,16 @@ namespace Volken.Weather
             if (_collisionFallback != null) { _collisionFallback.Release(); _collisionFallback = null; }
             if (_diag != null) { _diag.Release(); _diag = null; }
             if (_args != null) { _args.Release(); _args = null; }
+            _lastInstanceCount = -1;
+        }
+
+        // 当前没有 GPU 可见性剔除;有效数量变化时才上传,地区雨量不重建缓冲。
+        private void UpdateDrawCount(int amount)
+        {
+            if (_lastInstanceCount == amount) return;
+            _instanceCount[0] = (uint)amount;
+            _args.SetData(_instanceCount, 0, 1, 1);
+            _lastInstanceCount = amount;
         }
 
         // 挂载(幂等)
@@ -996,7 +1007,8 @@ namespace Volken.Weather
             }
 
             int cap = Mathf.Max(1, BufferCapacity > 0 ? BufferCapacity : Capacity);
-            int amount = TestRow ? 20 : cap;   // 等距排只画一小排(20 粒,30m 外 3m 间距)
+            float regionalRain = StandaloneMode ? 1f : VolkenWeather.Instance?.SampleRegionalWeather(camPos).Rain ?? 1f;
+            int amount = Mathf.RoundToInt((TestRow ? 20 : cap) * regionalRain);
 
             bool collisionActive = false;
             _mat.SetInt("_RainCollisionEnabled", 0);
@@ -1006,7 +1018,7 @@ namespace Volken.Weather
                 try
                 {
                     if (_collision == null) _collision = new RainCollision();
-                    collisionActive = _collision.Begin(_cam, _positions, _mat, down, effR, dt,
+                    collisionActive = _collision.Begin(_cam, _positions, _mat, amount, down, effR, dt,
                         hasWater, StandaloneMode ? camPos.y : craft.Altitude, craft.SeaRadius,
                         StandaloneMode || craft.SeaUp.sqrMagnitude < 0.5f ? -down : craft.SeaUp);
                 }
@@ -1023,8 +1035,7 @@ namespace Volken.Weather
                 _collision = null;
             }
 
-            // 1) 复位实例数(只写 args[1];args[0] = indexCount 建 buffer 时已置好,不必每帧上传整条)
-            _args.SetData(ArgsReset, 1, 1, 1);
+            UpdateDrawCount(amount);
 
             // 2) Positioning:积分 + 域环绕(TestRow 时覆盖为等距排)
             // 注:SetFloat/SetInt/SetVector 没有 per-kernel 重载(属性全局共享),只传名字。
@@ -1061,11 +1072,6 @@ namespace Volken.Weather
                     Mod.Log("RainCollision.Resolve failed: {0}", ex);
                 }
             }
-
-            // 3) FillArgs:原子统计活跃数(复位已在 1)做完)。 原子加只能用**带下标的** RWStructuredBuffer 2/3 参形式,见类注释。
-            _compute.SetBuffer(_kernelFillArgs, "_ArgsBuffer", _args);
-            _compute.SetInt("_amount", amount);
-            _compute.Dispatch(_kernelFillArgs, Mathf.CeilToInt(amount / (float)ThreadGroupSize), 1, 1);
 
             Light sun = StandaloneMode ? RenderSettings.sun : Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight;
             Vector3 lightUp = craft.SeaUp.sqrMagnitude > 0.5f ? craft.SeaUp : -down;

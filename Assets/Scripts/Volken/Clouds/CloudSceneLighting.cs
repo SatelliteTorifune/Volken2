@@ -33,6 +33,8 @@ namespace Volken.Clouds
                 if (scope.Owner == renderer) { ResetScopes(); break; }
             if (Renderers.Count != 0) return;
             ResetScopes();
+            _snapshotLight = null;
+            _snapshotFrame = -1;
             Camera.onPreCull -= Begin;
             Camera.onPreRender -= BeforeRender;
             Camera.onPostRender -= End;
@@ -57,6 +59,60 @@ namespace Volken.Clouds
             Scopes.Count > 0 && Scopes.Peek().Sun == sun ? Scopes.Peek().Intensity : sun.intensity;
         internal static Color SunColorBaseline(Light sun) => sun == null ? Color.black :
             Scopes.Count > 0 && Scopes.Peek().Sun == sun ? Scopes.Peek().LightColor : sun.color;
+
+        // Juno 在 Update 更新恒星光,随后相机 onPreCull 的云影作用域会临时改写/禁用光源。
+        // 云照明消费 LateUpdate 快照(同帧同光源才生效),缺失时回退实时值与上面的基线。
+        private static Light _snapshotLight;
+        private static int _snapshotFrame = -1;
+        private static Color _snapshotColor;
+        private static float _snapshotIntensity;
+        private static Vector3 _snapshotDirection;
+        private static bool _snapshotEnabled;
+        private static int _mismatchFrame = -1;
+        private static bool _mismatchReported;
+
+        internal static void CaptureSunSnapshot(Light sun)
+        {
+            if (sun == null)
+            {
+                _snapshotLight = null;
+                _snapshotFrame = -1;
+                return;
+            }
+            int frame = Time.frameCount;
+            if (frame == _snapshotFrame && ReferenceEquals(_snapshotLight, sun)) return;
+            _snapshotLight = sun;
+            _snapshotFrame = frame;
+            _snapshotColor = sun.color;
+            _snapshotIntensity = sun.intensity;
+            _snapshotDirection = sun.transform.forward;
+            _snapshotEnabled = sun.isActiveAndEnabled;
+        }
+
+        private static bool HasSnapshot(Light sun) =>
+            sun != null && _snapshotFrame == Time.frameCount && ReferenceEquals(_snapshotLight, sun);
+
+        internal static Vector3 SunDirection(Light sun) =>
+            HasSnapshot(sun) ? _snapshotDirection : sun != null ? sun.transform.forward : Vector3.up;
+        internal static Color ResolvedSunColor(Light sun) => HasSnapshot(sun) ? _snapshotColor : SunColorBaseline(sun);
+        internal static float SunIntensity(Light sun) => HasSnapshot(sun) ? _snapshotIntensity : SunIntensityBaseline(sun);
+        internal static bool SunEnabled(Light sun) => HasSnapshot(sun) ? _snapshotEnabled : sun != null && sun.isActiveAndEnabled;
+
+        // 证据日志(DevMode):绘制期光源真的被改写时记一次,区分"游戏关灯"与"作用域临时压暗"。
+        internal static void ReportSunLightMismatch(Light sun)
+        {
+            if (!HasSnapshot(sun) || _mismatchReported || _mismatchFrame == Time.frameCount) return;
+            _mismatchFrame = Time.frameCount;
+            bool liveEnabled = sun.isActiveAndEnabled;
+            float liveIntensity = sun.intensity;
+            bool enabledDiffers = liveEnabled != _snapshotEnabled;
+            bool intensityDiffers = Mathf.Abs(liveIntensity - _snapshotIntensity) >
+                Mathf.Max(0.001f, Mathf.Abs(_snapshotIntensity) * 0.05f);
+            if (!enabledDiffers && !intensityDiffers) return;
+            _mismatchReported = true;
+            Mod.Log("Volken: sun light differs inside the draw scope (snapshot enabled={0} intensity={1:F3}, live enabled={2} intensity={3:F3}); cloud lighting uses the LateUpdate snapshot.",
+                _snapshotEnabled, _snapshotIntensity, liveEnabled, liveIntensity);
+        }
 
         internal static Color AttenuateAmbient(Color ambient, float factor)
         {

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Volken.Weather
 {
     
-    /// <summary>天气根组直接提供预设管理,下设雨 / 雾 / 雷参数组。</summary>
+    /// <summary>天气根组提供预设管理、地区分布和各效果参数。</summary>
     /// <remarks>面板修改当前天气配置实例;保存才落盘,效果参数由各子系统独立消费。</remarks>
     public static class WeatherUserInterface
     {
@@ -28,6 +28,7 @@ namespace Volken.Weather
             }
 
             BuildConfigControls(root, weather);
+            BuildRegionsGroup(root, weather);
             BuildRainGroup(root, weather);
             BuildFogGroup(root, weather);
             BuildLightningGroup(root, weather);
@@ -136,6 +137,47 @@ namespace Volken.Weather
 
 
         }
+        private static void BuildRegionsGroup(GroupModel parent, VolkenWeather weather)
+        {
+            var group = new GroupModel(Locale.GetString("Volken.UI.WeatherRegions"));
+            group.Add(new ToggleModel(Locale.GetString("Volken.UI.RegionsEnabled"),
+                () => weather.Config?.Regions?.enabled ?? false,
+                v => ApplyRegions(r => r.enabled = v)));
+            var distributions = new System.Collections.Generic.List<string>
+            {
+                Locale.GetString("Volken.UI.RegionsProcedural"),
+                Locale.GetString("Volken.UI.RegionsTexture")
+            };
+            group.Add(new DropdownModel(Locale.GetString("Volken.UI.RegionsDistribution"),
+                () => distributions[Mathf.Clamp(weather.Config?.Regions?.distribution ?? 0, 0, 1)],
+                value => { int index = distributions.IndexOf(value); if (index >= 0) ApplyRegions(r => r.distribution = index); },
+                distributions));
+            AddSlider(group, "Volken.UI.RegionsMapLongitude", () => weather.Config?.Regions?.mapLongitudeOffset ?? 0f,
+                v => ApplyRegions(r => r.mapLongitudeOffset = v), -180f, 180f, 1);
+            AddSlider(group, "Volken.UI.RegionsSeed", () => weather.Config?.Regions?.seed ?? 1337,
+                v => ApplyRegions(r => r.seed = Mathf.RoundToInt(v)), 0f, 999999f, 0, true);
+            AddSlider(group, "Volken.UI.RegionsCoverage", () => weather.Config?.Regions?.coverage ?? 0.5f,
+                v => ApplyRegions(r => r.coverage = v), 0f, 1f, 2);
+            AddSlider(group, "Volken.UI.RegionsCellSize", () => weather.Config?.Regions?.cellSizeKm ?? 150f,
+                v => ApplyRegions(r => r.cellSizeKm = v), 1f, 2000f, 0);
+            AddSlider(group, "Volken.UI.RegionsEdgeSoftness", () => weather.Config?.Regions?.edgeSoftness ?? 0.2f,
+                v => ApplyRegions(r => r.edgeSoftness = v), 0.01f, 0.5f, 2);
+            AddSlider(group, "Volken.UI.RegionsWindSpeed", () => weather.Config?.Regions?.windSpeed ?? 20f,
+                v => ApplyRegions(r => r.windSpeed = v), -200f, 200f, 1);
+            AddSlider(group, "Volken.UI.RegionsStormFraction", () => weather.Config?.Regions?.stormFraction ?? 0.3f,
+                v => ApplyRegions(r => r.stormFraction = v), 0f, 1f, 2);
+            parent.Add(group);
+        }
+
+        private static void ApplyRegions(Action<VolkenWeatherConfig.RegionalSection> mutate)
+        {
+            var config = VolkenWeather.Instance?.Config;
+            if (config == null) return;
+            config.EnsureSections();
+            mutate(config.Regions);
+            config.Regions.Clamp();
+        }
+
         // 雨(实时控制)
 
         /// <summary>雨参数组:改动立刻推给 <see cref="RainParticles.ApplyConfig"/>(容量/雨丝长宽会触发重建);持续型参数由 RainParticles 每帧读静态字段。</summary>

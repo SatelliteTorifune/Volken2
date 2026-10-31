@@ -64,7 +64,7 @@ namespace Volken.Clouds
 
         public CloudRenderer()
         {
-            cam = GetComponent<Camera>();
+            // camera resolved in OnEnable (GetComponent is illegal in a MonoBehaviour constructor)
             CloudRenderManualRefresh();
 
             // 切天体 → 本相机历史作废。只订阅唯一的行星事件源:自己监听 PlayerChangedSoi 会漏退订(销毁后实例仍被事件链引用)
@@ -92,6 +92,10 @@ namespace Volken.Clouds
             CloudSceneLighting.Register(this);
         }
 
+        // Juno 在 Update 更新恒星光;在云影作用域改写光源前取本帧基线(见 CloudSceneLighting)。
+        private void LateUpdate() =>
+            CloudSceneLighting.CaptureSunSnapshot(Game.Instance?.FlightScene?.ViewManager?.GameView?.SunLight);
+
         private void OnPreRender() => Volken.Weather.FogRenderer.ClearGlobals();
         private void OnPostRender() => Volken.Weather.FogRenderer.ClearGlobals();
         private void OnDisable()
@@ -102,7 +106,6 @@ namespace Volken.Clouds
             foreach (var view in _views.Values)
             {
                 view.ClearHistory();
-                view.solarCache.Dispose();
             }
             Volken.Weather.FogRenderer.ClearGlobals();
             _fog?.Dispose();
@@ -117,7 +120,6 @@ namespace Volken.Clouds
             foreach (var view in _views.Values)
             {
                 view.ClearHistory();
-                view.solarCache.Dispose();
             }
         }
 
@@ -448,10 +450,12 @@ namespace Volken.Clouds
             mat.SetVector("sphereCenter", frame.PlanetToFramePosition(Vector3d.zero));
             mat.SetFloat("surfaceRadius", (float)node.Parent.PlanetData.Radius);
             var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-            mat.SetVector("lightDir", sun.transform.forward);
-            Color sunColor = CloudSceneLighting.SunColorBaseline(sun);
+            CloudSceneLighting.ReportSunLightMismatch(sun);
+            mat.SetVector("lightDir", CloudSceneLighting.SunDirection(sun));
+            Color sunColor = CloudSceneLighting.ResolvedSunColor(sun);
             var solar = CloudAmbientColor(sunColor, QualitySettings.activeColorSpace == ColorSpace.Linear);
-            float amount = sun.isActiveAndEnabled ? CloudSceneLighting.SunIntensityBaseline(sun) * Mathf.Clamp01(sunColor.a) : 0f;
+            float amount = CloudSceneLighting.SunEnabled(sun)
+                ? CloudSceneLighting.SunIntensity(sun) * Mathf.Clamp01(sunColor.a) : 0f;
             mat.SetVector("_CloudSolarColor", solar * amount);
             mat.SetFloat("currentRotation", layer.accumulatedRotation);
             mat.SetVector("cloudOffset", layer.runningOffset);
@@ -620,8 +624,6 @@ namespace Volken.Clouds
                 var activeLayers = _activeLayers;
                 var gameCamera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera;
                 if (cam != gameCamera?.NearCamera && !ModSettings.Instance.ExtraCameraClouds.Value) activeLayers.Clear();
-                foreach (var pair in _views)
-                    if (!activeLayers.Contains(pair.Key)) pair.Value.solarCache.Dispose();
                 if (_sceneDepthMaterial == null) _sceneDepthMaterial = SceneDepth.CreateMaterial();
                 if (_sceneDepthMaterial == null)
                 {
@@ -735,17 +737,10 @@ namespace Volken.Clouds
                     if (view == null) continue;
                     // 重投影与相机参数按每相机每层设置,风 / 自转已全局推进一次。
                     SetLayerDynamicProperties(layer, view, renderW, renderH);
-                    if (view.orbitFade >= 0.999f)
-                    {
-                        CloudSolarCache.Disable(layer.material);
-                        view.solarCache.Dispose();
-                        continue;
-                    }
+                    if (view.orbitFade >= 0.999f) continue;
 
                     layer.material.SetTexture("DepthTex", lowResDepthTex);   // Clouds pass 地面遮挡用
                     CloudEmptySpace.Configure(layer.material, layer, layer.config.emptySpaceSkippingEnabled);
-                    view.solarCache.Prepare(layer.material, layer.config, cam.transform.position);
-                    CloudSolarCache.SelectVariant(layer.material);
                     if (view.currentLightningEnabled) view.lightningCache.Prepare(layer.material);
                     // MRT:颜色 + 云面距离 + 运动数据(RG=UV 位移,B=上一相机云距离×1e-5)。
                     Graphics.SetRenderTarget(view.currentLightningEnabled ? view.lightningTargets : view.cloudTargets, view.cloudTex.depthBuffer);

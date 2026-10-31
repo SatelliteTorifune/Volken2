@@ -793,7 +793,6 @@ namespace Volken.Core
             group.Add(containerGroup);
 
             GroupModel qualityGroup = new GroupModel(Locale.GetString("Volken.UI.CloudQuality") + " [" + title + "]");
-            // 方案 C: 时序超采样(A/B 对比用)
             var temporalToggleModel = new ToggleModel(Locale.GetString("Volken.UI.UseTemporalUpscale"),
                 () => cfg.useTemporalUpscale, s =>
                 {
@@ -1038,32 +1037,13 @@ namespace Volken.Core
 
         private static void CreateCloudAccelerationControls(GroupModel group, CloudConfig cfg)
         {
-            group.Add(new ToggleModel(Locale.GetString("Volken.UI.SolarCacheEnabled"),
-                () => cfg.solarCacheEnabled, s =>
-                {
-                    cfg.solarCacheEnabled = s;
-                    VolumetricClouds.Instance.ValueChanged();
-                }));
             group.Add(new ToggleModel(Locale.GetString("Volken.UI.EmptySpaceSkippingEnabled"),
                 () => cfg.emptySpaceSkippingEnabled, s =>
                 {
                     cfg.emptySpaceSkippingEnabled = s;
                     VolumetricClouds.Instance.ValueChanged();
                 }));
-            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheResolution"), () => cfg.solarCacheResolution,
-                s =>
-                {
-                    cfg.solarCacheResolution = Mathf.RoundToInt(s);
-                    cfg.ClampAccelerationSettings();
-                    VolumetricClouds.Instance.ValueChanged();
-                }, 8, 64, 0, true);
-            CreateSlider(group, Locale.GetString("Volken.UI.SolarCacheExtent"), () => cfg.solarCacheExtent,
-                s =>
-                {
-                    cfg.solarCacheExtent = s;
-                    cfg.ClampAccelerationSettings();
-                    VolumetricClouds.Instance.ValueChanged();
-                }, 1000f, 100000f, 0);
+
         }
 
         /// <summary>轨道云(2D 壳着色 + 过渡带交叉淡入)配置组。默认关闭 → 零回归。</summary>

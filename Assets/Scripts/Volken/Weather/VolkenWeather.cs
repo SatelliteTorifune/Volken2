@@ -56,6 +56,10 @@ namespace Volken.Weather
         private LightningModule _lightning;
         private Shader _boltShader;
         private bool _boltShaderTried;
+        private bool _regionalSampleWarning;
+        private RegionalWeatherMap _regionalMap;
+        private float _regionalMapRetryAt;
+        private bool _regionalMapWarning;
 
         /// <summary>初始化单例(幂等)。由 <c>Mod.OnModLoaded</c> 调用,必须在 <see cref="VolumetricClouds.Initialize"/> 之后。</summary>
         public static void Initialize()
@@ -427,6 +431,86 @@ namespace Volken.Weather
             {
                 SetActive(false);
             }
+        }
+
+        /// <summary>帧空间位置转到行星固连坐标；只返回地区倍率，不改变效果开关。</summary>
+        public RegionalWeatherSample SampleRegionalWeather(Vector3 framePosition)
+        {
+            var regions = Config?.Regions;
+            if (regions == null || !regions.enabled || RainParticles.StandaloneMode || !Game.InFlightScene)
+            {
+                _regionalSampleWarning = false;
+                return RegionalWeatherSample.Identity;
+            }
+            try
+            {
+                var flight = Game.Instance?.FlightScene;
+                var craft = flight?.CraftNode;
+                var planet = craft?.Parent;
+                if (craft?.ReferenceFrame != null && planet?.PlanetData != null && flight.FlightState != null)
+                {
+                    Vector3d inertial = craft.ReferenceFrame.FrameToPlanetPosition(framePosition);
+                    Vector3d surface = planet.PlanetVectorToSurfaceVector(inertial);
+                    if (RegionalWeather.TrySample(regions, CurrentPlanet, surface.x, surface.y, surface.z,
+                        planet.PlanetData.Radius, flight.FlightState.Time, out var sample, GetRegionalMap()))
+                    {
+                        _regionalSampleWarning = false;
+                        return sample;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // 场景切换可能先卸载参考帧；走同一恒等降级，不保存失效坐标。
+            }
+            if (!_regionalSampleWarning)
+            {
+                _regionalSampleWarning = true;
+                Mod.Log("VolkenWeather: invalid regional sampling context; using global weather until recovery.");
+            }
+            return RegionalWeatherSample.Identity;
+        }
+
+        private RegionalWeatherMap GetRegionalMap()
+        {
+            if (Config?.Regions?.distribution != 1) return null;
+            if (_regionalMap != null) return _regionalMap;
+            if (Time.realtimeSinceStartup < _regionalMapRetryAt) return null;
+            _regionalMapRetryAt = Time.realtimeSinceStartup + 30f;
+            try
+            {
+                var texture = Mod.LoadVolkenAsset<Texture2D>(RegionalWeatherMap.AssetPath, false);
+#if UNITY_EDITOR
+                if (texture == null) texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(RegionalWeatherMap.AssetPath);
+#endif
+                if (texture == null || !texture.isReadable || texture.width < 2 || texture.height < 2 ||
+                    (long)texture.width * texture.height > 16777216)
+                    throw new InvalidOperationException("Missing, unreadable or oversized regional coverage texture.");
+                var pixels = texture.GetPixels32();
+                var coverage = new byte[pixels.Length];
+                for (int i = 0; i < pixels.Length; i++) coverage[i] = pixels[i].r;
+                _regionalMap = new RegionalWeatherMap(texture.width, texture.height, coverage);
+                _regionalMapWarning = false;
+                return _regionalMap;
+            }
+            catch (Exception ex)
+            {
+                if (!_regionalMapWarning)
+                {
+                    _regionalMapWarning = true;
+                    Mod.Log("VolkenWeather: regional map unavailable; using procedural distribution: " + ex.Message);
+                }
+                return null;
+            }
+        }
+
+        /// <summary>雨声独立查询主 NearCamera，避免渲染顺序或 PIP 覆盖输入。</summary>
+        public RegionalWeatherSample SampleMainRegionalWeather()
+        {
+            if (Config?.Regions == null || !Config.Regions.enabled || RainParticles.StandaloneMode || !Game.InFlightScene)
+                return RegionalWeatherSample.Identity;
+            var camera = Game.Instance?.FlightScene?.ViewManager?.GameView?.GameCamera?.NearCamera;
+            return camera != null ? SampleRegionalWeather(camera.transform.position) : RegionalWeatherSample.Identity;
         }
 
         private void UpdateCameraMetrics(float deltaTime)

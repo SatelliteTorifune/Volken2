@@ -128,10 +128,11 @@ namespace Volken.Weather
             }
             if (!settings.shelterCheck) _sheltered = false;
             float density = Mathf.Clamp(rain.amount / 100000f * Mathf.Pow(50f / Mathf.Max(10f, rain.domainRadius), 3f), 0f, 3f);
+            float regionalRain = weather.SampleRegionalWeather(_camera.transform.position).Rain;
             float targetRate = rain.enabled && !_sheltered
-                ? settings.spawnRate * settings.intensity * density * exposure * _environmentFade : 0f;
+                ? settings.spawnRate * settings.intensity * density * exposure * _environmentFade * regionalRain : 0f;
             _spawnRate = Mathf.Lerp(_spawnRate, targetRate, 1f - Mathf.Exp(-10f * dt));
-            if (!rain.enabled || _sheltered || exposure <= 0f || _environmentFade <= 0f) _spawnRate = 0f;
+            if (!rain.enabled || _sheltered || exposure <= 0f || _environmentFade <= 0f || regionalRain <= 0f) _spawnRate = 0f;
             _simulation.Tick(dt, _spawnRate, gravity, air, fast, _camera.aspect, settings);
         }
 

@@ -88,8 +88,8 @@ namespace Volken.Clouds
 
             // 天体/太阳参数与 SetLayerDynamicProperties 一致。只读:runningOffset / accumulatedRotation 用主相机上一帧推进后的值,一帧之差可忽略。
             Vector3 planetCenter = craftNode.ReferenceFrame.PlanetToFramePosition(Vector3d.zero);
-            var sun = Game.Instance.FlightScene.ViewManager.GameView.SunLight;
-            Vector3 lightDir = sun != null ? sun.transform.forward : Vector3.up;
+            Vector3 lightDir = CloudSceneLighting.SunDirection(
+                Game.Instance.FlightScene.ViewManager.GameView.SunLight);
             float surfaceRadius = 1f;
             try { surfaceRadius = (float)craftNode.Parent.PlanetData.Radius; } catch { }
 
@@ -116,7 +116,7 @@ namespace Volken.Clouds
             EnsureResources(rt.width, rt.height);
 
             int cloudsPass = -1;
-            int compositePass = -1;
+            int additivePass = -1;
 
             foreach (var layer in activeLayers)
             {
@@ -126,10 +126,10 @@ namespace Volken.Clouds
                 if (mat == null) continue;
 
                 if (cloudsPass < 0) cloudsPass = mat.FindPass("Clouds");
-                if (compositePass < 0) compositePass = mat.FindPass("Composite");
-                if (cloudsPass < 0 || compositePass < 0)
+                if (additivePass < 0) additivePass = mat.FindPass("ReflectionCloudAdditive");
+                if (cloudsPass < 0 || additivePass < 0)
                 {
-                    Mod.Log("Cloud reflection pass not found (Clouds={0}, Composite={1})", cloudsPass, compositePass);
+                    Mod.Log("Cloud reflection pass not found (Clouds={0}, Additive={1})", cloudsPass, additivePass);
                     return;
                 }
 
@@ -169,9 +169,7 @@ namespace Volken.Clouds
                 float lightSamples = Mathf.Max(1f, kReflectionLightSamples);
                 mat.SetFloat("numLightSamplePoints", lightSamples);
                 mat.SetFloat("lightStepSize", Mathf.Max(0.01f, layer.config.lightMarchDistance / lightSamples));
-                CloudSolarCache.Disable(mat); // 两个反射光样本直接查询，不建立太阳缓存。
                 CloudEmptySpace.Configure(mat, layer, layer.config.emptySpaceSkippingEnabled);
-                CloudSolarCache.SelectVariant(mat);
 
                 // Clouds pass 仍会算 MV,但不绑 MRT → 丢弃;reprojMat 给单位阵,避免未初始化矩阵产生 NaN
                 mat.SetMatrix("reprojMat", Matrix4x4.identity);
@@ -192,15 +190,7 @@ namespace Volken.Clouds
                     Graphics.DrawMeshNow(_fullscreenTriangle, Matrix4x4.identity);
 
                     mat.SetTexture("UpscaledCloudTex", _cloudTex);
-                    mat.SetTexture("OrbitCloudTex", _cloudTex);   // 轨道云不进反射路径:绑上避免空采样
-                    mat.SetTexture("SceneDepthTex", _cloudTex);   // additive 分支不使用,绑上避免空采样
-                    mat.SetFloat("_CompositeMode", 0f);           // additive
-                    mat.SetFloat("_OrbitFade", 0f);               // 反射相机在水面(低空)→ 恒纯体积云
-
-                    var tmp = RenderTexture.GetTemporary(rt.width, rt.height, 0, rt.format);   // 不能同 RT 读写
-                    Graphics.Blit(rt, tmp, mat, compositePass);
-                    Graphics.Blit(tmp, rt);
-                    RenderTexture.ReleaseTemporary(tmp);
+                    Graphics.Blit(_cloudTex, rt, mat, additivePass);   // Blend One One:只加云 RGB,不改反射 RT 的 alpha
                 }
                 finally
                 {

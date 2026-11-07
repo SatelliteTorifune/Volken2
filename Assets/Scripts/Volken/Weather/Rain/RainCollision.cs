@@ -198,13 +198,14 @@ namespace Volken.Weather
             }
         }
 
-        internal bool Begin(Camera camera, ComputeBuffer positions, Material rainMaterial, Vector3 down,
+        internal bool Begin(Camera camera, ComputeBuffer positions, Material rainMaterial, int activeRainCount, Vector3 down,
             float radius, float dt, bool hasWater, float seaAltitude, float seaRadius, Vector3 seaUp)
         {
             rainMaterial.SetInt("_RainCollisionEnabled", 0);
             if (!EnsureAssets()) return false;
             EnsureBuffers(positions.count);
             _compute.SetInt("_Capacity", positions.count);
+            _compute.SetInt("_ActiveRainCount", Mathf.Clamp(activeRainCount, 0, positions.count));
             _compute.SetInt("_SplashCapacity", SplashCapacity);
             _compute.SetFloat("_DeltaTime", dt);
             _compute.SetInt("_SplashesEnabled", RainParticles.SplashesEnabled && (_splashMaterial != null || _waterSplashMaterial != null) ? 1 : 0);

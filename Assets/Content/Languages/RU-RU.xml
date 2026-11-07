@@ -32,6 +32,19 @@
     <s id="Volken.UI.WeatherResetToDefault">Настройки сброшены. Сохраните конфигурацию.</s>
 
 
+    <s id="Volken.UI.WeatherRegions">Региональная погода</s>
+    <s id="Volken.UI.RegionsEnabled">Включить региональные дожди и грозы</s>
+    <s id="Volken.UI.RegionsDistribution">Распределение погоды</s>
+    <s id="Volken.UI.RegionsProcedural">Процедурное</s>
+    <s id="Volken.UI.RegionsTexture">Глобальная карта покрытия</s>
+    <s id="Volken.UI.RegionsMapLongitude">Смещение карты на восток (градусы)</s>
+    <s id="Volken.UI.RegionsSeed">Начальное число распределения</s>
+    <s id="Volken.UI.RegionsCoverage">Покрытие дождём</s>
+    <s id="Volken.UI.RegionsCellSize">Масштаб областей (км)</s>
+    <s id="Volken.UI.RegionsEdgeSoftness">Плавность границ</s>
+    <s id="Volken.UI.RegionsWindSpeed">Дрейф на восток у экватора (м/с)</s>
+    <s id="Volken.UI.RegionsStormFraction">Покрытие грозами в дождевых областях</s>
+
     <s id="Volken.UI.WeatherRain">Дождь</s>
     <s id="Volken.UI.RainLens">Капли на объективе</s>
     <s id="Volken.UI.RainLensEnabled">Включить капли на объективе</s>
@@ -188,10 +201,7 @@
     <s id="Volken.UI.HistoryBlend">История Смешивания</s>
     <s id="Volken.UI.UseTemporalUpscale">Временное апскейлинг</s>
     <s id="Volken.UI.UpscaleGrid">Сетка временного апскейлинга</s>
-    <s id="Volken.UI.SolarCacheEnabled">Кэш солнечного освещения (эксперимент)</s>
     <s id="Volken.UI.EmptySpaceSkippingEnabled">Консервативный пропуск пустых областей</s>
-    <s id="Volken.UI.SolarCacheResolution">Разрешение сетки солнечного кэша</s>
-    <s id="Volken.UI.SolarCacheExtent">Ширина области солнечного кэша (м)</s>
 
     <!-- Орбитальные облака(2D-шейдинг оболочки + перекрёстное затухание) -->
     <s id="Volken.UI.OrbitClouds">Орбитальные облака</s>

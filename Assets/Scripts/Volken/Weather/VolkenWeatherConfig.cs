@@ -32,6 +32,46 @@ namespace Volken.Weather
             }
         }
 
+        /// <summary>行星固定的地区分布;关闭时所有效果使用恒等倍率。</summary>
+        [Serializable]
+        public class RegionalSection
+        {
+            public bool enabled = false;
+            public int distribution = 0;       // 0 = 程序化,1 = 内置经纬度贴图
+            public float mapLongitudeOffset = 0f; // 向东平移,度
+            public int seed = 1337;
+            public float coverage = 0.5f;
+            public float cellSizeKm = 150f;    // 噪声格距,千米;不代表圆形区域半径
+            public float edgeSoftness = 0.2f;
+            public float windSpeed = 20f;     // 赤道米/秒,正值向东
+            public float stormFraction = 0.3f;
+
+            public void CopyFrom(RegionalSection source)
+            {
+                if (source == null) return;
+                enabled = source.enabled;
+                distribution = source.distribution;
+                mapLongitudeOffset = source.mapLongitudeOffset;
+                seed = source.seed;
+                coverage = source.coverage;
+                cellSizeKm = source.cellSizeKm;
+                edgeSoftness = source.edgeSoftness;
+                windSpeed = source.windSpeed;
+                stormFraction = source.stormFraction;
+            }
+
+            public void Clamp()
+            {
+                distribution = Mathf.Clamp(distribution, 0, 1);
+                mapLongitudeOffset = FogFinite(mapLongitudeOffset, 0f, -180f, 180f);
+                coverage = FogFinite(coverage, 0.5f, 0f, 1f);
+                cellSizeKm = FogFinite(cellSizeKm, 150f, 1f, 2000f);
+                edgeSoftness = FogFinite(edgeSoftness, 0.2f, 0.01f, 0.5f);
+                windSpeed = FogFinite(windSpeed, 20f, -200f, 200f);
+                stormFraction = FogFinite(stormFraction, 0.3f, 0f, 1f);
+            }
+        }
+
         // ③ 雨
 
         /// <summary>雨子系统参数;密度、域半径与运行契约见 <c>docs/weather.md</c>。</summary>
@@ -323,6 +363,9 @@ namespace Volken.Weather
         [XmlElement("Overall")]
         public OverallSection overall = new OverallSection();
 
+        [XmlElement("Regions")]
+        public RegionalSection Regions = new RegionalSection();
+
         [XmlElement("Rain")]
         public RainSection rain = new RainSection();
 
@@ -341,6 +384,7 @@ namespace Volken.Weather
             return new VolkenWeatherConfig
             {
                 overall = new OverallSection (),
+                Regions = new RegionalSection(),
                 rain = new RainSection(),
                 rainLens = new RainLensSection(),
                 fog = new FogSection(),
@@ -352,6 +396,7 @@ namespace Volken.Weather
         public void EnsureSections()
         {
             if (overall == null) overall = new OverallSection();
+            if (Regions == null) Regions = new RegionalSection();
             if (rain == null) rain = new RainSection();
             if (rainLens == null) rainLens = new RainLensSection();
             if (fog == null) fog = new FogSection();
@@ -380,6 +425,7 @@ namespace Volken.Weather
         public void ClampAll()
         {
             EnsureSections();
+            Regions.Clamp();
 
             // ---- ③ 雨 ----
             rain.amount = Mathf.Clamp(rain.amount, 0f, 400000f);
@@ -477,6 +523,8 @@ namespace Volken.Weather
             EnsureSections();
 
             overall.CopyFrom(source.overall);
+            Regions.CopyFrom(source.Regions);
+            Regions.Clamp();
             rain.CopyFrom(source.rain);
             rainLens.CopyFrom(source.rainLens);
             fog.CopyFrom(source.fog);
@@ -563,6 +611,8 @@ namespace Volken.Weather
                     Directory.CreateDirectory(directory);
                 }
 
+                EnsureSections();
+                Regions.Clamp();
                 XmlSerializer serializer = new XmlSerializer(typeof(VolkenWeatherConfig));
                 temporaryPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))

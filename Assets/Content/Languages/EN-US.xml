@@ -32,6 +32,19 @@
     <s id="Volken.UI.WeatherResetToDefault">Defaults restored. Save the configuration to keep them.</s>
 
 
+    <s id="Volken.UI.WeatherRegions">Regional weather</s>
+    <s id="Volken.UI.RegionsEnabled">Enable regional rain and storms</s>
+    <s id="Volken.UI.RegionsDistribution">Distribution</s>
+    <s id="Volken.UI.RegionsProcedural">Procedural</s>
+    <s id="Volken.UI.RegionsTexture">Global coverage map</s>
+    <s id="Volken.UI.RegionsMapLongitude">Map eastward offset (degrees)</s>
+    <s id="Volken.UI.RegionsSeed">Pattern seed</s>
+    <s id="Volken.UI.RegionsCoverage">Rain coverage</s>
+    <s id="Volken.UI.RegionsCellSize">Region scale (km)</s>
+    <s id="Volken.UI.RegionsEdgeSoftness">Boundary softness</s>
+    <s id="Volken.UI.RegionsWindSpeed">Eastward drift at equator (m/s)</s>
+    <s id="Volken.UI.RegionsStormFraction">Storm coverage within rain</s>
+
     <s id="Volken.UI.WeatherRain">Rain</s>
     <s id="Volken.UI.RainLens">Lens droplets</s>
     <s id="Volken.UI.RainLensEnabled">Enable lens droplets</s>
@@ -188,10 +201,7 @@
     <s id="Volken.UI.HistoryBlend">History Blend</s>
     <s id="Volken.UI.UseTemporalUpscale">Temporal Upscale</s>
     <s id="Volken.UI.UpscaleGrid">Temporal Upscale Grid</s>
-    <s id="Volken.UI.SolarCacheEnabled">Solar Light Cache (Experimental)</s>
     <s id="Volken.UI.EmptySpaceSkippingEnabled">Conservative Empty Space Skipping</s>
-    <s id="Volken.UI.SolarCacheResolution">Solar Cache Grid Resolution</s>
-    <s id="Volken.UI.SolarCacheExtent">Solar Cache Coverage Width (m)</s>
 
     <!-- Orbit Clouds (2D shell shading + transition crossfade) -->
     <s id="Volken.UI.OrbitClouds">Orbit clouds</s>

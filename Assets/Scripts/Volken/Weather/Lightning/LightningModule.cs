@@ -416,7 +416,7 @@ namespace Volken.Weather
             }
         }
 
-        /// <summary>劈一道随机雷。返回 false = 本次没有落雷(海拔闸门拦下 / 缺 shader / 取不到相机),原因会写进日志。</summary>
+        /// <summary>劈一道随机雷；地区模式按候选落点概率筛选，晴区拒绝不会重抽候选。</summary>
         public bool CastRandomBolt()
         {
             var weather = VolkenWeather.Instance;
@@ -449,6 +449,16 @@ namespace Volken.Weather
             float sourceAlt = haveCloudBand
                 ? Mathf.Lerp(cloudBottom, cloudTop, 0.5f)
                 : weather.CameraAltitudeAsl + 2000f;
+
+            if (cfg.Regions != null && cfg.Regions.enabled &&
+                TryGetRegionalEndpoints(camPos, sourceAlt, cfg.lightning, out var regionalSource, out var regionalTarget))
+            {
+                float storm = weather.SampleRegionalWeather(regionalTarget).Storm;
+                if (storm <= 0f || (storm < 1f && UnityEngine.Random.value >= storm)) return false;
+                CastBolt(regionalSource, regionalTarget, cam);
+                return true;
+            }
+
             Vector3 source = camPos + radial * (sourceAlt - weather.CameraAltitudeAsl);
             source += UnityEngine.Random.insideUnitSphere * cfg.lightning.spawnRange;
 
@@ -460,6 +470,49 @@ namespace Volken.Weather
             CastBolt(source, target, cam);
             return true;
         }
+
+        private static bool TryGetRegionalEndpoints(Vector3 observerPosition, float sourceAltitude,
+            VolkenWeatherConfig.LightningSection settings, out Vector3 source, out Vector3 target)
+        {
+            source = target = Vector3.zero;
+            try
+            {
+                var node = Game.Instance?.FlightScene?.CraftNode;
+                var frame = node?.ReferenceFrame;
+                var planet = node?.Parent?.PlanetData;
+                if (frame == null || planet == null || !Finite(planet.Radius) || planet.Radius <= 0 ||
+                    !Finite(sourceAltitude) || !Finite(settings.targetRange) || !Finite(settings.spawnRange)) return false;
+                Vector3d observer = frame.FrameToPlanetPosition(observerPosition);
+                double distance = observer.magnitude;
+                if (!Finite(distance) || distance <= 0) return false;
+
+                // 落点先选球面地理列，源点偏移也以该列为中心；球面仍不代表实际地形。
+                Vector2 offset = UnityEngine.Random.insideUnitCircle * Mathf.Max(0f, settings.targetRange);
+                Vector3d targetDirection = OffsetOnSphere(observer / distance, planet.Radius, offset);
+                Vector3 jitter = UnityEngine.Random.insideUnitSphere * Mathf.Max(0f, settings.spawnRange);
+                Vector3d sourceDirection = OffsetOnSphere(targetDirection, planet.Radius, new Vector2(jitter.x, jitter.z));
+                target = frame.PlanetToFramePosition(targetDirection * planet.Radius);
+                source = frame.PlanetToFramePosition(sourceDirection * (planet.Radius + Math.Max(1.0, sourceAltitude + jitter.y)));
+                return Finite(source.x) && Finite(source.y) && Finite(source.z) &&
+                    Finite(target.x) && Finite(target.y) && Finite(target.z);
+            }
+            catch { return false; } // 短暂缺参考帧时保留旧的全局生成路径。
+        }
+
+        /// <summary>米制切平面偏移映射为球面弧长，双精度保留小行星与浮动原点精度。</summary>
+        private static Vector3d OffsetOnSphere(Vector3d up, double radius, Vector2 offset)
+        {
+            double distance = Math.Sqrt((double)offset.x * offset.x + (double)offset.y * offset.y);
+            if (distance <= 0) return up;
+            Vector3d axis = Math.Abs(up.y) < 0.9 ? new Vector3d(0, 1, 0) : new Vector3d(1, 0, 0);
+            Vector3d tangentX = Vector3d.Cross(axis, up).normalized;
+            Vector3d tangentY = Vector3d.Cross(up, tangentX);
+            Vector3d direction = (tangentX * offset.x + tangentY * offset.y) / distance;
+            double angle = Math.Min(Math.PI, distance / radius);
+            return (up * Math.Cos(angle) + direction * Math.Sin(angle)).normalized;
+        }
+
+        private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
         public void CastBolt(Vector3 from, Vector3 to, Camera cam = null)
         {

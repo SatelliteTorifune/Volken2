@@ -20,7 +20,6 @@ namespace Volken.Clouds
         public readonly RenderBuffer[] lightningTargets = new RenderBuffer[4];
         public RenderTexture lightningTex;         // 当前帧云内雷光,不进入基础云颜色历史。
         internal readonly CloudLightningCache lightningCache = new CloudLightningCache();
-        internal readonly CloudSolarCache solarCache = new CloudSolarCache();
         public RenderTexture upscaledCloudTex;      // 全清本帧结果;下次时序绘制前与 historyTex 交换
         public RenderTexture historyTex;            // 全清历史颜色
         internal long historyDepthVersion = -1;    // 颜色 / 云距离对应的本相机场景深度快照
@@ -149,7 +148,6 @@ namespace Volken.Clouds
             ReleaseRT(ref cloudMVTex);
             ReleaseRT(ref lightningTex);
             lightningCache.Dispose();
-            solarCache.Dispose();
             ReleaseRT(ref orbitCloudTex);
             historyDepthVersion = -1;
         }

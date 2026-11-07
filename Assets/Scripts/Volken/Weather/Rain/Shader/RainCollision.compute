@@ -15,7 +15,7 @@ float3 _CollisionStepX, _CollisionStepY;
 float3 _Down, _DomainCenter, _SeaUp;
 float _DomainRadius, _FallSpeed, _DeltaTime, _DepthFar;
 float _SeaAltitude, _SeaRadius, _SplashLifetime, _SplashDistance, _SplashDensity;
-uint _Capacity, _SplashCapacity, _DepthResolution, _DepthReady, _HasWater;
+uint _Capacity, _ActiveRainCount, _SplashCapacity, _DepthResolution, _DepthReady, _HasWater;
 uint _SplashesEnabled, _MaxImpacts, _FrameSeed;
 uint _DepthFlipY;
 
@@ -131,7 +131,8 @@ void Resolve(uint3 id : SV_DispatchThreadID)
     float3 expected = _Down * _FallSpeed * _DeltaTime;
     float3 error = (p.xyz - previous.xyz) - expected;
     bool crossed = _DeltaTime > 0.0 && previous.w > 0.0 && oldDistance > 0.0 && oldDistance < 1e6 && dot(error,error) < 0.0025;
-    if (crossed && _SplashesEnabled != 0u)
+    // Inactive rain continues recycling; only visible drops can create new splashes.
+    if (crossed && id.x < _ActiveRainCount && _SplashesEnabled != 0u)
     {
         float t = saturate(oldDistance / max(1e-5, oldDistance - distance));
         float3 hit = lerp(previous.xyz, p.xyz, t);

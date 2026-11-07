@@ -52,6 +52,7 @@ crashlytics-build.properties
 InitTestScene*.unity*
 *.jpg
 *.png
+!/Assets/Scripts/Volken/Weather/Textures/RegionalCoverage.png
 *.ps1
 
 # Local plugins, mod tools and generated Unity assets.

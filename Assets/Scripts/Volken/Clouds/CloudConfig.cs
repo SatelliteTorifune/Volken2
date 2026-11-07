@@ -134,10 +134,7 @@ namespace Volken.Clouds
         public float stepSizeFalloff;
         public int numLightSamplePoints;
         public float lightMarchDistance = 12000f;   // 光照步进总距离(米);lightStepSize = lightMarchDistance / numLightSamplePoints
-        public bool solarCacheEnabled = false;
         public bool emptySpaceSkippingEnabled = false;
-        public int solarCacheResolution = 24;
-        public float solarCacheExtent = 24000f; // 世界空间覆盖立方体边长(米)。
         public float blueNoiseStrength;
         public float historyBlend;
         public float historyDepthThreshold = 0.05f;
@@ -191,14 +188,6 @@ namespace Volken.Clouds
         public float forwardScatteringBias = 0.85f;
 
         #endregion
-
-        public void ClampAccelerationSettings()
-        {
-            solarCacheResolution = Mathf.Clamp(solarCacheResolution, 8, 64);
-            if (float.IsNaN(solarCacheExtent) || float.IsInfinity(solarCacheExtent))
-                solarCacheExtent = 24000f;
-            solarCacheExtent = Mathf.Clamp(solarCacheExtent, 1000f, 100000f);
-        }
 
         public static string GetConfigFolderPath(string planetName)
         {
@@ -260,7 +249,6 @@ namespace Volken.Clouds
             string temporaryPath = null;
             try
             {
-                ClampAccelerationSettings();
                 string filePath = GetConfigPath(planetName,configName);
                 string directory = Path.GetDirectoryName(filePath);
 
@@ -351,7 +339,6 @@ namespace Volken.Clouds
                         if (config.layerSpreads.w == 0f) config.layerSpreads.w = 1f;
                     }
 
-                    config.ClampAccelerationSettings();
                     Mod.Log($"Cloud config '{configName}' loaded from: {filePath}");
                     return config;
                 }
@@ -395,10 +382,7 @@ namespace Volken.Clouds
                 stepSizeFalloff = 0.6731564f,
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
-                solarCacheEnabled = false,
                 emptySpaceSkippingEnabled = false,
-                solarCacheResolution = 24,
-                solarCacheExtent = 24000f,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
@@ -461,10 +445,7 @@ namespace Volken.Clouds
                 stepSizeFalloff = 0.6731564f,
                 numLightSamplePoints = 25,
                 lightMarchDistance = 12000f,
-                solarCacheEnabled = false,
                 emptySpaceSkippingEnabled = false,
-                solarCacheResolution = 24,
-                solarCacheExtent = 24000f,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
@@ -527,10 +508,7 @@ namespace Volken.Clouds
                 stepSizeFalloff = 1.52126586f,
                 numLightSamplePoints = 5,
                 lightMarchDistance = 12000f,
-                solarCacheEnabled = false,
                 emptySpaceSkippingEnabled = false,
-                solarCacheResolution = 24,
-                solarCacheExtent = 24000f,
                 blueNoiseStrength = 0f,
                 historyBlend = 0f,
                 historyDepthThreshold = 0.05f,
@@ -597,10 +575,7 @@ namespace Volken.Clouds
             this.stepSizeFalloff = source.stepSizeFalloff;
             this.numLightSamplePoints = source.numLightSamplePoints;
             this.lightMarchDistance = source.lightMarchDistance;
-            this.solarCacheEnabled = source.solarCacheEnabled;
             this.emptySpaceSkippingEnabled = source.emptySpaceSkippingEnabled;
-            this.solarCacheResolution = source.solarCacheResolution;
-            this.solarCacheExtent = source.solarCacheExtent;
             this.blueNoiseStrength = source.blueNoiseStrength;
             this.historyBlend = source.historyBlend;
             this.historyDepthThreshold = source.historyDepthThreshold;
@@ -631,7 +606,6 @@ namespace Volken.Clouds
             this.orbitDetailStrength = source.orbitDetailStrength;
             this.orbitResolutionScale = source.orbitResolutionScale;
             this.orbitDebugMode = source.orbitDebugMode;
-            ClampAccelerationSettings();
         }
 
     }

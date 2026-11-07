@@ -9,21 +9,26 @@ namespace Volken.Clouds
         private static readonly int EnabledId = Shader.PropertyToID("_CloudEmptySpaceEnabled");
         private static readonly int MinId = Shader.PropertyToID("_CloudEmptyBandMin");
         private static readonly int MaxId = Shader.PropertyToID("_CloudEmptyBandMax");
+        private static readonly int DensityBoundsId = Shader.PropertyToID("_CloudDensityBounds");
 
         internal static bool Configure(Material material, CloudLayer layer, bool enabled)
         {
             if (material == null) return false;
+            material.DisableKeyword("VOLKEN_CLOUD_EMPTY_SPACE");
             material.SetFloat(EnabledId, 0f);
-            if (!enabled || layer == null || !HasBoundedTextures(material, layer)) return false;
-
+            material.SetFloat(DensityBoundsId, 0f);
+            if (layer == null || !HasBoundedTextures(material, layer)) return false;
             if (!TryBuildBands(material.GetFloat("cloudCoverage"), material.GetFloat("cloudDensity"),
                 material.GetFloat("detailStrength"), material.GetVector("cloudLayerHeights"),
                 material.GetVector("cloudLayerSpreads"), material.GetVector("cloudLayerStrengths"),
                 out var minimum, out var maximum)) return false;
 
+            material.SetFloat(DensityBoundsId, 1f);
+            if (!enabled) return false;
             material.SetVector(MinId, minimum);
             material.SetVector(MaxId, maximum);
             material.SetFloat(EnabledId, 1f);
+            material.EnableKeyword("VOLKEN_CLOUD_EMPTY_SPACE");
             return true;
         }
 

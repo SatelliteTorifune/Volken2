@@ -1164,17 +1164,29 @@ Shader "Hidden/Clouds"
             float _CloudSunOcclusion;
             float _OrbitFade;      // 海拔淡入因子:0 = 纯体积云, 1 = 纯 2D 轨道云
             float _OrbitDebugMode; // 调试:>0.5 → 左右分屏(左=体积云,右=2D 轨道云/覆盖足迹)
+            int _LightningSamples; // <2 时没有雷光输入,跳过雷光纹理采样
             
             float4 frag(v2f i) : SV_Target
             {
                 float4 volClouds = UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv);
-                volClouds.rgb += CloudLightningTex.Sample(samplerCloudLightningTex, i.uv).rgb;
-                float4 orbitClouds = OrbitCloudTex.Sample(samplerOrbitCloudTex, i.uv);
-                float4 clouds = lerp(volClouds, orbitClouds, _OrbitFade);
+                // 雷光与轨道云只在对应输入存在时采样:它们占全屏纹理读取,关闭时不应付出。
+                [branch] if (_LightningSamples >= 2)
+                    volClouds.rgb += CloudLightningTex.Sample(samplerCloudLightningTex, i.uv).rgb;
+                bool orbitSampled = _OrbitFade > 0.001 || _OrbitDebugMode > 0.5;
+                float4 orbitClouds = volClouds;
+                if (orbitSampled)
+                    orbitClouds = OrbitCloudTex.Sample(samplerOrbitCloudTex, i.uv);
+                float4 clouds = orbitSampled ? lerp(volClouds, orbitClouds, _OrbitFade) : volClouds;
                 // 调试:无视淡入,左右分屏直接对比范围(须在过渡带内,体积云同帧渲染)
                 if (_OrbitDebugMode > 0.5)
                     clouds = (i.uv.x < 0.5) ? volClouds : orbitClouds;
                 float4 source = tex2D(_MainTex, i.uv);
+
+                // === Additive Mode (零视觉干扰) ===
+                // 直接将云光加到场景上,不改变场景透过率;不采样场景深度 / 雾。
+                if (_CompositeMode < 0.5 && _VolkenFogComposite < 0.5)
+                    return float4(source.rgb + clouds.rgb, source.a);
+
                 float sceneDepth = SceneDepthTex.Sample(samplerSceneDepthTex, i.uv);
 
                 if (_VolkenFogComposite > 0.5 && _VolkenFogEnabled > 0.5)
@@ -1240,6 +1252,52 @@ Shader "Hidden/Clouds"
                 }
             }
 
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "ReflectionCloudAdditive"
+
+            // 反射云的加法合成:只输出云 RGB 并 Blend One One 叠进反射 RT,
+            // 省掉"临时 RT 合成 + 整幅复制回"的两次全幅操作,也不读场景深度 / 雾。
+
+            Blend One One, Zero One
+            ZWrite Off ZTest Always Cull Off
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            Texture2D<float4> UpscaledCloudTex;
+            SamplerState samplerUpscaledCloudTex;
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                return o;
+            }
+
+            float4 frag(v2f i) : SV_Target
+            {
+                return float4(UpscaledCloudTex.Sample(samplerUpscaledCloudTex, i.uv).rgb, 0.0);
+            }
             ENDCG
         }
 
